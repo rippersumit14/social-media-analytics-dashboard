@@ -1,10 +1,28 @@
+import { Routes, Route } from "react-router-dom";
+
+import Login from "./pages/Login.jsx";
+import Signup from "./pages/Signup.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import Analytics from "./pages/Analytics.jsx";
+import Layout from "./components/layout/Layout.jsx";
+import NotFound from "./pages/NotFound.jsx";
+
 function App() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900">
-      <h1 className="text-4xl font-bold text-green-400">
-        Social Media Analytics Dashboard
-      </h1>
-    </div>
+    <Routes>
+      {/* Public */}
+      <Route path="/" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+
+      {/* Layout */}
+      <Route element={<Layout />}>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/analytics" element={<Analytics />} />
+      </Route>
+
+      {/* 404 */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 }
 
