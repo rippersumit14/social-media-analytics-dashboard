@@ -44,13 +44,12 @@ const userSchema = new moongose.Schema(
 
 userSchema.pre("save", async function (next){
     if (!this.isModified("password")){
-        next();
         return;
     }
     
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
-    next();
+    
 });
 
 /**
@@ -64,7 +63,7 @@ userSchema.methods.matchPassword = async function name (enteredPassword) {
     
 };
 
-const User = mongoose("User", userSchema);
+const User = mongoose.model("User", userSchema);
 
 //export the user 
 export default User;

@@ -1,33 +1,44 @@
-/**
- * app.js
- * Main Express application configuration using ES Modules.
- * Handles middleware and base routes.
- */
-
-// Import dependencies using ES Modules
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
+import authRoutes from "./routes/authRoutes.js";
 
-// Initialize Express app
 const app = express();
 
-// ======================
-// Middleware Configuration
-// ======================
-app.use(cors()); // Enable Cross-Origin Resource Sharing
-app.use(express.json()); // Parse incoming JSON requests
-app.use(morgan("dev")); // Log HTTP requests
+//Global middleware configuration
+//Enable cross origin-resource sharing
 
-// ======================
-// Health Check Route
-// ======================
+app.use(cors());
+
+//Parse incoming JSON requests bodies
+app.use(express.json());
+
+//Log HTTP requests in development
+app.use(morgan("dev"));
+
+//Base route
+//Useful for confirming backend is running
+
 app.get("/", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Social Media Analytics API is running successfully ",
+  res.json({
+    message: "Social media Analytics API is running",
   });
 });
 
-// Export the app for use in server.js
+//Health Check route 
+//Usefull for testing server status
+
+app.get("/api/health", (req, res) => {
+  res.status(200).json({
+    status: "OK",
+    uptime: process.uptime(),
+    timestamp: new Date(),
+  });
+});
+
+//authentication routes
+//all auth endpoints will start with /api/auth
+
+app.use("/api/auth", authRoutes);
+
 export default app;
