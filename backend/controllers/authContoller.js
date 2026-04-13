@@ -105,10 +105,13 @@ export const getCurrentUser = async (req, res) => {
     res.status(200).json({
       user: req.user,
     });
-  } catch (error) {
-    res.status(500).json({
-      message: "Server error while fetching current user",
-      error: error.message,
-    });
+  }catch (error) {
+  console.error("LOGIN ERROR:", error);
+  console.error("LOGIN ERROR MESSAGE:", error.message);
+
+  return res.status(500).json({
+    message: "Server error while logging in",
+    error: error.message,
+  });
   }
-};
+}

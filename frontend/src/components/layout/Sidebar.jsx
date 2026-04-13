@@ -1,21 +1,24 @@
-/**
- * Top navigation bar for dashboard pages.
- */
-const Navbar = () => {
-  return (
-    <header className="flex items-center justify-between bg-white px-6 py-4 shadow">
-      <h1 className="text-xl font-bold text-gray-800">
-        Social Media Analytics
-      </h1>
+import { Link } from "react-router-dom";
 
-      <button
-        type="button"
-        className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
-      >
-        Logout
-      </button>
-    </header>
+/**
+ * Sidebar navigation for dashboard pages.
+ */
+const Sidebar = () => {
+  return (
+    <aside className="min-h-screen w-64 bg-gray-900 p-5 text-white">
+      <h2 className="mb-8 text-2xl font-bold">Dashboard</h2>
+
+      <nav className="space-y-4">
+        <Link to="/dashboard" className="block rounded px-2 py-1 hover:bg-gray-800">
+          Dashboard
+        </Link>
+
+        <Link to="/analytics" className="block rounded px-2 py-1 hover:bg-gray-800">
+          Analytics
+        </Link>
+      </nav>
+    </aside>
   );
 };
 
-export default Navbar;
+export default Sidebar;

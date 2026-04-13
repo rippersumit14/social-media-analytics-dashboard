@@ -3,13 +3,13 @@ import User from "../models/User.js";
 
 /**
  * Protect middleware
- * Verifies JWT token and attaches authenticated user to req.user
+ * Verifies JWT token and attaches the authenticated user to req.user
  */
 const protect = async (req, res, next) => {
   try {
     let token;
 
-    // Check if authorization header exists and starts with "Bearer "
+    // Check if Authorization header exists and starts with "Bearer "
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith("Bearer ")
@@ -17,14 +17,14 @@ const protect = async (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
     }
 
-    // If token is missing, reject request
+    // If token is missing, block access
     if (!token) {
       return res.status(401).json({
         message: "Not authorized, no token provided",
       });
     }
 
-    // Verify token using JWT secret
+    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // Find user by decoded id and exclude password
@@ -47,5 +47,7 @@ const protect = async (req, res, next) => {
     });
   }
 };
+
+
 
 export default protect;
