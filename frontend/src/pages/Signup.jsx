@@ -4,7 +4,11 @@ import { useAuth } from "../context/AuthContext.jsx";
 
 /**
  * Signup page.
- * Registers a new user and redirects to dashboard.
+ * Handles:
+ * - form state
+ * - register API call through AuthContext
+ * - error handling
+ * - redirect after successful signup
  */
 const Signup = () => {
   const navigate = useNavigate();
@@ -19,6 +23,9 @@ const Signup = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Handle input field changes
+   */
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -28,6 +35,9 @@ const Signup = () => {
     }));
   };
 
+  /**
+   * Handle signup form submission
+   */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
