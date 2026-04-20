@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import morgan from "morgan";
 import authRoutes from "./routes/authRoutes.js";
+import socialAccountRoutes from "./routes/socialAccountRoutes.js"
 
 const app = express();
 
@@ -15,6 +16,9 @@ app.use(express.json());
 
 //Log HTTP requests in development
 app.use(morgan("dev"));
+
+//adding the socialAccountRoute
+app.use("/api/social-accounts", socialAccountRoutes);
 
 //Base route
 //Useful for confirming backend is running
