@@ -24,7 +24,7 @@ const socialAccountSchema = new mongoose.Schema(
             trim: true,
         },
         //profile id 
-        profileID: {
+        profileId: {
             type: String,
             trim: true,
             default: "",

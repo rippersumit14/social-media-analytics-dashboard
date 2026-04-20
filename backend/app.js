@@ -3,6 +3,7 @@ import cors from "cors";
 import morgan from "morgan";
 import authRoutes from "./routes/authRoutes.js";
 import socialAccountRoutes from "./routes/socialAccountRoutes.js"
+import analyticsSnapshotRoutes from "./routes/analyticsSnapshotRoutes.js";
 
 const app = express();
 
@@ -19,6 +20,9 @@ app.use(morgan("dev"));
 
 //adding the socialAccountRoute
 app.use("/api/social-accounts", socialAccountRoutes);
+
+//adding the snapshot route
+app.use("/api/analytics-snapshots", analyticsSnapshotRoutes); 
 
 //Base route
 //Useful for confirming backend is running
