@@ -1,7 +1,8 @@
 import express from "express";
 import {
-    createSocialAccount,
-    getUserSocialAccount,
+  createSocialAccount,
+  getUserSocialAccount,
+  syncSocialAccountAnalytics,
 } from "../controllers/socialAccountController.js";
 import protect from "../middleware/authMiddleware.js";
 
@@ -20,5 +21,12 @@ router.post("/", protect, createSocialAccount);
  * @access  Private
  */
 router.get("/", protect, getUserSocialAccount);
+
+/**
+ * @route   POST /api/social-accounts/:id/sync
+ * @desc    Sync analytics for one social account
+ * @access  Private
+ */
+router.post("/:id/sync", protect, syncSocialAccountAnalytics);
 
 export default router;
