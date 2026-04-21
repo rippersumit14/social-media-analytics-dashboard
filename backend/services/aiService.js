@@ -1,5 +1,5 @@
 /**
- * Generate AI insights using OpenRouter (FREE models)
+ * Generate AI insights using OpenRouter
  */
 export const generateAnalyticsInsights = async (socialAccount, snapshots) => {
   try {
@@ -13,22 +13,38 @@ export const generateAnalyticsInsights = async (socialAccount, snapshots) => {
     const prompt = `
 You are a social media analytics expert.
 
-Analyze this Instagram account data and give:
-1. Performance summary
-2. Trend (increase/decrease)
-3. One actionable tip
+Analyze this Instagram account data and provide:
+1. A short performance summary
+2. A key trend over time
+3. One actionable recommendation
 
-Account: ${socialAccount.username}
+Account:
+- Username: ${socialAccount.username}
+- Platform: ${socialAccount.platform}
 
-Start:
-Followers: ${first.followers}
-Engagement: ${first.engagementRate}
+First Snapshot:
+- Followers: ${first.followers}
+- Following: ${first.following}
+- Posts: ${first.posts}
+- Likes: ${first.likes}
+- Comments: ${first.comments}
+- Engagement Rate: ${first.engagementRate}
+- Impressions: ${first.impressions}
+- Reach: ${first.reach}
+- Captured At: ${first.capturedAt}
 
-Latest:
-Followers: ${latest.followers}
-Engagement: ${latest.engagementRate}
+Latest Snapshot:
+- Followers: ${latest.followers}
+- Following: ${latest.following}
+- Posts: ${latest.posts}
+- Likes: ${latest.likes}
+- Comments: ${latest.comments}
+- Engagement Rate: ${latest.engagementRate}
+- Impressions: ${latest.impressions}
+- Reach: ${latest.reach}
+- Captured At: ${latest.capturedAt}
 
-Give answer in 3 short bullet points.
+Respond in simple English using exactly 3 short bullet points.
 `;
 
     const response = await fetch(
@@ -40,22 +56,36 @@ Give answer in 3 short bullet points.
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "mistralai/mistral-7b-instruct", // FREE model
+        model: "google/gemma-3-27b-it:free",
           messages: [
             {
               role: "user",
               content: prompt,
             },
           ],
+          temperature: 0.4,
+          max_tokens: 300,
         }),
       }
     );
 
     const data = await response.json();
 
-    return data.choices?.[0]?.message?.content || "No insights generated.";
+    console.log("OPENROUTER RAW RESPONSE:", JSON.stringify(data, null, 2));
+
+    if (!response.ok) {
+      throw new Error(data?.error?.message || "OpenRouter request failed");
+    }
+
+    const content = data?.choices?.[0]?.message?.content;
+
+    if (!content || typeof content !== "string") {
+      return "AI responded, but no usable insight text was returned.";
+    }
+
+    return content.trim();
   } catch (error) {
-    console.error("AI Service Error:", error);
-    return "Error generating insights.";
+    console.error("AI Service Error:", error.message);
+    return `Error generating insights: ${error.message}`;
   }
 };
