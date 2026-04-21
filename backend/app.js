@@ -4,6 +4,7 @@ import morgan from "morgan";
 import authRoutes from "./routes/authRoutes.js";
 import socialAccountRoutes from "./routes/socialAccountRoutes.js"
 import analyticsSnapshotRoutes from "./routes/analyticsSnapshotRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 
 const app = express();
 
@@ -23,6 +24,10 @@ app.use("/api/social-accounts", socialAccountRoutes);
 
 //adding the snapshot route
 app.use("/api/analytics-snapshots", analyticsSnapshotRoutes); 
+
+//adding the ai route
+app.use("/api/ai", aiRoutes);
+
 
 //Base route
 //Useful for confirming backend is running
