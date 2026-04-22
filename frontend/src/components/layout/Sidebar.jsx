@@ -9,12 +9,28 @@ const Sidebar = () => {
       <h2 className="mb-8 text-2xl font-bold">Dashboard</h2>
 
       <nav className="space-y-4">
-        <Link to="/dashboard" className="block rounded px-2 py-1 hover:bg-gray-800">
+        {/* Dashboard */}
+        <Link
+          to="/dashboard"
+          className="block rounded px-2 py-1 hover:bg-gray-800"
+        >
           Dashboard
         </Link>
 
-        <Link to="/analytics" className="block rounded px-2 py-1 hover:bg-gray-800">
+        {/* Analytics */}
+        <Link
+          to="/analytics"
+          className="block rounded px-2 py-1 hover:bg-gray-800"
+        >
           Analytics
+        </Link>
+
+        {/*  AI Chat (NEW) */}
+        <Link
+          to="/ai-chat"
+          className="block rounded px-2 py-1 hover:bg-gray-800"
+        >
+          AI Chat
         </Link>
       </nav>
     </aside>
