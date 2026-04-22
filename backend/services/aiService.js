@@ -1,43 +1,49 @@
 /**
- * Generate AI insights using OpenRouter with fallback models.
- * This service:
- * 1. Accepts a social account and its analytics snapshots
- * 2. Builds a prompt for the AI model
- * 3. Tries multiple free/cheap models one by one
- * 4. Returns the first successful insight text
+ * Generate AI response using OpenRouter.
+ *
+ * This service supports 2 modes:
+ * 1. Default analytics insights mode
+ *    - used by /api/ai/insights/:socialAccountId
+ * 2. Custom prompt mode
+ *    - used by /api/ai/chat/:socialAccountId
+ *
+ * It also supports fallback across multiple models.
  */
 
-export const generateAnalyticsInsights = async (socialAccount, snapshots) => {
+export const generateAnalyticsInsights = async (
+  socialAccount,
+  snapshots,
+  customPrompt = null
+) => {
   try {
-    // If there is no analytics history yet, return a safe fallback message
-    if (!snapshots || snapshots.length === 0) {
+    // If no snapshots and no custom prompt context exists,
+    // return a fallback message.
+    if ((!snapshots || snapshots.length === 0) && !customPrompt) {
       return "No analytics data available. Please sync your account first.";
     }
 
-    // Use first snapshot and latest snapshot for trend comparison
-    const first = snapshots[0];
-    const latest = snapshots[snapshots.length - 1];
+    const first = snapshots?.[0] || null;
+    const latest = snapshots?.[snapshots.length - 1] || null;
 
     /**
-     * Build a structured prompt using account + analytics history.
-     * We are giving:
-     * - account details
-     * - starting metrics
-     * - latest metrics
-     * - clear instruction on output format
+     * Default prompt for AI Insights feature
+     * Used only when a custom prompt is not provided.
      */
-    const prompt = `
+    const defaultPrompt = `
 You are a social media analytics expert.
 
-Analyze this Instagram account data and provide:
+Analyze this account's performance and provide:
 1. A short performance summary
 2. A key trend over time
 3. One actionable recommendation
 
 Account:
-- Username: ${socialAccount.username}
-- Platform: ${socialAccount.platform}
+- Username: ${socialAccount?.username || "Unknown"}
+- Platform: ${socialAccount?.platform || "Unknown"}
 
+${
+  first && latest
+    ? `
 First Snapshot:
 - Followers: ${first.followers}
 - Following: ${first.following}
@@ -59,17 +65,22 @@ Latest Snapshot:
 - Impressions: ${latest.impressions}
 - Reach: ${latest.reach}
 - Captured At: ${latest.capturedAt}
+`
+    : `
+No detailed snapshots are available yet.
+`
+}
 
 Respond in simple English using exactly 3 short bullet points.
 `;
 
+    // Use custom prompt for chatbot, otherwise fallback to default insights prompt
+    const prompt = customPrompt || defaultPrompt;
+
     /**
-     * Fallback model list
-     * If one model fails, we try the next one automatically.
-     * This makes the AI system more stable.
-     *
-     * Note:
-     * Some free models may go down or become unavailable temporarily.
+     * OpenRouter models
+     * First model is your confirmed working free model.
+     * You can add more fallback models later if needed.
      */
     const models = [
       "inclusionai/ling-2.6-flash:free",
@@ -77,9 +88,7 @@ Respond in simple English using exactly 3 short bullet points.
 
     let lastError = null;
 
-    /**
-     * Try models one by one until one succeeds
-     */
+    // Try models one by one
     for (const model of models) {
       try {
         const response = await fetch(
@@ -98,35 +107,33 @@ Respond in simple English using exactly 3 short bullet points.
                   content: prompt,
                 },
               ],
-              temperature: 0.4, // low randomness for stable analytics-style output
-              max_tokens: 300, // keep response short and cheap
+              temperature: 0.5,
+              max_tokens: 400,
             }),
           }
         );
 
         const data = await response.json();
 
-        // Helpful backend debug log
+        // Helpful debug logs for development
         console.log("MODEL USED:", model);
-        console.log("OPENROUTER RAW RESPONSE:", JSON.stringify(data, null, 2));
+        console.log(
+          "OPENROUTER RAW RESPONSE:",
+          JSON.stringify(data, null, 2)
+        );
 
-        // If provider returned an error, throw it so we can try next model
+        // If API/provider returned error, throw so fallback can continue
         if (!response.ok) {
           throw new Error(data?.error?.message || "Model request failed");
         }
 
-        /**
-         * Safe extraction of response text
-         * Optional chaining prevents crashes if any nested field is missing
-         */
+        // Extract model text safely
         const content = data?.choices?.[0]?.message?.content;
 
-        // If model returned text successfully, return it immediately
         if (content && typeof content === "string") {
           return content.trim();
         }
 
-        // If no usable content came back, mark it as an error and continue fallback
         throw new Error("No usable insight text returned by model");
       } catch (error) {
         console.error(`Model failed: ${model}`, error.message);
@@ -134,12 +141,9 @@ Respond in simple English using exactly 3 short bullet points.
       }
     }
 
-    /**
-     * If all models fail, return final fallback message
-     */
+    // If all models fail
     return `All AI models failed. Last error: ${lastError}`;
   } catch (error) {
-    // Outer catch handles unexpected service-level failures
     console.error("AI Service Error:", error.message);
     return `Error generating insights: ${error.message}`;
   }
