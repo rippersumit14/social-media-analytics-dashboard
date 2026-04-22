@@ -29,6 +29,15 @@ const userSchema = new moongose.Schema(
             type: String,
             required: [true, "Password is required"],
             minlength: 6,
+        },
+        aiUsageCount: { //how many times user has used ai
+            type: Number,
+            default: 0,
+        },
+        aiUsageLimit: { //Max allowed usage for free plan
+            type: Number,
+            default: 20,
+
         }
     },
     {
@@ -64,6 +73,8 @@ userSchema.methods.matchPassword = async function name (enteredPassword) {
 };
 
 const User = mongoose.model("User", userSchema);
+
+
 
 //export the user 
 export default User;
