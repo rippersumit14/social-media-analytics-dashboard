@@ -1,9 +1,148 @@
 /**
- * Generate AI response using OpenRouter.
+ * AI Service
  *
- * Supports:
- * 1. Default insights mode
- * 2. Custom prompt mode (used by AI chat)
+ * Supports 2 modes:
+ * 1. generateAnalyticsInsights()  -> for insights feature
+ * 2. generateAnalyticsResponse()  -> for chat / personal assistant feature
+ *
+ * Features:
+ * - Multiple fallback models
+ * - Clear logging of model usage
+ * - Graceful error handling
+ * - Professional default prompts
+ */
+
+/**
+ * Shared list of OpenRouter fallback models.
+ *
+ * Order matters:
+ * - We try top to bottom
+ * - As soon as one works, we return its response
+ */
+const AI_MODELS = [
+  "inclusionai/ling-2.6-flash:free",
+  "nvidia/nemotron-3-super:free",
+  "z-ai/glm-4.5-air:free",
+  "openai/gpt-oss-120b:free",
+  "google/gemma-4-31b:free",
+  "google/gemma-4-26b-a4b:free",
+  "openai/gpt-oss-20b:free",
+];
+
+/**
+ * Helper:
+ * Extracts the most useful error message from OpenRouter response
+ */
+const extractOpenRouterError = (data) => {
+  return (
+    data?.error?.metadata?.raw ||
+    data?.error?.message ||
+    "Unknown AI provider error"
+  );
+};
+
+/**
+ * Helper:
+ * Makes a single OpenRouter request with a specific model
+ *
+ * @param {string} model - model name
+ * @param {Array} messages - chat completion messages
+ * @param {number} temperature - randomness
+ * @param {number} maxTokens - response size cap
+ * @returns {Promise<string>} response text
+ */
+const callOpenRouterModel = async ({
+  model,
+  messages,
+  temperature = 0.5,
+  maxTokens = 500,
+}) => {
+  const response = await fetch(
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_tokens: maxTokens,
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  console.log("MODEL ATTEMPTED:", model);
+  console.log(
+    "OPENROUTER RAW RESPONSE:",
+    JSON.stringify(data, null, 2)
+  );
+
+  if (!response.ok) {
+    throw new Error(extractOpenRouterError(data));
+  }
+
+  const content = data?.choices?.[0]?.message?.content;
+
+  if (!content || typeof content !== "string") {
+    throw new Error("No usable response text returned by model");
+  }
+
+  return content.trim();
+};
+
+/**
+ * Helper:
+ * Tries models one by one until one succeeds
+ *
+ * @param {Array} messages - formatted chat messages
+ * @param {number} temperature
+ * @param {number} maxTokens
+ * @returns {Promise<string>}
+ */
+const tryModelsWithFallback = async ({
+  messages,
+  temperature = 0.5,
+  maxTokens = 500,
+}) => {
+  let lastError = null;
+
+  for (const model of AI_MODELS) {
+    try {
+      const result = await callOpenRouterModel({
+        model,
+        messages,
+        temperature,
+        maxTokens,
+      });
+
+      console.log("MODEL SUCCESS:", model);
+      return result;
+    } catch (error) {
+      console.error(`MODEL FAILED: ${model}`, error.message);
+      lastError = error.message;
+      continue;
+    }
+  }
+
+  return `All AI models failed. Please try again later. Last error: ${lastError}`;
+};
+
+/**
+ * Feature 1:
+ * Generate structured analytics insights
+ *
+ * Used by:
+ * - AI Insights button/page
+ *
+ * @param {Object} socialAccount
+ * @param {Array} snapshots
+ * @param {string|null} customPrompt - optional override prompt
+ * @returns {Promise<string>}
  */
 export const generateAnalyticsInsights = async (
   socialAccount,
@@ -11,7 +150,7 @@ export const generateAnalyticsInsights = async (
   customPrompt = null
 ) => {
   try {
-    // If no snapshots and no custom prompt exists
+    // If no data and no custom prompt, give safe fallback
     if ((!snapshots || snapshots.length === 0) && !customPrompt) {
       return "No analytics data available. Please sync your account first.";
     }
@@ -20,9 +159,10 @@ export const generateAnalyticsInsights = async (
     const latest = snapshots?.[snapshots.length - 1] || null;
 
     /**
-     * Default structured prompt for AI Insights feature
+     * Default insights prompt
+     * Professional, structured, no childish style
      */
-const defaultPrompt = `
+    const defaultPrompt = `
 You are a professional social media analytics expert.
 
 Your job:
@@ -31,30 +171,28 @@ Your job:
 - Focus on growth, engagement, content performance, and actionable recommendations
 - Do not use emojis
 - Do not sound casual or childish
-- Do not produce random decorative titles
 - Avoid one long paragraph
 - Keep the response polished and readable
 
 Required structure:
 
 Performance Breakdown
-- Summarize the current performance using the available data
-- Mention meaningful metric changes where relevant
+- Summarize current performance using the available data
+- Mention important metric movement where relevant
 
 Key Findings
 - Explain the most important growth or performance signals
 - Highlight what appears to be helping or hurting growth
 
 Recommended Actions
-- Give practical steps the user can apply next
-- Keep suggestions specific and useful
+- Give practical, high-value next steps
+- Keep them specific and useful
 
 Rules:
 - Use professional headings
-- Use bullet points where helpful
-- Be analytical but clear
-- Mention percentages or metric movement when relevant
-- Keep the tone serious, useful, and product-quality
+- Use bullet points where useful
+- Be analytical but easy to understand
+- Mention percentages or metric changes when relevant
 
 Account:
 - Username: ${socialAccount?.username || "Unknown"}
@@ -99,66 +237,104 @@ No detailed analytics snapshots are available yet.
 
 Generate a professional structured response now.
 `;
-    // Use custom prompt if provided by chatbot
+
     const prompt = customPrompt || defaultPrompt;
 
-    // Confirmed working free model
-    const models = ["inclusionai/ling-2.6-flash:free"];
+    const messages = [
+      {
+        role: "user",
+        content: prompt,
+      },
+    ];
 
-    let lastError = null;
-
-    for (const model of models) {
-      try {
-        const response = await fetch(
-          "https://openrouter.ai/api/v1/chat/completions",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model,
-              messages: [
-                {
-                  role: "user",
-                  content: prompt,
-                },
-              ],
-              temperature: 0.5,
-              max_tokens: 500,
-            }),
-          }
-        );
-
-        const data = await response.json();
-
-        console.log("MODEL USED:", model);
-        console.log(
-          "OPENROUTER RAW RESPONSE:",
-          JSON.stringify(data, null, 2)
-        );
-
-        if (!response.ok) {
-          throw new Error(data?.error?.message || "Model request failed");
-        }
-
-        const content = data?.choices?.[0]?.message?.content;
-
-        if (content && typeof content === "string") {
-          return content.trim();
-        }
-
-        throw new Error("No usable response text returned by model");
-      } catch (error) {
-        console.error(`Model failed: ${model}`, error.message);
-        lastError = error.message;
-      }
-    }
-
-    return `All AI models failed. Last error: ${lastError}`;
+    return await tryModelsWithFallback({
+      messages,
+      temperature: 0.5,
+      maxTokens: 700,
+    });
   } catch (error) {
-    console.error("AI Service Error:", error.message);
+    console.error("AI Service Error (Insights):", error.message);
     return `Error generating insights: ${error.message}`;
+  }
+};
+
+/**
+ * Feature 2:
+ * Personal assistant / conversational AI chat
+ *
+ * Used by:
+ * - AI Chat page
+ *
+ * This mode behaves more like ChatGPT / Claude:
+ * - short reply for greetings
+ * - uses analytics only when relevant
+ * - acts like a social media strategist when asked
+ * - continues conversation naturally
+ *
+ * @param {Object} params
+ * @param {string} params.analyticsContext
+ * @param {Array} params.historyMessages
+ * @param {string} params.latestUserMessage
+ * @returns {Promise<string>}
+ */
+export const generateAnalyticsResponse = async ({
+  analyticsContext,
+  historyMessages = [],
+  latestUserMessage,
+}) => {
+  try {
+    /**
+     * System prompt controls chatbot behavior
+     */
+    const systemPrompt = `
+You are a professional AI personal assistant inside a social media analytics platform.
+
+Your behavior:
+- Be natural, intelligent, and conversational
+- Sound like a serious assistant, not a reporting bot
+- Do not use emojis
+- Do not act childish or overly casual
+- Do not always turn every response into an analytics report
+- Answer according to the user's actual question
+- Keep greetings short and natural
+- Use account analytics only when relevant
+- If the user asks about performance, use analytics context
+- If the user asks strategy/content questions, act like a social media growth expert
+- If the user asks casual/general questions, respond naturally and briefly
+- Avoid repetition
+- Keep answers polished and practical
+
+Formatting rules:
+- Prefer natural assistant-style responses
+- Use headings only when needed
+- Use bullets only when helpful
+- Avoid random decorative titles
+- Avoid one long raw paragraph when the answer is complex
+- For very short questions like "hi", "hello", or "how are you", respond briefly
+
+Analytics context:
+${analyticsContext}
+`;
+
+    const messages = [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      ...historyMessages,
+      {
+        role: "user",
+        content: latestUserMessage,
+      },
+    ];
+
+    return await tryModelsWithFallback({
+      messages,
+      temperature: 0.6,
+      maxTokens: 700,
+    });
+  } catch (error) {
+    console.error("AI Service Error (Chat):", error.message);
+    return `Error generating chat response: ${error.message}`;
   }
 };
