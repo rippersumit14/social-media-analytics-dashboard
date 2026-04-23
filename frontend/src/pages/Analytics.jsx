@@ -22,7 +22,7 @@ import { getAIInsights } from "../services/aiService.js";
  * Purpose:
  * - account selector
  * - sync
- * - detailed stats
+ * - category-based analytics
  * - charts
  * - AI insights
  */
@@ -31,19 +31,33 @@ const Analytics = () => {
 
   const [socialAccounts, setSocialAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState(null);
+  const [snapshots, setSnapshots] = useState([]);
 
   const [dashboardStats, setDashboardStats] = useState([]);
   const [engagementChartData, setEngagementChartData] = useState([]);
   const [postsChartData, setPostsChartData] = useState([]);
+  const [followersChartData, setFollowersChartData] = useState([]);
+  const [reelsChartData, setReelsChartData] = useState([]);
+  const [repostsChartData, setRepostsChartData] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
 
-  // AI state
   const [aiInsights, setAIInsights] = useState("");
   const [aiLoading, setAILoading] = useState(false);
   const [remainingUsage, setRemainingUsage] = useState(null);
+
+  // NEW: category selector
+  const [activeCategory, setActiveCategory] = useState("engagement");
+
+  const categories = [
+    { id: "engagement", label: "Engagement" },
+    { id: "followers", label: "Followers" },
+    { id: "posts", label: "Posts" },
+    { id: "reels", label: "Reels" },
+    { id: "reposts", label: "Reposts" },
+  ];
 
   const formatDateTime = (dateString) => {
     if (!dateString) return "Never synced";
@@ -66,50 +80,98 @@ const Analytics = () => {
     });
   };
 
-  const transformSnapshotData = (snapshots) => {
-    if (!snapshots || snapshots.length === 0) {
+  /**
+   * Transform raw snapshots into UI-ready stats and chart series
+   */
+  const transformSnapshotData = (allSnapshots) => {
+    setSnapshots(allSnapshots || []);
+
+    if (!allSnapshots || allSnapshots.length === 0) {
       setDashboardStats([]);
       setEngagementChartData([]);
       setPostsChartData([]);
+      setFollowersChartData([]);
+      setReelsChartData([]);
+      setRepostsChartData([]);
       return;
     }
 
-    const latestSnapshot = snapshots[snapshots.length - 1];
+    const latest = allSnapshots[allSnapshots.length - 1];
+
+    // Safe fallback fields for upcoming backend expansion
+    const latestReelViews = latest.reelViews ?? latest.impressions ?? 0;
+    const latestReposts = latest.reposts ?? latest.shares ?? 0;
 
     const stats = [
       {
         id: 1,
-        title: "Total Posts",
-        value: latestSnapshot.posts?.toString() || "0",
-        color: "blue",
+        title: "Followers",
+        value: String(latest.followers ?? 0),
+        color: "purple",
       },
       {
         id: 2,
-        title: "Engagement",
-        value: `${latestSnapshot.engagementRate ?? 0}%`,
-        color: "green",
+        title: "Posts",
+        value: String(latest.posts ?? 0),
+        color: "blue",
       },
       {
         id: 3,
-        title: "Followers",
-        value: latestSnapshot.followers?.toString() || "0",
+        title: "Comments",
+        value: String(latest.comments ?? 0),
+        color: "green",
+      },
+      {
+        id: 4,
+        title: "Reel Views",
+        value: String(latestReelViews),
+        color: "blue",
+      },
+      {
+        id: 5,
+        title: "Reposts",
+        value: String(latestReposts),
+        color: "green",
+      },
+      {
+        id: 6,
+        title: "Engagement",
+        value: `${latest.engagementRate ?? 0}%`,
         color: "purple",
       },
     ];
 
-    const engagementData = snapshots.map((snapshot) => ({
+    const engagementData = allSnapshots.map((snapshot) => ({
       name: formatChartLabel(snapshot.capturedAt),
-      engagement: snapshot.engagementRate,
+      engagement: snapshot.engagementRate ?? 0,
     }));
 
-    const postsData = snapshots.map((snapshot) => ({
+    const postsData = allSnapshots.map((snapshot) => ({
       name: formatChartLabel(snapshot.capturedAt),
-      posts: snapshot.posts,
+      posts: snapshot.posts ?? 0,
+    }));
+
+    const followersData = allSnapshots.map((snapshot) => ({
+      name: formatChartLabel(snapshot.capturedAt),
+      followers: snapshot.followers ?? 0,
+    }));
+
+    const reelsData = allSnapshots.map((snapshot) => ({
+      name: formatChartLabel(snapshot.capturedAt),
+      engagement: snapshot.reelViews ?? snapshot.impressions ?? 0,
+    }));
+
+    const repostsData = allSnapshots.map((snapshot) => ({
+      name: formatChartLabel(snapshot.capturedAt),
+      posts: snapshot.reposts ?? snapshot.shares ?? 0,
     }));
 
     setDashboardStats(stats);
     setEngagementChartData(engagementData);
     setPostsChartData(postsData);
+    setFollowersChartData(followersData);
+    setReelsChartData(reelsData);
+    setRepostsChartData(repostsData);
   };
 
   useEffect(() => {
@@ -127,9 +189,7 @@ const Analytics = () => {
 
         if (accounts.length === 0) {
           setSelectedAccount(null);
-          setDashboardStats([]);
-          setEngagementChartData([]);
-          setPostsChartData([]);
+          transformSnapshotData([]);
           return;
         }
 
@@ -162,11 +222,7 @@ const Analytics = () => {
         setSelectedAccount(syncData.socialAccount);
       }
 
-      const snapshotsData = await getAnalyticsSnapshots(
-        selectedAccount._id,
-        token
-      );
-
+      const snapshotsData = await getAnalyticsSnapshots(selectedAccount._id, token);
       transformSnapshotData(snapshotsData.snapshots || []);
     } catch (err) {
       console.error("Sync error:", err);
@@ -200,7 +256,6 @@ const Analytics = () => {
 
   const handleAccountChange = async (e) => {
     const accountId = e.target.value;
-
     const account = socialAccounts.find((item) => item._id === accountId);
 
     if (!account || !token) return;
@@ -210,7 +265,7 @@ const Analytics = () => {
       setError("");
       setSelectedAccount(account);
 
-      // reset AI data when switching accounts
+      // reset AI when switching account
       setAIInsights("");
       setRemainingUsage(null);
 
@@ -224,6 +279,132 @@ const Analytics = () => {
     }
   };
 
+  // Category-specific stat groups
+  const getCategoryStats = () => {
+    const latest = snapshots[snapshots.length - 1] || {};
+
+    switch (activeCategory) {
+      case "followers":
+        return [
+          {
+            id: 1,
+            title: "Followers",
+            value: String(latest.followers ?? 0),
+            color: "purple",
+          },
+          {
+            id: 2,
+            title: "Following",
+            value: String(latest.following ?? 0),
+            color: "blue",
+          },
+        ];
+
+      case "posts":
+        return [
+          {
+            id: 1,
+            title: "Posts",
+            value: String(latest.posts ?? 0),
+            color: "blue",
+          },
+          {
+            id: 2,
+            title: "Comments",
+            value: String(latest.comments ?? 0),
+            color: "green",
+          },
+          {
+            id: 3,
+            title: "Likes",
+            value: String(latest.likes ?? 0),
+            color: "purple",
+          },
+        ];
+
+      case "reels":
+        return [
+          {
+            id: 1,
+            title: "Reel Views",
+            value: String(latest.reelViews ?? latest.impressions ?? 0),
+            color: "blue",
+          },
+          {
+            id: 2,
+            title: "Reach",
+            value: String(latest.reach ?? 0),
+            color: "green",
+          },
+          {
+            id: 3,
+            title: "Impressions",
+            value: String(latest.impressions ?? 0),
+            color: "purple",
+          },
+        ];
+
+      case "reposts":
+        return [
+          {
+            id: 1,
+            title: "Reposts",
+            value: String(latest.reposts ?? latest.shares ?? 0),
+            color: "green",
+          },
+          {
+            id: 2,
+            title: "Comments",
+            value: String(latest.comments ?? 0),
+            color: "blue",
+          },
+        ];
+
+      case "engagement":
+      default:
+        return [
+          {
+            id: 1,
+            title: "Engagement",
+            value: `${latest.engagementRate ?? 0}%`,
+            color: "green",
+          },
+          {
+            id: 2,
+            title: "Likes",
+            value: String(latest.likes ?? 0),
+            color: "blue",
+          },
+          {
+            id: 3,
+            title: "Comments",
+            value: String(latest.comments ?? 0),
+            color: "purple",
+          },
+        ];
+    }
+  };
+
+  const renderCategoryChart = () => {
+    switch (activeCategory) {
+      case "followers":
+        return <EngagementChart data={followersChartData} />;
+
+      case "posts":
+        return <PostsChart data={postsChartData} />;
+
+      case "reels":
+        return <EngagementChart data={reelsChartData} />;
+
+      case "reposts":
+        return <PostsChart data={repostsChartData} />;
+
+      case "engagement":
+      default:
+        return <EngagementChart data={engagementChartData} />;
+    }
+  };
+
   return (
     <div>
       {/* Header */}
@@ -231,7 +412,7 @@ const Analytics = () => {
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Analytics</h1>
           <p className="mt-3 text-gray-600">
-            Explore detailed charts, metrics, sync activity, and AI analysis.
+            Explore category-wise metrics, charts, and AI-powered insights.
           </p>
         </div>
 
@@ -265,7 +446,7 @@ const Analytics = () => {
         </div>
       )}
 
-      {/* Account selector + info */}
+      {/* Account selector */}
       {selectedAccount && (
         <div className="mt-6 rounded-xl bg-white p-5 shadow-md">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -322,8 +503,33 @@ const Analytics = () => {
         </div>
       )}
 
-      {/* Stats */}
-      {socialAccounts.length > 0 && (
+      {/* Category selector */}
+      {selectedAccount && (
+        <div className="mt-6 rounded-xl bg-white p-5 shadow-md">
+          <h2 className="text-lg font-semibold text-gray-700">
+            Analytics Categories
+          </h2>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                onClick={() => setActiveCategory(category.id)}
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                  activeCategory === category.id
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {category.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Category stats */}
+      {selectedAccount && (
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {loading
             ? Array.from({ length: 3 }).map((_, i) => (
@@ -332,22 +538,18 @@ const Analytics = () => {
                   className="h-24 animate-pulse rounded-lg bg-gray-200"
                 ></div>
               ))
-            : dashboardStats.map((stat) => (
+            : getCategoryStats().map((stat) => (
                 <StatsCard key={stat.id} {...stat} />
               ))}
         </div>
       )}
 
-      {/* Charts */}
-      {!loading && engagementChartData.length > 0 && (
-        <EngagementChart data={engagementChartData} />
+      {/* Category chart */}
+      {!loading && selectedAccount && (
+        <div className="mt-6">{renderCategoryChart()}</div>
       )}
 
-      {!loading && postsChartData.length > 0 && (
-        <PostsChart data={postsChartData} />
-      )}
-
-      {/* AI Insights */}
+      {/* AI insights */}
       {selectedAccount && (
         <AIInsightsCard
           insights={aiInsights}

@@ -83,7 +83,7 @@ const AIChat = () => {
     setSelectedAccount(account);
     setChatMessages([]);
     setRemainingUsage(null);
-    setInput("");
+    setInput(""); 
     setError("");
   };
 
