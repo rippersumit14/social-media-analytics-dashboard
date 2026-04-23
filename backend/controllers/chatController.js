@@ -9,27 +9,26 @@ import { generateAnalyticsInsights } from "../services/aiService.js";
  * @access  Private
  *
  * This controller:
- * 1. Validates the incoming message
- * 2. Checks the logged-in user's AI quota
- * 3. Verifies the selected social account belongs to the user
- * 4. Loads analytics snapshots for that account
- * 5. Builds a conversational prompt with analytics context
- * 6. Calls the AI service
- * 7. Returns the AI reply + remaining usage
+ * - validates the question
+ * - checks usage limit
+ * - verifies account ownership
+ * - loads analytics context
+ * - builds a structured conversational prompt
+ * - calls the AI service
  */
 export const chatWithAI = async (req, res) => {
   try {
     const { socialAccountId } = req.params;
     const { message } = req.body;
 
-    // Validate incoming message
+    // Validate input
     if (!message || !message.trim()) {
       return res.status(400).json({
         message: "Message is required",
       });
     }
 
-    // Load current user from DB
+    // Get current user
     const user = await User.findById(req.user._id);
 
     if (!user) {
@@ -38,14 +37,15 @@ export const chatWithAI = async (req, res) => {
       });
     }
 
-    // Enforce AI usage limit
+    // Check AI usage limit
     if (user.aiUsageCount >= user.aiUsageLimit) {
       return res.status(403).json({
-        message: "AI usage limit reached. Please try again later or upgrade your plan.",
+        message:
+          "AI usage limit reached. Please try again later or upgrade your plan.",
       });
     }
 
-    // Verify social account belongs to the logged-in user
+    // Verify selected account belongs to the user
     const socialAccount = await SocialAccount.findOne({
       _id: socialAccountId,
       user: req.user._id,
@@ -57,29 +57,56 @@ export const chatWithAI = async (req, res) => {
       });
     }
 
-    // Load all snapshots for this account (oldest to latest)
+    // Load snapshots for context
     const snapshots = await AnalyticsSnapshot.find({
       socialAccount: socialAccountId,
     }).sort({ capturedAt: 1 });
 
-    // If no snapshots exist, still allow AI to respond but with less context
     const first = snapshots[0] || null;
     const latest = snapshots[snapshots.length - 1] || null;
 
-    // Build a conversational + expert-style prompt
-    const prompt = `
-You are an AI assistant inside a social media analytics platform.
+    // Structured conversational prompt
+const prompt = `
+You are an AI assistant inside a professional social media analytics platform.
 
 Your role:
-- Answer like a helpful, smart, conversational assistant
-- Also act like a social media growth expert and strategist
+- Act like a helpful assistant and social media growth expert
 - Use analytics data when relevant
-- If the user's question is general, answer generally
-- If the user's question is about account performance, use the analytics data below
-- If the user asks for strategy, combine social media best practices with the account data
-- Avoid repeating the same "insights summary" style every time
-- Be practical, direct, and easy to understand
-- Keep the answer concise but helpful
+- Answer clearly, professionally, and in a structured way
+- Do not use emojis
+- Do not sound childish or overly casual
+- Do not write one long raw paragraph
+- Do not generate random decorative titles
+- Keep the response informative, practical, and polished
+
+Formatting rules:
+- Use clear professional section headings
+- Prefer 2 to 3 sections maximum
+- Use bullet points when useful
+- Keep the structure clean and readable
+- Make the answer feel like a serious AI assistant, not a casual chatbot
+
+Preferred response styles:
+
+For account/performance questions:
+Performance Summary
+- ...
+
+Key Insight
+- ...
+
+Recommended Action
+- ...
+
+For general strategy questions:
+Direct Answer
+...
+
+Why This Matters
+...
+
+Recommended Next Step
+...
 
 User question:
 "${message}"
@@ -99,6 +126,8 @@ First snapshot:
 - Posts: ${first.posts}
 - Likes: ${first.likes}
 - Comments: ${first.comments}
+- Impressions: ${first.impressions}
+- Reach: ${first.reach}
 
 Latest snapshot:
 - Followers: ${latest.followers}
@@ -106,13 +135,17 @@ Latest snapshot:
 - Posts: ${latest.posts}
 - Likes: ${latest.likes}
 - Comments: ${latest.comments}
+- Impressions: ${latest.impressions}
+- Reach: ${latest.reach}
 
-Changes over time:
+Change over time:
 - Follower change: ${(latest.followers ?? 0) - (first.followers ?? 0)}
 - Engagement rate change: ${(
     (latest.engagementRate ?? 0) - (first.engagementRate ?? 0)
   ).toFixed(2)}
-- Post count change: ${(latest.posts ?? 0) - (first.posts ?? 0)}
+- Post change: ${(latest.posts ?? 0) - (first.posts ?? 0)}
+- Likes change: ${(latest.likes ?? 0) - (first.likes ?? 0)}
+- Comments change: ${(latest.comments ?? 0) - (first.comments ?? 0)}
 `
     : `
 No detailed analytics snapshots are available yet.
@@ -120,17 +153,16 @@ If useful, guide the user generally and suggest syncing the account for more acc
 `
 }
 
-Answer naturally and directly.
+Now answer in a professional, structured, informative format.
 `;
-
-    // Call AI service with custom conversational prompt
+    // Call AI service using custom prompt
     const aiReply = await generateAnalyticsInsights(
       socialAccount,
       snapshots,
       prompt
     );
 
-    // Increment user usage count only after a successful AI attempt
+    // Increase usage count after successful attempt
     user.aiUsageCount += 1;
     await user.save();
 
@@ -146,4 +178,4 @@ Answer naturally and directly.
       error: error.message,
     });
   }
-};   
+};

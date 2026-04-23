@@ -1,23 +1,17 @@
 /**
  * Generate AI response using OpenRouter.
  *
- * This service supports 2 modes:
- * 1. Default analytics insights mode
- *    - used by /api/ai/insights/:socialAccountId
- * 2. Custom prompt mode
- *    - used by /api/ai/chat/:socialAccountId
- *
- * It also supports fallback across multiple models.
+ * Supports:
+ * 1. Default insights mode
+ * 2. Custom prompt mode (used by AI chat)
  */
-
 export const generateAnalyticsInsights = async (
   socialAccount,
   snapshots,
   customPrompt = null
 ) => {
   try {
-    // If no snapshots and no custom prompt context exists,
-    // return a fallback message.
+    // If no snapshots and no custom prompt exists
     if ((!snapshots || snapshots.length === 0) && !customPrompt) {
       return "No analytics data available. Please sync your account first.";
     }
@@ -26,16 +20,41 @@ export const generateAnalyticsInsights = async (
     const latest = snapshots?.[snapshots.length - 1] || null;
 
     /**
-     * Default prompt for AI Insights feature
-     * Used only when a custom prompt is not provided.
+     * Default structured prompt for AI Insights feature
      */
-    const defaultPrompt = `
-You are a social media analytics expert.
+const defaultPrompt = `
+You are a professional social media analytics expert.
 
-Analyze this account's performance and provide:
-1. A short performance summary
-2. A key trend over time
-3. One actionable recommendation
+Your job:
+- Analyze account performance clearly
+- Provide structured, informative, professional output
+- Focus on growth, engagement, content performance, and actionable recommendations
+- Do not use emojis
+- Do not sound casual or childish
+- Do not produce random decorative titles
+- Avoid one long paragraph
+- Keep the response polished and readable
+
+Required structure:
+
+Performance Breakdown
+- Summarize the current performance using the available data
+- Mention meaningful metric changes where relevant
+
+Key Findings
+- Explain the most important growth or performance signals
+- Highlight what appears to be helping or hurting growth
+
+Recommended Actions
+- Give practical steps the user can apply next
+- Keep suggestions specific and useful
+
+Rules:
+- Use professional headings
+- Use bullet points where helpful
+- Be analytical but clear
+- Mention percentages or metric movement when relevant
+- Keep the tone serious, useful, and product-quality
 
 Account:
 - Username: ${socialAccount?.username || "Unknown"}
@@ -53,7 +72,6 @@ First Snapshot:
 - Engagement Rate: ${first.engagementRate}
 - Impressions: ${first.impressions}
 - Reach: ${first.reach}
-- Captured At: ${first.capturedAt}
 
 Latest Snapshot:
 - Followers: ${latest.followers}
@@ -64,31 +82,31 @@ Latest Snapshot:
 - Engagement Rate: ${latest.engagementRate}
 - Impressions: ${latest.impressions}
 - Reach: ${latest.reach}
-- Captured At: ${latest.capturedAt}
+
+Change Summary:
+- Follower change: ${(latest.followers ?? 0) - (first.followers ?? 0)}
+- Engagement rate change: ${(
+    (latest.engagementRate ?? 0) - (first.engagementRate ?? 0)
+  ).toFixed(2)}
+- Post change: ${(latest.posts ?? 0) - (first.posts ?? 0)}
+- Likes change: ${(latest.likes ?? 0) - (first.likes ?? 0)}
+- Comments change: ${(latest.comments ?? 0) - (first.comments ?? 0)}
 `
     : `
-No detailed snapshots are available yet.
+No detailed analytics snapshots are available yet.
 `
 }
 
-Respond in simple English using exactly 3 short bullet points.
+Generate a professional structured response now.
 `;
-
-    // Use custom prompt for chatbot, otherwise fallback to default insights prompt
+    // Use custom prompt if provided by chatbot
     const prompt = customPrompt || defaultPrompt;
 
-    /**
-     * OpenRouter models
-     * First model is your confirmed working free model.
-     * You can add more fallback models later if needed.
-     */
-    const models = [
-      "inclusionai/ling-2.6-flash:free",
-    ];
+    // Confirmed working free model
+    const models = ["inclusionai/ling-2.6-flash:free"];
 
     let lastError = null;
 
-    // Try models one by one
     for (const model of models) {
       try {
         const response = await fetch(
@@ -108,40 +126,36 @@ Respond in simple English using exactly 3 short bullet points.
                 },
               ],
               temperature: 0.5,
-              max_tokens: 400,
+              max_tokens: 500,
             }),
           }
         );
 
         const data = await response.json();
 
-        // Helpful debug logs for development
         console.log("MODEL USED:", model);
         console.log(
           "OPENROUTER RAW RESPONSE:",
           JSON.stringify(data, null, 2)
         );
 
-        // If API/provider returned error, throw so fallback can continue
         if (!response.ok) {
           throw new Error(data?.error?.message || "Model request failed");
         }
 
-        // Extract model text safely
         const content = data?.choices?.[0]?.message?.content;
 
         if (content && typeof content === "string") {
           return content.trim();
         }
 
-        throw new Error("No usable insight text returned by model");
+        throw new Error("No usable response text returned by model");
       } catch (error) {
         console.error(`Model failed: ${model}`, error.message);
         lastError = error.message;
       }
     }
 
-    // If all models fail
     return `All AI models failed. Last error: ${lastError}`;
   } catch (error) {
     console.error("AI Service Error:", error.message);
