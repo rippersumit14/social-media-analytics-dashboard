@@ -7,14 +7,14 @@ import { chatWithAI } from "../services/chatService.js";
  * AI Chat Page
  *
  * Features:
- * - account selector
- * - session-aware chat
- * - modern chat UI
- * - animated loading state
- * - auto scroll
- * - local message history
- * - mic input (speech-to-text)
- * - image upload preview (UI only for now)
+ * - Account selector
+ * - Session-aware AI chat
+ * - Saved chat session support through backend sessionId
+ * - Animated loading bubble
+ * - Auto-scroll to latest message
+ * - Voice input using browser SpeechRecognition
+ * - Voice auto-send after transcript is captured
+ * - Image upload preview is UI-only for now
  */
 const AIChat = () => {
   const { token } = useAuth();
@@ -33,24 +33,22 @@ const AIChat = () => {
   const [sessionId, setSessionId] = useState(null);
   const [sessionTitle, setSessionTitle] = useState("");
 
-  // Mic / voice state
+  // Voice input state
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
+  const [pendingVoiceText, setPendingVoiceText] = useState("");
 
-  // Image upload state
+  // Image upload state: UI preview only for now
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState("");
-
-  //Adding pendingVoiceState
-  const [pendingVoiceText, setPendingVoiceText] = useState("");
 
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const fileInputRef = useRef(null);
 
-
   /**
-   * Keep only recent messages in frontend state
+   * Keep frontend chat state bounded.
+   * Backend already has its own message limit, but this prevents heavy UI rendering.
    */
   const limitMessages = (messages, max = 100) => {
     if (messages.length <= max) return messages;
@@ -58,18 +56,26 @@ const AIChat = () => {
   };
 
   /**
-   * Auto-scroll chat to latest message
+   * Scroll chat window to latest message.
    */
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  /**
+   * Auto-scroll whenever messages or loading bubble changes.
+   */
   useEffect(() => {
     scrollToBottom();
   }, [chatMessages, chatLoading]);
 
   /**
-   * Detect browser speech recognition support
+   * Setup browser SpeechRecognition once when component mounts.
+   *
+   * Important:
+   * This effect only creates and configures recognition.
+   * It does not auto-send directly.
+   * Auto-send is handled by the separate top-level pendingVoiceText effect below.
    */
   useEffect(() => {
     const SpeechRecognition =
@@ -80,18 +86,8 @@ const AIChat = () => {
       return;
     }
 
-  useEffect(() =>{
-    if(!pendingVoiceText) return;
-
-    const timer = setTimeout(() => {
-      handleSendFromMic(pendingVoiceText);
-      setPendingVoiceText("");
-    }, 300);
-
-    return() => clearTimeout(timer);
-  }, [pendingVoiceText, selectedAccount, token, chatLoading, sessionId]);
-
     const recognition = new SpeechRecognition();
+
     recognition.lang = "en-US";
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
@@ -112,20 +108,22 @@ const AIChat = () => {
     };
 
     recognition.onresult = (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript || "";
+      const transcript = event.results?.[0]?.[0]?.transcript?.trim() || "";
 
-      if(transcript.trim()) {
-        setInput(transcript.trim());
-        setPendingVoiceText(transcript.trim());
-      }
-    }
-    
-    
+      if (!transcript) return;
+
+      // Show transcript in textarea so the user can see what was captured.
+      setInput(transcript);
+
+      // Trigger the top-level auto-send effect.
+      setPendingVoiceText(transcript);
+    };
+
     recognitionRef.current = recognition;
   }, []);
 
   /**
-   * Load connected accounts
+   * Load connected social accounts for the account selector.
    */
   useEffect(() => {
     const loadAccounts = async () => {
@@ -139,12 +137,7 @@ const AIChat = () => {
         const accounts = data.accounts || [];
 
         setSocialAccounts(accounts);
-
-        if (accounts.length > 0) {
-          setSelectedAccount(accounts[0]);
-        } else {
-          setSelectedAccount(null);
-        }
+        setSelectedAccount(accounts.length > 0 ? accounts[0] : null);
       } catch (err) {
         console.error("AI Chat load error:", err);
         setError("Failed to load connected accounts");
@@ -157,7 +150,26 @@ const AIChat = () => {
   }, [token]);
 
   /**
-   * Reset chat when account changes
+   * Auto-send voice transcript after it is captured.
+   *
+   * Important:
+   * This hook is top-level inside the component.
+   * Do not move it inside another useEffect, handler, condition, or JSX.
+   */
+  useEffect(() => {
+    if (!pendingVoiceText) return;
+    if (!selectedAccount || !token || chatLoading) return;
+
+    const timer = setTimeout(() => {
+      handleSend(pendingVoiceText);
+      setPendingVoiceText("");
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [pendingVoiceText, selectedAccount, token, chatLoading, sessionId]);
+
+  /**
+   * Reset chat state when selected account changes.
    */
   const handleAccountChange = (e) => {
     const accountId = e.target.value;
@@ -171,13 +183,14 @@ const AIChat = () => {
     setSessionId(null);
     setSessionTitle("");
     setInput("");
+    setPendingVoiceText("");
     setSelectedImage(null);
     setSelectedImagePreview("");
     setError("");
   };
 
   /**
-   * Start / stop voice recognition
+   * Start or stop browser voice recognition.
    */
   const handleMicClick = () => {
     if (!speechSupported || !recognitionRef.current) {
@@ -198,14 +211,17 @@ const AIChat = () => {
   };
 
   /**
-   * Handle image selection
+   * Handle image selection.
+   *
+   * Current behavior:
+   * - Image is only previewed in UI.
+   * - Backend image analysis is not connected yet.
    */
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
 
     if (!file) return;
 
-    // Basic client-side validation
     if (!file.type.startsWith("image/")) {
       setError("Please upload a valid image file.");
       return;
@@ -217,7 +233,7 @@ const AIChat = () => {
   };
 
   /**
-   * Remove selected image
+   * Remove selected image preview and clear file input.
    */
   const handleRemoveImage = () => {
     setSelectedImage(null);
@@ -229,74 +245,19 @@ const AIChat = () => {
   };
 
   /**
-   * Send message to backend
+   * Send a message to backend AI chat API.
    *
-   * Note:
-   * For now image upload is UI-only.
-   * Later we can send the image to backend / multimodal model.
+   * messageText is optional:
+   * - Normal typing uses current input state.
+   * - Voice auto-send passes transcript directly.
    */
-  const handleSend = async () => {
-    if ((!input.trim() && !selectedImage) || !selectedAccount || !token || chatLoading) {
+  const handleSend = async (messageText = input) => {
+    const currentInput = messageText.trim();
+
+    if ((!currentInput && !selectedImage) || !selectedAccount || !token || chatLoading) {
       return;
     }
 
-  const handleSendFromMic = async (spokenText) => {
-  if (!spokenText.trim() || !selectedAccount || !token || chatLoading) return;
-
-  const userMessage = {
-    id: Date.now(),
-    role: "user",
-    content: spokenText.trim(),
-  };
-
-  setChatMessages((prev) => limitMessages([...prev, userMessage]));
-  setInput("");
-
-  try {
-    setChatLoading(true);
-    setError("");
-
-    const data = await chatWithAI(
-      selectedAccount._id,
-      spokenText.trim(),
-      token,
-      sessionId
-    );
-
-    if (data.sessionId) setSessionId(data.sessionId);
-    if (data.sessionTitle) setSessionTitle(data.sessionTitle);
-
-    const aiMessage = {
-      id: Date.now() + 1,
-      role: "assistant",
-      content: data.reply || "No reply generated.",
-    };
-
-    setChatMessages((prev) => limitMessages([...prev, aiMessage]));
-    setRemainingUsage(data.remainingUsage ?? null);
-  } catch (err) {
-    console.error("AI Chat mic error:", err);
-
-    setError(err.response?.data?.message || "Failed to get AI response");
-
-    setChatMessages((prev) =>
-      limitMessages([
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "assistant",
-          content: "Sorry, something went wrong while generating the response.",
-        },
-      ])
-    );
-  } finally {
-    setChatLoading(false);
-  }
-};
-  
-
-    // Build what user sees in chat
-    const currentInput = input.trim();
     const userVisibleContent =
       currentInput || (selectedImage ? "Uploaded an image for analysis." : "");
 
@@ -314,7 +275,6 @@ const AIChat = () => {
       setChatLoading(true);
       setError("");
 
-      // Temporary text prompt if image is uploaded
       let finalMessage = currentInput;
 
       if (selectedImage && currentInput) {
@@ -348,18 +308,17 @@ const AIChat = () => {
       setChatMessages((prev) => limitMessages([...prev, aiMessage]));
       setRemainingUsage(data.remainingUsage ?? null);
 
-      // Reset image after send
+      // Clear image preview only after successful send.
       setSelectedImage(null);
       setSelectedImagePreview("");
+
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     } catch (err) {
       console.error("AI Chat error:", err);
 
-      setError(
-        err.response?.data?.message || "Failed to get AI response"
-      );
+      setError(err.response?.data?.message || "Failed to get AI response");
 
       const failMessage = {
         id: Date.now() + 1,
@@ -374,7 +333,7 @@ const AIChat = () => {
   };
 
   /**
-   * Render assistant message nicely
+   * Render assistant messages with simple formatting.
    */
   const renderMessageContent = (content) => {
     const lines = content
@@ -418,14 +377,14 @@ const AIChat = () => {
         </p>
       </div>
 
-      {/* Error */}
+      {/* Error message */}
       {error && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      {/* No connected accounts */}
+      {/* Empty account state */}
       {!loading && socialAccounts.length === 0 && (
         <div className="mt-6 rounded-2xl bg-white p-6 shadow-md">
           <h2 className="text-xl font-semibold text-gray-700">
@@ -437,7 +396,7 @@ const AIChat = () => {
         </div>
       )}
 
-      {/* Account + session info */}
+      {/* Account selector and session info */}
       {selectedAccount && (
         <div className="mt-6 rounded-2xl bg-white p-5 shadow-md">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -457,7 +416,8 @@ const AIChat = () => {
 
               {sessionTitle && (
                 <p className="mt-2 text-sm text-gray-500">
-                  Current session: <span className="font-medium">{sessionTitle}</span>
+                  Current session:{" "}
+                  <span className="font-medium">{sessionTitle}</span>
                 </p>
               )}
             </div>
@@ -534,7 +494,7 @@ const AIChat = () => {
                   </div>
                 ))}
 
-                {/* Loading bubble */}
+                {/* AI loading bubble */}
                 {chatLoading && (
                   <div className="flex justify-start">
                     <div className="max-w-[80%] rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm">
@@ -596,7 +556,7 @@ const AIChat = () => {
               />
 
               <div className="flex items-center gap-2">
-                {/* Image upload button */}
+                {/* Hidden image input */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -614,7 +574,7 @@ const AIChat = () => {
                   Image
                 </button>
 
-                {/* Mic button */}
+                {/* Voice input button */}
                 <button
                   type="button"
                   onClick={handleMicClick}
@@ -628,9 +588,9 @@ const AIChat = () => {
                   {isListening ? "Listening..." : "Voice Ask"}
                 </button>
 
-                {/* Send button */}
                 <button
-                  onClick={handleSend}
+                  type="button"
+                  onClick={() => handleSend()}
                   disabled={chatLoading}
                   className="rounded-xl bg-blue-600 px-5 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
