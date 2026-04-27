@@ -41,9 +41,13 @@ const AIChat = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState("");
 
+  //Adding pendingVoiceState
+  const [pendingVoiceText, setPendingVoiceText] = useState("");
+
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
   const fileInputRef = useRef(null);
+
 
   /**
    * Keep only recent messages in frontend state
@@ -76,6 +80,17 @@ const AIChat = () => {
       return;
     }
 
+  useEffect(() =>{
+    if(!pendingVoiceText) return;
+
+    const timer = setTimeout(() => {
+      handleSendFromMic(pendingVoiceText);
+      setPendingVoiceText("");
+    }, 300);
+
+    return() => clearTimeout(timer);
+  }, [pendingVoiceText, selectedAccount, token, chatLoading, sessionId]);
+
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     recognition.interimResults = false;
@@ -99,21 +114,13 @@ const AIChat = () => {
     recognition.onresult = (event) => {
       const transcript = event.results?.[0]?.[0]?.transcript || "";
 
-      if(transcript){
-        //Put spoken text into input box 
-        setInput(transcript);
-
-        //Auto-send after speech recognition finishes 
-        setTimeout(() => {
-          handleSendFromMic(transcript);
-        }, 300);
+      if(transcript.trim()) {
+        setInput(transcript.trim());
+        setPendingVoiceText(transcript.trim());
       }
     }
-
-
-
-
-
+    
+    
     recognitionRef.current = recognition;
   }, []);
 
