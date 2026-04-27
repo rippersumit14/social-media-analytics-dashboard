@@ -288,7 +288,8 @@ const AIChat = () => {
         selectedAccount._id,
         finalMessage,
         token,
-        sessionId
+        sessionId,
+        selectedImage
       );
 
       if (data.sessionId) {

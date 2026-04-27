@@ -1,15 +1,48 @@
 import api from "./api.js";
 
 /**
- * Send a message to backend AI chat API
+ * Send message to AI chat API
  *
- * @param {string} accountId - Selected social account ID
- * @param {string} message - User's current message
- * @param {string} token - Auth token
- * @param {string|null} sessionId - Existing chat session ID (optional)
- * @returns {Promise<Object>} reply, remainingUsage, sessionId, sessionTitle
+ * Supports:
+ * - Text-only (JSON)
+ * - Text + image (FormData)
+ *
+ * @param {string} accountId
+ * @param {string} message
+ * @param {string} token
+ * @param {string|null} sessionId
+ * @param {File|null} imageFile
  */
-export const chatWithAI = async (accountId, message, token, sessionId = null) => {
+export const chatWithAI = async (
+  accountId,
+  message,
+  token,
+  sessionId = null,
+  imageFile = null
+) => {
+  // IMAGE PRESENT 
+  if (imageFile) {
+    const formData = new FormData();
+
+    formData.append("message", message);
+    if (sessionId) formData.append("sessionId", sessionId);
+    formData.append("image", imageFile);
+
+    const response = await api.post(
+      `/ai/chat/${accountId}`,
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      }
+    );
+
+    return response.data;
+  }
+
+  // TEXT ONLY 
   const response = await api.post(
     `/ai/chat/${accountId}`,
     {
