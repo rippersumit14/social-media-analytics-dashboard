@@ -9,7 +9,7 @@ const AuthContext = createContext(null);
 
 /**
  * Global authentication provider.
- * Handles:
+ * Handles: 
  * - token persistence
  * - loading current user on refresh
  * - login
