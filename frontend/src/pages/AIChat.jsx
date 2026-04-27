@@ -98,10 +98,21 @@ const AIChat = () => {
 
     recognition.onresult = (event) => {
       const transcript = event.results?.[0]?.[0]?.transcript || "";
-      if (transcript) {
-        setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+
+      if(transcript){
+        //Put spoken text into input box 
+        setInput(transcript);
+
+        //Auto-send after speech recognition finishes 
+        setTimeout(() => {
+          handleSendFromMic(transcript);
+        }, 300);
       }
-    };
+    }
+
+
+
+
 
     recognitionRef.current = recognition;
   }, []);
@@ -221,6 +232,61 @@ const AIChat = () => {
     if ((!input.trim() && !selectedImage) || !selectedAccount || !token || chatLoading) {
       return;
     }
+
+  const handleSendFromMic = async (spokenText) => {
+  if (!spokenText.trim() || !selectedAccount || !token || chatLoading) return;
+
+  const userMessage = {
+    id: Date.now(),
+    role: "user",
+    content: spokenText.trim(),
+  };
+
+  setChatMessages((prev) => limitMessages([...prev, userMessage]));
+  setInput("");
+
+  try {
+    setChatLoading(true);
+    setError("");
+
+    const data = await chatWithAI(
+      selectedAccount._id,
+      spokenText.trim(),
+      token,
+      sessionId
+    );
+
+    if (data.sessionId) setSessionId(data.sessionId);
+    if (data.sessionTitle) setSessionTitle(data.sessionTitle);
+
+    const aiMessage = {
+      id: Date.now() + 1,
+      role: "assistant",
+      content: data.reply || "No reply generated.",
+    };
+
+    setChatMessages((prev) => limitMessages([...prev, aiMessage]));
+    setRemainingUsage(data.remainingUsage ?? null);
+  } catch (err) {
+    console.error("AI Chat mic error:", err);
+
+    setError(err.response?.data?.message || "Failed to get AI response");
+
+    setChatMessages((prev) =>
+      limitMessages([
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          content: "Sorry, something went wrong while generating the response.",
+        },
+      ])
+    );
+  } finally {
+    setChatLoading(false);
+  }
+};
+  
 
     // Build what user sees in chat
     const currentInput = input.trim();
@@ -552,7 +618,7 @@ const AIChat = () => {
                   }`}
                   title="Voice input"
                 >
-                  {isListening ? "Listening..." : "Mic"}
+                  {isListening ? "Listening..." : "Voice Ask"}
                 </button>
 
                 {/* Send button */}
