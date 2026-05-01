@@ -9,12 +9,13 @@ import { chatWithAI } from "../services/chatService.js";
  * Features:
  * - Account selector
  * - Session-aware AI chat
- * - Saved chat session support through backend sessionId
- * - Animated loading bubble
+ * - Text-only chat
+ * - Image-only chat
+ * - Text + image chat
+ * - Voice input with auto-send
+ * - Loading state
+ * - Clean AI busy/error handling
  * - Auto-scroll to latest message
- * - Voice input using browser SpeechRecognition
- * - Voice auto-send after transcript is captured
- * - Image upload preview is UI-only for now
  */
 const AIChat = () => {
   const { token } = useAuth();
@@ -33,12 +34,10 @@ const AIChat = () => {
   const [sessionId, setSessionId] = useState(null);
   const [sessionTitle, setSessionTitle] = useState("");
 
-  // Voice input state
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
   const [pendingVoiceText, setPendingVoiceText] = useState("");
 
-  // Image upload state: UI preview only for now
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState("");
 
@@ -46,36 +45,42 @@ const AIChat = () => {
   const recognitionRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  /**
-   * Keep frontend chat state bounded.
-   * Backend already has its own message limit, but this prevents heavy UI rendering.
-   */
   const limitMessages = (messages, max = 100) => {
     if (messages.length <= max) return messages;
     return messages.slice(messages.length - max);
   };
 
-  /**
-   * Scroll chat window to latest message.
-   */
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  /**
-   * Auto-scroll whenever messages or loading bubble changes.
-   */
+  const clearSelectedImage = () => {
+    if (selectedImagePreview) {
+      URL.revokeObjectURL(selectedImagePreview);
+    }
+
+    setSelectedImage(null);
+    setSelectedImagePreview("");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [chatMessages, chatLoading]);
 
+  useEffect(() => {
+    return () => {
+      if (selectedImagePreview) {
+        URL.revokeObjectURL(selectedImagePreview);
+      }
+    };
+  }, [selectedImagePreview]);
+
   /**
-   * Setup browser SpeechRecognition once when component mounts.
-   *
-   * Important:
-   * This effect only creates and configures recognition.
-   * It does not auto-send directly.
-   * Auto-send is handled by the separate top-level pendingVoiceText effect below.
+   * Setup browser speech recognition.
    */
   useEffect(() => {
     const SpeechRecognition =
@@ -112,10 +117,7 @@ const AIChat = () => {
 
       if (!transcript) return;
 
-      // Show transcript in textarea so the user can see what was captured.
       setInput(transcript);
-
-      // Trigger the top-level auto-send effect.
       setPendingVoiceText(transcript);
     };
 
@@ -123,7 +125,7 @@ const AIChat = () => {
   }, []);
 
   /**
-   * Load connected social accounts for the account selector.
+   * Load connected social accounts.
    */
   useEffect(() => {
     const loadAccounts = async () => {
@@ -140,7 +142,7 @@ const AIChat = () => {
         setSelectedAccount(accounts.length > 0 ? accounts[0] : null);
       } catch (err) {
         console.error("AI Chat load error:", err);
-        setError("Failed to load connected accounts");
+        setError("Failed to load connected accounts.");
       } finally {
         setLoading(false);
       }
@@ -150,11 +152,7 @@ const AIChat = () => {
   }, [token]);
 
   /**
-   * Auto-send voice transcript after it is captured.
-   *
-   * Important:
-   * This hook is top-level inside the component.
-   * Do not move it inside another useEffect, handler, condition, or JSX.
+   * Auto-send voice transcript.
    */
   useEffect(() => {
     if (!pendingVoiceText) return;
@@ -168,9 +166,6 @@ const AIChat = () => {
     return () => clearTimeout(timer);
   }, [pendingVoiceText, selectedAccount, token, chatLoading, sessionId]);
 
-  /**
-   * Reset chat state when selected account changes.
-   */
   const handleAccountChange = (e) => {
     const accountId = e.target.value;
     const account = socialAccounts.find((a) => a._id === accountId);
@@ -184,15 +179,13 @@ const AIChat = () => {
     setSessionTitle("");
     setInput("");
     setPendingVoiceText("");
-    setSelectedImage(null);
-    setSelectedImagePreview("");
+    clearSelectedImage();
     setError("");
   };
 
-  /**
-   * Start or stop browser voice recognition.
-   */
   const handleMicClick = () => {
+    if (chatLoading) return;
+
     if (!speechSupported || !recognitionRef.current) {
       setError("Speech recognition is not supported in this browser.");
       return;
@@ -210,13 +203,6 @@ const AIChat = () => {
     }
   };
 
-  /**
-   * Handle image selection.
-   *
-   * Current behavior:
-   * - Image is only previewed in UI.
-   * - Backend image analysis is not connected yet.
-   */
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
 
@@ -227,39 +213,36 @@ const AIChat = () => {
       return;
     }
 
+    if (selectedImagePreview) {
+      URL.revokeObjectURL(selectedImagePreview);
+    }
+
     setSelectedImage(file);
     setSelectedImagePreview(URL.createObjectURL(file));
     setError("");
   };
 
-  /**
-   * Remove selected image preview and clear file input.
-   */
   const handleRemoveImage = () => {
-    setSelectedImage(null);
-    setSelectedImagePreview("");
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+    clearSelectedImage();
   };
 
   /**
-   * Send a message to backend AI chat API.
-   *
-   * messageText is optional:
-   * - Normal typing uses current input state.
-   * - Voice auto-send passes transcript directly.
+   * Send message to backend AI chat API.
    */
   const handleSend = async (messageText = input) => {
     const currentInput = messageText.trim();
 
-    if ((!currentInput && !selectedImage) || !selectedAccount || !token || chatLoading) {
+    if (
+      (!currentInput && !selectedImage) ||
+      !selectedAccount ||
+      !token ||
+      chatLoading
+    ) {
       return;
     }
 
     const userVisibleContent =
-      currentInput || (selectedImage ? "Uploaded an image for analysis." : "");
+      currentInput || "Uploaded an image for analysis.";
 
     const userMessage = {
       id: Date.now(),
@@ -270,23 +253,14 @@ const AIChat = () => {
 
     setChatMessages((prev) => limitMessages([...prev, userMessage]));
     setInput("");
+    setError("");
 
     try {
       setChatLoading(true);
-      setError("");
-
-      let finalMessage = currentInput;
-
-      if (selectedImage && currentInput) {
-        finalMessage = `${currentInput}\n\nThe user has also uploaded an image. Image analysis is not connected yet, so respond based on the text and mention that image understanding will be added soon.`;
-      } else if (selectedImage && !currentInput) {
-        finalMessage =
-          "The user uploaded an image and wants help. Image analysis is not connected yet, so acknowledge the upload and ask what they want analyzed.";
-      }
 
       const data = await chatWithAI(
         selectedAccount._id,
-        finalMessage,
+        currentInput,
         token,
         sessionId,
         selectedImage
@@ -303,28 +277,26 @@ const AIChat = () => {
       const aiMessage = {
         id: Date.now() + 1,
         role: "assistant",
-        content: data.reply || "No reply generated.",
+        content: data.reply || "AI is currently busy, please try again.",
       };
 
       setChatMessages((prev) => limitMessages([...prev, aiMessage]));
       setRemainingUsage(data.remainingUsage ?? null);
 
-      // Clear image preview only after successful send.
-      setSelectedImage(null);
-      setSelectedImagePreview("");
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      clearSelectedImage();
     } catch (err) {
       console.error("AI Chat error:", err);
 
-      setError(err.response?.data?.message || "Failed to get AI response");
+      const cleanError =
+        err.response?.data?.message || "AI is currently busy, please try again.";
+
+      setError(cleanError);
 
       const failMessage = {
         id: Date.now() + 1,
         role: "assistant",
-        content: "Sorry, something went wrong while generating the response.",
+        content: cleanError,
+        isError: true,
       };
 
       setChatMessages((prev) => limitMessages([...prev, failMessage]));
@@ -333,9 +305,6 @@ const AIChat = () => {
     }
   };
 
-  /**
-   * Render assistant messages with simple formatting.
-   */
   const renderMessageContent = (content) => {
     const lines = content
       .split("\n")
@@ -346,9 +315,7 @@ const AIChat = () => {
       <div className="space-y-2">
         {lines.map((line, index) => {
           const isHeading =
-            !line.startsWith("-") &&
-            line.length < 45 &&
-            !line.includes(":");
+            !line.startsWith("-") && line.length < 45 && !line.includes(":");
 
           if (isHeading) {
             return (
@@ -370,22 +337,20 @@ const AIChat = () => {
 
   return (
     <div>
-      {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-800">AI Chat</h1>
         <p className="mt-3 text-gray-600">
-          Ask detailed questions about account performance, content strategy, and growth.
+          Ask detailed questions about account performance, content strategy,
+          and growth.
         </p>
       </div>
 
-      {/* Error message */}
       {error && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      {/* Empty account state */}
       {!loading && socialAccounts.length === 0 && (
         <div className="mt-6 rounded-2xl bg-white p-6 shadow-md">
           <h2 className="text-xl font-semibold text-gray-700">
@@ -397,7 +362,6 @@ const AIChat = () => {
         </div>
       )}
 
-      {/* Account selector and session info */}
       {selectedAccount && (
         <div className="mt-6 rounded-2xl bg-white p-5 shadow-md">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -406,7 +370,7 @@ const AIChat = () => {
                 Active Account
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                Switch account to ask account-specific questions
+                Switch account to ask account-specific questions.
               </p>
 
               {typeof remainingUsage === "number" && (
@@ -431,7 +395,8 @@ const AIChat = () => {
               <select
                 value={selectedAccount._id}
                 onChange={handleAccountChange}
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-gray-700 outline-none focus:border-blue-500"
+                disabled={chatLoading}
+                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-gray-700 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {socialAccounts.map((account) => (
                   <option key={account._id} value={account._id}>
@@ -444,7 +409,6 @@ const AIChat = () => {
         </div>
       )}
 
-      {/* Chat window */}
       {selectedAccount && (
         <div className="mt-6 rounded-2xl bg-white p-5 shadow-md">
           <div className="h-[500px] overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50 p-4">
@@ -455,8 +419,8 @@ const AIChat = () => {
                     Start a conversation
                   </h3>
                   <p className="mt-2 text-sm text-gray-500">
-                    Ask about followers, engagement, content ideas, growth strategy,
-                    post performance, or general social media questions.
+                    Ask about followers, engagement, content ideas, growth
+                    strategy, post performance, or upload an image for analysis.
                   </p>
                 </div>
               </div>
@@ -474,6 +438,8 @@ const AIChat = () => {
                         className={`rounded-2xl px-4 py-3 shadow-sm ${
                           message.role === "user"
                             ? "rounded-br-md bg-blue-600 text-white"
+                            : message.isError
+                            ? "rounded-bl-md border border-red-200 bg-red-50 text-red-700"
                             : "rounded-bl-md bg-white text-gray-800"
                         }`}
                       >
@@ -486,7 +452,9 @@ const AIChat = () => {
                         )}
 
                         {message.role === "user" ? (
-                          <p className="text-sm leading-6">{message.content}</p>
+                          <p className="text-sm leading-6">
+                            {message.content}
+                          </p>
                         ) : (
                           renderMessageContent(message.content)
                         )}
@@ -495,14 +463,18 @@ const AIChat = () => {
                   </div>
                 ))}
 
-                {/* AI loading bubble */}
                 {chatLoading && (
                   <div className="flex justify-start">
                     <div className="max-w-[80%] rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400"></span>
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]"></span>
-                        <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]"></span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400"></span>
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]"></span>
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]"></span>
+                        </div>
+                        <span className="text-sm text-gray-500">
+                          AI is thinking...
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -513,7 +485,6 @@ const AIChat = () => {
             )}
           </div>
 
-          {/* Selected image preview before send */}
           {selectedImagePreview && (
             <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-3">
               <div className="flex items-start justify-between gap-4">
@@ -531,7 +502,8 @@ const AIChat = () => {
                 <button
                   type="button"
                   onClick={handleRemoveImage}
-                  className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  disabled={chatLoading}
+                  className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Remove
                 </button>
@@ -539,7 +511,6 @@ const AIChat = () => {
             </div>
           )}
 
-          {/* Input area */}
           <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-3">
             <div className="flex flex-col gap-3 md:flex-row">
               <textarea
@@ -552,34 +523,36 @@ const AIChat = () => {
                     handleSend();
                   }
                 }}
+                disabled={chatLoading}
                 placeholder="Ask AI about this account..."
-                className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-gray-700 outline-none focus:border-blue-500"
+                className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-gray-700 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
               />
 
               <div className="flex items-center gap-2">
-                {/* Hidden image input */}
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   onChange={handleImageChange}
+                  disabled={chatLoading}
                   className="hidden"
                 />
 
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  disabled={chatLoading}
+                  className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                   title="Upload image"
                 >
                   Image
                 </button>
 
-                {/* Voice input button */}
                 <button
                   type="button"
                   onClick={handleMicClick}
-                  className={`rounded-xl border px-3 py-2 text-sm ${
+                  disabled={chatLoading}
+                  className={`rounded-xl border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
                     isListening
                       ? "border-red-300 bg-red-50 text-red-600"
                       : "border-gray-200 text-gray-700 hover:bg-gray-50"
@@ -592,10 +565,12 @@ const AIChat = () => {
                 <button
                   type="button"
                   onClick={() => handleSend()}
-                  disabled={chatLoading}
+                  disabled={
+                    chatLoading || (!input.trim() && !selectedImage)
+                  }
                   className="rounded-xl bg-blue-600 px-5 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Send
+                  {chatLoading ? "Sending..." : "Send"}
                 </button>
               </div>
             </div>
