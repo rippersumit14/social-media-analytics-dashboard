@@ -3,6 +3,8 @@ import { getAIInsights } from "../controllers/aiController.js";
 import protect from "../middleware/authMiddleware.js";
 import aiRateLimiter from "../middleware/aiRateLimiter.js";
 import { chatWithAI } from "../controllers/chatController.js";
+import { uploadImage } from "../middleware/uploadMiddleware.js";
+
 
 const router = express.Router();
 
@@ -14,6 +16,13 @@ const router = express.Router();
 router.post("/insights/:socialAccountId", protect, getAIInsights, aiRateLimiter);
 
 
-router.post("/chat/:socialAccountId", protect, aiRateLimiter, chatWithAI);
+router.post(
+    "/chat/:socialAccountId",
+    protect,
+    uploadImage.single("image"),
+    chatWithAI,
+)
+
+
 
 export default router;

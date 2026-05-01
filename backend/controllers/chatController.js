@@ -115,6 +115,21 @@ const buildSessionTitle = (message) => {
   return clean.length > 60 ? `${clean.slice(0, 60)}...` : clean;
 };
 
+//Build a safe user message for text, image-only, or text + image chat
+const buildUserMessgeText = (message, hasImage) => {
+  const cleanMessage = message?.trim() || "";
+
+  if(cleanMessage) return cleanMessage;
+
+  if(hasImage){
+    return "The user uploads an image and wants analysis"
+  }
+
+  return "";
+
+
+}
+
 /**
  * Helper: build analytics context block
  */
@@ -192,14 +207,26 @@ Change summary:
 export const chatWithAI = async (req, res) => {
   try {
     const { socialAccountId } = req.params;
-    const { message, sessionId } = req.body;
+    const {message, sessionId} = req.body;
+    const uploadedImage = req.file || null;
+    const hasImage = Boolean(uploadedImage);
 
-    // Validate input
-    if (!message || !message.trim()) {
+    const userMessageText = buildUserMessgeText(message, hasImage);
+
+    //Validate input: allow only the text is allowed, image-only, or text + image.
+    if(!userMessageText && !hasImage){
       return res.status(400).json({
-        message: "Message is required",
+        message: "Message or image is required",
       });
     }
+
+    const imageBase64 = uploadedImage
+    ? uploadedImage.buffer.toString("base64")
+    : null;
+
+    const imageMimeType = uploadedImage?.mimetype || null;
+
+
 
     // Current authenticated user
     const user = await User.findById(req.user._id);
@@ -254,7 +281,7 @@ export const chatWithAI = async (req, res) => {
       const newSession = {
         userId: user._id.toString(),
         socialAccountId,
-        title: buildSessionTitle(message),
+        title: buildSessionTitle(userMessageText),
         createdAt: now,
         updatedAt: now,
       };
@@ -281,7 +308,14 @@ export const chatWithAI = async (req, res) => {
       userId: user._id.toString(),
       socialAccountId,
       role: "user",
-      content: message.trim(),
+      content: userMessageText,
+      image: hasImage
+      ? {
+        originalName: uploadedImage.originalname,
+        mimeType: imageMimeType,
+        size: uploadedImage.size,
+    }
+  : null,
       createdAt: now,
     };
 
@@ -310,7 +344,9 @@ export const chatWithAI = async (req, res) => {
     const aiReply = await generateAnalyticsResponse({
       analyticsContext,
       historyMessages,
-      latestUserMessage: message.trim(),
+      latestUserMessage: userMessageText,
+      imageBase64,
+      imageMimeType,
     });
 
     // ---------- Save assistant reply ----------

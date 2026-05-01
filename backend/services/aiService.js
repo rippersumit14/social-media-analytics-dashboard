@@ -1,24 +1,11 @@
 /**
  * AI Service
  *
- * Supports 2 modes:
- * 1. generateAnalyticsInsights()  -> for insights feature
- * 2. generateAnalyticsResponse()  -> for chat / personal assistant feature
- *
- * Features:
- * - Multiple fallback models
- * - Clear logging of model usage
- * - Graceful error handling
- * - Professional default prompts
+ * Supports:
+ * 1. generateAnalyticsInsights() -> analytics insights feature
+ * 2. generateAnalyticsResponse() -> AI chat text + optional image analysis
  */
 
-/**
- * Shared list of OpenRouter fallback models.
- *
- * Order matters:
- * - We try top to bottom
- * - As soon as one works, we return its response
- */
 const AI_MODELS = [
   "inclusionai/ling-2.6-flash:free",
   "nvidia/nemotron-3-super:free",
@@ -30,9 +17,17 @@ const AI_MODELS = [
 ];
 
 /**
- * Helper:
- * Extracts the most useful error message from OpenRouter response
+ * Vision-capable free router.
+ * OpenRouter automatically filters for models that support image input.
  */
+const VISION_MODELS = [
+  "qwen/qwen2.5-vl-72b-instruct:free",
+  "qwen/qwen2.5-vl-32b-instruct:free",
+  "google/gemini-2.0-flash-exp:free",
+  "google/gemma-3-27b-it:free",
+  "openrouter/free",
+];
+
 const extractOpenRouterError = (data) => {
   return (
     data?.error?.metadata?.raw ||
@@ -41,46 +36,30 @@ const extractOpenRouterError = (data) => {
   );
 };
 
-/**
- * Helper:
- * Makes a single OpenRouter request with a specific model
- *
- * @param {string} model - model name
- * @param {Array} messages - chat completion messages
- * @param {number} temperature - randomness
- * @param {number} maxTokens - response size cap
- * @returns {Promise<string>} response text
- */
 const callOpenRouterModel = async ({
   model,
   messages,
   temperature = 0.5,
   maxTokens = 500,
 }) => {
-  const response = await fetch(
-    "https://openrouter.ai/api/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-      }),
-    }
-  );
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
 
   const data = await response.json();
 
   console.log("MODEL ATTEMPTED:", model);
-  console.log(
-    "OPENROUTER RAW RESPONSE:",
-    JSON.stringify(data, null, 2)
-  );
+  console.log("OPENROUTER RAW RESPONSE:", JSON.stringify(data, null, 2));
 
   if (!response.ok) {
     throw new Error(extractOpenRouterError(data));
@@ -95,23 +74,15 @@ const callOpenRouterModel = async ({
   return content.trim();
 };
 
-/**
- * Helper:
- * Tries models one by one until one succeeds
- *
- * @param {Array} messages - formatted chat messages
- * @param {number} temperature
- * @param {number} maxTokens
- * @returns {Promise<string>}
- */
 const tryModelsWithFallback = async ({
+  models = AI_MODELS,
   messages,
   temperature = 0.5,
   maxTokens = 500,
 }) => {
   let lastError = null;
 
-  for (const model of AI_MODELS) {
+  for (const model of models) {
     try {
       const result = await callOpenRouterModel({
         model,
@@ -125,32 +96,18 @@ const tryModelsWithFallback = async ({
     } catch (error) {
       console.error(`MODEL FAILED: ${model}`, error.message);
       lastError = error.message;
-      continue;
     }
   }
 
   return `All AI models failed. Please try again later. Last error: ${lastError}`;
 };
 
-/**
- * Feature 1:
- * Generate structured analytics insights
- *
- * Used by:
- * - AI Insights button/page
- *
- * @param {Object} socialAccount
- * @param {Array} snapshots
- * @param {string|null} customPrompt - optional override prompt
- * @returns {Promise<string>}
- */
 export const generateAnalyticsInsights = async (
   socialAccount,
   snapshots,
   customPrompt = null
 ) => {
   try {
-    // If no data and no custom prompt, give safe fallback
     if ((!snapshots || snapshots.length === 0) && !customPrompt) {
       return "No analytics data available. Please sync your account first.";
     }
@@ -158,10 +115,6 @@ export const generateAnalyticsInsights = async (
     const first = snapshots?.[0] || null;
     const latest = snapshots?.[snapshots.length - 1] || null;
 
-    /**
-     * Default insights prompt
-     * Professional, structured, no childish style
-     */
     const defaultPrompt = `
 You are a professional social media analytics expert.
 
@@ -224,8 +177,8 @@ Latest Snapshot:
 Change Summary:
 - Follower change: ${(latest.followers ?? 0) - (first.followers ?? 0)}
 - Engagement rate change: ${(
-    (latest.engagementRate ?? 0) - (first.engagementRate ?? 0)
-  ).toFixed(2)}
+        (latest.engagementRate ?? 0) - (first.engagementRate ?? 0)
+      ).toFixed(2)}
 - Post change: ${(latest.posts ?? 0) - (first.posts ?? 0)}
 - Likes change: ${(latest.likes ?? 0) - (first.likes ?? 0)}
 - Comments change: ${(latest.comments ?? 0) - (first.comments ?? 0)}
@@ -248,6 +201,7 @@ Generate a professional structured response now.
     ];
 
     return await tryModelsWithFallback({
+      models: AI_MODELS,
       messages,
       temperature: 0.5,
       maxTokens: 700,
@@ -258,36 +212,16 @@ Generate a professional structured response now.
   }
 };
 
-/**
- * Feature 2:
- * Personal assistant / conversational AI chat
- *
- * Used by:
- * - AI Chat page
- *
- * This mode behaves more like ChatGPT / Claude:
- * - short reply for greetings
- * - uses analytics only when relevant
- * - acts like a social media strategist when asked
- * - continues conversation naturally
- *
- * @param {Object} params
- * @param {string} params.analyticsContext
- * @param {Array} params.historyMessages
- * @param {string} params.latestUserMessage
- * @returns {Promise<string>}
- */
 export const generateAnalyticsResponse = async ({
   analyticsContext,
   historyMessages = [],
   latestUserMessage,
+  imageBase64 = null,
+  imageMimeType = null,
 }) => {
   try {
-    /**
-     * System prompt controls chatbot behavior
-     */
     const systemPrompt = `
-You are a professional AI personal assistant inside a social media analytics platform.
+You are a professional AI assistant inside a social media analytics platform.
 
 Your behavior:
 - Be natural, intelligent, and conversational
@@ -300,7 +234,9 @@ Your behavior:
 - Use account analytics only when relevant
 - If the user asks about performance, use analytics context
 - If the user asks strategy/content questions, act like a social media growth expert
-- If the user asks casual/general questions, respond naturally and briefly
+- If the user uploads an image, analyze the visual content clearly and practically
+- If the image appears to be a post, thumbnail, profile, design, chart, or analytics screenshot, explain what is visible and give useful improvement suggestions
+- Avoid claiming details that are not visible in the image
 - Avoid repetition
 - Keep answers polished and practical
 
@@ -316,6 +252,23 @@ Analytics context:
 ${analyticsContext}
 `;
 
+    const hasImage = Boolean(imageBase64 && imageMimeType);
+
+    const userContent = hasImage
+      ? [
+          {
+            type: "text",
+            text: latestUserMessage,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:${imageMimeType};base64,${imageBase64}`,
+            },
+          },
+        ]
+      : latestUserMessage;
+
     const messages = [
       {
         role: "system",
@@ -324,14 +277,15 @@ ${analyticsContext}
       ...historyMessages,
       {
         role: "user",
-        content: latestUserMessage,
+        content: userContent,
       },
     ];
 
     return await tryModelsWithFallback({
+      models: hasImage ? VISION_MODELS : AI_MODELS,
       messages,
       temperature: 0.6,
-      maxTokens: 700,
+      maxTokens: 800,
     });
   } catch (error) {
     console.error("AI Service Error (Chat):", error.message);
