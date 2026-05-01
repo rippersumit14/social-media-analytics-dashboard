@@ -1,9 +1,14 @@
 /**
  * AI Service
  *
- * Supports:
- * 1. generateAnalyticsInsights() -> analytics insights feature
- * 2. generateAnalyticsResponse() -> AI chat text + optional image analysis
+ * Responsibilities:
+ * 1. Generate analytics insights from account snapshots
+ * 2. Generate AI chat responses with optional image analysis
+ * 3. Provide a reliability layer:
+ *    - retry failed model calls
+ *    - fallback to next model
+ *    - hide raw provider errors from frontend
+ *    - log backend-only debugging details
  */
 
 const AI_MODELS = [
@@ -17,8 +22,8 @@ const AI_MODELS = [
 ];
 
 /**
- * Vision-capable free router.
- * OpenRouter automatically filters for models that support image input.
+ * Vision-capable models for image-based AI chat.
+ * These are used only when the user uploads an image.
  */
 const VISION_MODELS = [
   "qwen/qwen2.5-vl-72b-instruct:free",
@@ -28,6 +33,22 @@ const VISION_MODELS = [
   "openrouter/free",
 ];
 
+/**
+ * Reliability configuration
+ */
+const MAX_MODEL_RETRIES = 2;
+const RETRY_DELAY_MS = 600;
+const SAFE_AI_ERROR_MESSAGE = "AI is currently busy, please try again";
+
+/**
+ * Small delay helper used between retry attempts.
+ */
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Extracts useful provider error details for backend logs only.
+ * This error should never be directly sent to the frontend.
+ */
 const extractOpenRouterError = (data) => {
   return (
     data?.error?.metadata?.raw ||
@@ -36,6 +57,21 @@ const extractOpenRouterError = (data) => {
   );
 };
 
+/**
+ * Backend-only model failure logger.
+ */
+const logModelFailure = ({ model, attempt, error }) => {
+  console.error("[AI_MODEL_FAILED]", {
+    model,
+    attempt,
+    message: error?.message || "Unknown AI error",
+    timestamp: new Date().toISOString(),
+  });
+};
+
+/**
+ * Calls a single OpenRouter model once.
+ */
 const callOpenRouterModel = async ({
   model,
   messages,
@@ -58,9 +94,6 @@ const callOpenRouterModel = async ({
 
   const data = await response.json();
 
-  console.log("MODEL ATTEMPTED:", model);
-  console.log("OPENROUTER RAW RESPONSE:", JSON.stringify(data, null, 2));
-
   if (!response.ok) {
     throw new Error(extractOpenRouterError(data));
   }
@@ -74,32 +107,84 @@ const callOpenRouterModel = async ({
   return content.trim();
 };
 
-const tryModelsWithFallback = async ({
-  models = AI_MODELS,
+/**
+ * Retries the same model before moving to another model.
+ */
+const trySingleModelWithRetry = async ({
+  model,
   messages,
   temperature = 0.5,
   maxTokens = 500,
 }) => {
   let lastError = null;
 
+  for (let attempt = 1; attempt <= MAX_MODEL_RETRIES; attempt++) {
+    try {
+      return await callOpenRouterModel({
+        model,
+        messages,
+        temperature,
+        maxTokens,
+      });
+    } catch (error) {
+      lastError = error;
+
+      logModelFailure({
+        model,
+        attempt,
+        error,
+      });
+
+      if (attempt < MAX_MODEL_RETRIES) {
+        await wait(RETRY_DELAY_MS * attempt);
+      }
+    }
+  }
+
+  throw lastError;
+};
+
+/**
+ * Smart fallback system.
+ *
+ * Flow:
+ * 1. Try first model
+ * 2. Retry same model if it fails
+ * 3. Move to next model if retries fail
+ * 4. Return safe fallback message if all models fail
+ */
+const tryModelsWithFallback = async ({
+  models = AI_MODELS,
+  messages,
+  temperature = 0.5,
+  maxTokens = 500,
+}) => {
   for (const model of models) {
     try {
-      const result = await callOpenRouterModel({
+      const result = await trySingleModelWithRetry({
         model,
         messages,
         temperature,
         maxTokens,
       });
 
-      console.log("MODEL SUCCESS:", model);
+      console.log("[AI_MODEL_SUCCESS]", {
+        model,
+        timestamp: new Date().toISOString(),
+      });
+
       return result;
-    } catch (error) {
-      console.error(`MODEL FAILED: ${model}`, error.message);
-      lastError = error.message;
+    } catch {
+      continue;
     }
   }
 
-  return `All AI models failed. Please try again later. Last error: ${lastError}`;
+  console.error("[AI_ALL_MODELS_FAILED]", {
+    totalModelsTried: models.length,
+    timestamp: new Date().toISOString(),
+  });
+
+  return SAFE_AI_ERROR_MESSAGE;
 };
 
 export const generateAnalyticsInsights = async (
@@ -208,7 +293,7 @@ Generate a professional structured response now.
     });
   } catch (error) {
     console.error("AI Service Error (Insights):", error.message);
-    return `Error generating insights: ${error.message}`;
+    return SAFE_AI_ERROR_MESSAGE;
   }
 };
 
@@ -289,6 +374,6 @@ ${analyticsContext}
     });
   } catch (error) {
     console.error("AI Service Error (Chat):", error.message);
-    return `Error generating chat response: ${error.message}`;
+    return SAFE_AI_ERROR_MESSAGE;
   }
 };

@@ -5,48 +5,25 @@ import User from "../models/User.js";
 import { generateAnalyticsResponse } from "../services/aiService.js";
 
 /**
- * Chat session storage strategy
+ * Chat Controller
  *
- * To avoid requiring extra model files right now,
- * this controller uses raw MongoDB collections through mongoose.connection.db:
- *
- * Collections used:
- * - chat_sessions
- * - chat_messages
- *
- * This keeps the feature working without creating extra schema files today.
- *
- * Document shape:
- *
- * chat_sessions:
- * {
- *   _id,
- *   userId,
- *   socialAccountId,
- *   title,
- *   createdAt,
- *   updatedAt
- * }
- *
- * chat_messages:
- * {
- *   _id,
- *   sessionId,
- *   userId,
- *   socialAccountId,
- *   role,        // "user" | "assistant"
- *   content,
- *   createdAt
- * }
+ * Handles:
+ * - AI chat requests
+ * - text-only messages
+ * - image-only messages
+ * - text + image messages
+ * - chat session storage
+ * - chat message storage
+ * - analytics context injection
  */
 
 // ---------- Limits ----------
 const MAX_SESSIONS_PER_ACCOUNT = 20;
 const MAX_MESSAGES_PER_SESSION = 100;
-const MAX_CONTEXT_MESSAGES = 12; // messages sent to AI for continuity
+const MAX_CONTEXT_MESSAGES = 12;
 
 /**
- * Helper: get raw collections safely
+ * Safely access raw MongoDB collections.
  */
 const getCollections = () => {
   const db = mongoose.connection.db;
@@ -62,10 +39,14 @@ const getCollections = () => {
 };
 
 /**
- * Helper: trim old sessions if session count exceeds limit
- * Keeps only the most recent MAX_SESSIONS_PER_ACCOUNT sessions
+ * Keeps only the latest sessions for a social account.
  */
-const trimOldSessions = async (sessionsCollection, messagesCollection, userId, socialAccountId) => {
+const trimOldSessions = async (
+  sessionsCollection,
+  messagesCollection,
+  userId,
+  socialAccountId
+) => {
   const sessions = await sessionsCollection
     .find({ userId, socialAccountId })
     .sort({ updatedAt: -1 })
@@ -85,8 +66,7 @@ const trimOldSessions = async (sessionsCollection, messagesCollection, userId, s
 };
 
 /**
- * Helper: trim old messages if message count exceeds limit
- * Keeps only the most recent MAX_MESSAGES_PER_SESSION messages
+ * Keeps only the latest messages inside one session.
  */
 const trimOldMessages = async (messagesCollection, sessionId) => {
   const allMessages = await messagesCollection
@@ -98,7 +78,11 @@ const trimOldMessages = async (messagesCollection, sessionId) => {
     return;
   }
 
-  const messagesToDelete = allMessages.slice(0, allMessages.length - MAX_MESSAGES_PER_SESSION);
+  const messagesToDelete = allMessages.slice(
+    0,
+    allMessages.length - MAX_MESSAGES_PER_SESSION
+  );
+
   const idsToDelete = messagesToDelete.map((msg) => msg._id);
 
   if (idsToDelete.length > 0) {
@@ -107,31 +91,40 @@ const trimOldMessages = async (messagesCollection, sessionId) => {
 };
 
 /**
- * Helper: create a readable session title from first user message
+ * Creates a readable session title from the first user message.
  */
 const buildSessionTitle = (message) => {
   const clean = message.replace(/\s+/g, " ").trim();
-  if (!clean) return "New Chat";
+
+  if (!clean) {
+    return "New Chat";
+  }
+
   return clean.length > 60 ? `${clean.slice(0, 60)}...` : clean;
 };
 
-//Build a safe user message for text, image-only, or text + image chat
-const buildUserMessgeText = (message, hasImage) => {
+/**
+ * Builds safe message text for:
+ * - text-only chat
+ * - image-only chat
+ * - text + image chat
+ */
+const buildUserMessageText = (message, hasImage) => {
   const cleanMessage = message?.trim() || "";
 
-  if(cleanMessage) return cleanMessage;
+  if (cleanMessage) {
+    return cleanMessage;
+  }
 
-  if(hasImage){
-    return "The user uploads an image and wants analysis"
+  if (hasImage) {
+    return "The user uploaded an image and wants analysis.";
   }
 
   return "";
-
-
-}
+};
 
 /**
- * Helper: build analytics context block
+ * Builds analytics context for the AI system prompt.
  */
 const buildAnalyticsContext = (socialAccount, snapshots) => {
   const first = snapshots[0] || null;
@@ -178,7 +171,9 @@ Latest snapshot:
 
 Change summary:
 - Follower change: ${(latest.followers ?? 0) - (first.followers ?? 0)}
-- Engagement rate change: ${((latest.engagementRate ?? 0) - (first.engagementRate ?? 0)).toFixed(2)}
+- Engagement rate change: ${(
+    (latest.engagementRate ?? 0) - (first.engagementRate ?? 0)
+  ).toFixed(2)}
 - Post change: ${(latest.posts ?? 0) - (first.posts ?? 0)}
 - Likes change: ${(latest.likes ?? 0) - (first.likes ?? 0)}
 - Comments change: ${(latest.comments ?? 0) - (first.comments ?? 0)}
@@ -186,47 +181,37 @@ Change summary:
 };
 
 /**
- * @desc    AI personal assistant chat for analytics + strategy
+ * @desc    AI assistant chat for analytics + strategy
  * @route   POST /api/ai/chat/:socialAccountId
  * @access  Private
- *
- * Request body:
- * {
- *   "message": "Why is my engagement increasing?",
- *   "sessionId": "optional-existing-session-id"
- * }
- *
- * Response:
- * {
- *   "reply": "...",
- *   "remainingUsage": 97,
- *   "sessionId": "...",
- *   "sessionTitle": "Why is my engagement increasing?"
- * }
  */
 export const chatWithAI = async (req, res) => {
   try {
     const { socialAccountId } = req.params;
-    const {message, sessionId} = req.body;
+    const { message, sessionId } = req.body;
+
     const uploadedImage = req.file || null;
     const hasImage = Boolean(uploadedImage);
 
-    const userMessageText = buildUserMessgeText(message, hasImage);
+    const userMessageText = buildUserMessageText(message, hasImage);
 
-    //Validate input: allow only the text is allowed, image-only, or text + image.
-    if(!userMessageText && !hasImage){
+    /**
+     * Allow:
+     * - text-only
+     * - image-only
+     * - text + image
+     */
+    if (!userMessageText && !hasImage) {
       return res.status(400).json({
         message: "Message or image is required",
       });
     }
 
     const imageBase64 = uploadedImage
-    ? uploadedImage.buffer.toString("base64")
-    : null;
+      ? uploadedImage.buffer.toString("base64")
+      : null;
 
     const imageMimeType = uploadedImage?.mimetype || null;
-
-
 
     // Current authenticated user
     const user = await User.findById(req.user._id);
@@ -237,14 +222,15 @@ export const chatWithAI = async (req, res) => {
       });
     }
 
-    // Usage limit check
+    // AI usage limit check
     if (user.aiUsageCount >= user.aiUsageLimit) {
       return res.status(403).json({
-        message: "AI usage limit reached. Please try again later or upgrade your plan.",
+        message:
+          "AI usage limit reached. Please try again later or upgrade your plan.",
       });
     }
 
-    // Ensure account belongs to this user
+    // Ensure the selected social account belongs to the logged-in user
     const socialAccount = await SocialAccount.findOne({
       _id: socialAccountId,
       user: req.user._id,
@@ -256,7 +242,7 @@ export const chatWithAI = async (req, res) => {
       });
     }
 
-    // Load snapshots for account-aware answers
+    // Load account analytics snapshots for context-aware replies
     const snapshots = await AnalyticsSnapshot.find({
       socialAccount: socialAccountId,
     }).sort({ capturedAt: 1 });
@@ -266,9 +252,10 @@ export const chatWithAI = async (req, res) => {
     const now = new Date();
     let activeSession = null;
 
-    // ---------- Session resolution ----------
+    /**
+     * Reuse session if sessionId is valid and belongs to same user/account.
+     */
     if (sessionId) {
-      // Reuse existing session if valid and owned by same user/account
       activeSession = await sessions.findOne({
         _id: new mongoose.Types.ObjectId(sessionId),
         userId: user._id.toString(),
@@ -276,7 +263,9 @@ export const chatWithAI = async (req, res) => {
       });
     }
 
-    // If no valid session found, create a new one
+    /**
+     * Create new session when no valid session exists.
+     */
     if (!activeSession) {
       const newSession = {
         userId: user._id.toString(),
@@ -293,7 +282,6 @@ export const chatWithAI = async (req, res) => {
         ...newSession,
       };
 
-      // Trim old sessions after creating a new one
       await trimOldSessions(
         sessions,
         messages,
@@ -302,7 +290,9 @@ export const chatWithAI = async (req, res) => {
       );
     }
 
-    // ---------- Save current user message ----------
+    /**
+     * Save current user message.
+     */
     const userMessageDoc = {
       sessionId: activeSession._id,
       userId: user._id.toString(),
@@ -310,37 +300,39 @@ export const chatWithAI = async (req, res) => {
       role: "user",
       content: userMessageText,
       image: hasImage
-      ? {
-        originalName: uploadedImage.originalname,
-        mimeType: imageMimeType,
-        size: uploadedImage.size,
-    }
-  : null,
+        ? {
+            originalName: uploadedImage.originalname,
+            mimeType: imageMimeType,
+            size: uploadedImage.size,
+          }
+        : null,
       createdAt: now,
     };
 
     await messages.insertOne(userMessageDoc);
 
-    // ---------- Load recent message history ----------
+    /**
+     * Load recent history for AI continuity.
+     */
     const recentHistory = await messages
       .find({ sessionId: activeSession._id })
       .sort({ createdAt: -1 })
       .limit(MAX_CONTEXT_MESSAGES)
       .toArray();
 
-    // Reverse because DB fetch is latest-first, AI expects oldest-first
     const orderedHistory = recentHistory.reverse();
 
-    // Convert DB messages to chat completion messages
     const historyMessages = orderedHistory.map((msg) => ({
       role: msg.role,
       content: msg.content,
     }));
 
-    // Build analytics context for system prompt
     const analyticsContext = buildAnalyticsContext(socialAccount, snapshots);
 
-    // ---------- Ask AI ----------
+    /**
+     * Generate AI reply.
+     * Reliability, retry, and fallback are handled inside aiService.js.
+     */
     const aiReply = await generateAnalyticsResponse({
       analyticsContext,
       historyMessages,
@@ -349,7 +341,9 @@ export const chatWithAI = async (req, res) => {
       imageMimeType,
     });
 
-    // ---------- Save assistant reply ----------
+    /**
+     * Save assistant reply.
+     */
     const assistantMessageDoc = {
       sessionId: activeSession._id,
       userId: user._id.toString(),
@@ -361,7 +355,7 @@ export const chatWithAI = async (req, res) => {
 
     await messages.insertOne(assistantMessageDoc);
 
-    // Update session timestamp
+    // Update session activity timestamp
     await sessions.updateOne(
       { _id: activeSession._id },
       {
@@ -371,10 +365,9 @@ export const chatWithAI = async (req, res) => {
       }
     );
 
-    // Trim message history if needed
     await trimOldMessages(messages, activeSession._id);
 
-    // Increment usage after successful AI responses
+    // Increment usage only after AI flow completes
     user.aiUsageCount += 1;
     await user.save();
 
@@ -385,11 +378,13 @@ export const chatWithAI = async (req, res) => {
       sessionTitle: activeSession.title,
     });
   } catch (error) {
-    console.error("chatWithAI error:", error.message);
+    console.error("[CHAT_WITH_AI_ERROR]", {
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
 
     return res.status(500).json({
-      message: "Chat AI error",
-      error: error.message,
+      message: "AI is currently busy, please try again",
     });
   }
 };
