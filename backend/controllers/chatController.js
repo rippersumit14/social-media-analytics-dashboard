@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import SocialAccount from "../models/SocialAccount.js";
 import AnalyticsSnapshot from "../models/AnalyticsSnapshot.js";
-import User from "../models/User.js";
+import User, { PLAN_AI_LIMITS } from "../models/User.js";
 import { generateAnalyticsResponse } from "../services/aiService.js";
 
 /**
@@ -15,12 +15,65 @@ import { generateAnalyticsResponse } from "../services/aiService.js";
  * - chat session storage
  * - chat message storage
  * - analytics context injection
+ * - daily AI usage enforcement
  */
 
-// ---------- Limits ----------
+// ---------- Chat Limits ----------
 const MAX_SESSIONS_PER_ACCOUNT = 20;
 const MAX_MESSAGES_PER_SESSION = 100;
 const MAX_CONTEXT_MESSAGES = 12;
+
+// ---------- Usage Limits ----------
+const ONE_DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Checks whether the user's AI usage window has expired.
+ */
+const shouldResetAIUsage = (resetDate) => {
+  if (!resetDate) {
+    return true;
+  }
+
+  const lastResetTime = new Date(resetDate).getTime();
+  const now = Date.now();
+
+  return now - lastResetTime >= ONE_DAY_IN_MS;
+};
+
+/**
+ * Prepares user usage state before every AI request.
+ *
+ * Responsibilities:
+ * - sync usage limit with current plan
+ * - reset usage count if daily window expired
+ */
+const prepareAIUsageForRequest = async (user) => {
+  const planLimit = PLAN_AI_LIMITS[user.plan] || PLAN_AI_LIMITS.FREE;
+
+  user.aiUsageLimit = planLimit;
+
+  if (shouldResetAIUsage(user.aiUsageResetDate)) {
+    user.aiUsageCount = 0;
+    user.aiUsageResetDate = new Date();
+  }
+
+  await user.save();
+
+  return user;
+};
+
+/**
+ * Builds frontend-friendly usage information.
+ */
+const buildUsageInfo = (user) => {
+  return {
+    plan: user.plan,
+    used: user.aiUsageCount,
+    limit: user.aiUsageLimit,
+    remaining: Math.max(user.aiUsageLimit - user.aiUsageCount, 0),
+    resetDate: user.aiUsageResetDate,
+  };
+};
 
 /**
  * Safely access raw MongoDB collections.
@@ -222,11 +275,19 @@ export const chatWithAI = async (req, res) => {
       });
     }
 
-    // AI usage limit check
-    if (user.aiUsageCount >= user.aiUsageLimit) {
+    /**
+     * Prepare AI usage before checking the limit.
+     * This resets daily usage if the user's usage window expired.
+     */
+    await prepareAIUsageForRequest(user);
+
+    const usageInfoBeforeAI = buildUsageInfo(user);
+
+    if (usageInfoBeforeAI.remaining <= 0) {
       return res.status(403).json({
         message:
-          "AI usage limit reached. Please try again later or upgrade your plan.",
+          "Daily AI usage limit reached. Please try again after reset or upgrade your plan.",
+        usage: usageInfoBeforeAI,
       });
     }
 
@@ -341,6 +402,8 @@ export const chatWithAI = async (req, res) => {
       imageMimeType,
     });
 
+    const isAISuccess = aiReply && !aiReply.includes("AI is currently busy");
+
     /**
      * Save assistant reply.
      */
@@ -367,13 +430,19 @@ export const chatWithAI = async (req, res) => {
 
     await trimOldMessages(messages, activeSession._id);
 
-    // Increment usage only after AI flow completes
+    /**
+     * Increment usage only after AI gives a valid successful response.
+     * Failed to fallback responses should not consume user's daily quota
+     */
+    if (isAISuccess){
     user.aiUsageCount += 1;
     await user.save();
+    }
 
     return res.status(200).json({
       reply: aiReply,
-      remainingUsage: user.aiUsageLimit - user.aiUsageCount,
+      usage: buildUsageInfo(user),
+      remainingUsage: Math.max(user.aiUsageLimit - user.aiUsageCount, 0),
       sessionId: activeSession._id.toString(),
       sessionTitle: activeSession.title,
     });

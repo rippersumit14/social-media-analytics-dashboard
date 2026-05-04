@@ -2,6 +2,23 @@ import User from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 
 /**
+ * Build safe user response.
+ *
+ * We never return password from controller responses.
+ */
+const buildUserResponse = (user) => {
+  return {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    plan: user.plan,
+    aiUsageCount: user.aiUsageCount,
+    aiUsageLimit: user.aiUsageLimit,
+    aiUsageResetDate: user.aiUsageResetDate,
+  };
+};
+
+/**
  * @desc    Register a new user
  * @route   POST /api/auth/register
  * @access  Public
@@ -10,15 +27,19 @@ export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    // Basic input validation
+    /**
+     * Basic validation.
+     * Later we can move this to validation middleware.
+     */
     if (!name || !email || !password) {
       return res.status(400).json({
         message: "Please provide name, email, and password",
       });
     }
 
-    // Check if user already exists
-    const userExists = await User.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const userExists = await User.findOne({ email: normalizedEmail });
 
     if (userExists) {
       return res.status(400).json({
@@ -26,27 +47,25 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    // Create new user
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: normalizedEmail,
       password,
     });
 
-    // Return user data with token
-    res.status(201).json({
+    return res.status(201).json({
       message: "User registered successfully",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      },
+      user: buildUserResponse(user),
       token: generateToken(user._id.toString()),
     });
   } catch (error) {
-    res.status(500).json({
+    console.error("[REGISTER_USER_ERROR]", {
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
+
+    return res.status(500).json({
       message: "Server error while registering user",
-      error: error.message,
     });
   }
 };
@@ -60,37 +79,52 @@ export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Basic input validation
+    /**
+     * Basic validation.
+     */
     if (!email || !password) {
       return res.status(400).json({
         message: "Please provide email and password",
       });
     }
 
-    // Find user by email
-    const user = await User.findOne({ email });
+    const normalizedEmail = email.trim().toLowerCase();
 
-    // Check user existence and password validity
-    if (!user || !(await user.matchPassword(password))) {
+    /**
+     * Password has select: false in User model.
+     * So we explicitly include it only for login comparison.
+     */
+    const user = await User.findOne({ email: normalizedEmail }).select(
+      "+password"
+    );
+
+    if (!user) {
       return res.status(401).json({
         message: "Invalid email or password",
       });
     }
 
-    // Return user data with token
-    res.status(200).json({
+    const isPasswordCorrect = await user.matchPassword(password);
+
+    if (!isPasswordCorrect) {
+      return res.status(401).json({
+        message: "Invalid email or password",
+      });
+    }
+
+    return res.status(200).json({
       message: "Login successful",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-      },
+      user: buildUserResponse(user),
       token: generateToken(user._id.toString()),
     });
   } catch (error) {
-    res.status(500).json({
+    console.error("[LOGIN_USER_ERROR]", {
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
+
+    return res.status(500).json({
       message: "Server error while logging in",
-      error: error.message,
     });
   }
 };
@@ -102,16 +136,17 @@ export const loginUser = async (req, res) => {
  */
 export const getCurrentUser = async (req, res) => {
   try {
-    res.status(200).json({
-      user: req.user,
+    return res.status(200).json({
+      user: buildUserResponse(req.user),
     });
-  }catch (error) {
-  console.error("LOGIN ERROR:", error);
-  console.error("LOGIN ERROR MESSAGE:", error.message);
+  } catch (error) {
+    console.error("[GET_CURRENT_USER_ERROR]", {
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
 
-  return res.status(500).json({
-    message: "Server error while logging in",
-    error: error.message,
-  });
+    return res.status(500).json({
+      message: "Server error while fetching current user",
+    });
   }
-}
+};
