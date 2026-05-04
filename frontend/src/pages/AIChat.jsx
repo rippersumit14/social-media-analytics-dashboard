@@ -15,6 +15,8 @@ import { chatWithAI } from "../services/chatService.js";
  * - Voice input with auto-send
  * - Loading state
  * - Clean AI busy/error handling
+ * - AI usage progress UI
+ * - Limit reached handling
  * - Auto-scroll to latest message
  */
 const AIChat = () => {
@@ -29,7 +31,9 @@ const AIChat = () => {
   const [loading, setLoading] = useState(true);
   const [chatLoading, setChatLoading] = useState(false);
   const [error, setError] = useState("");
+
   const [remainingUsage, setRemainingUsage] = useState(null);
+  const [usageInfo, setUsageInfo] = useState(null);
 
   const [sessionId, setSessionId] = useState(null);
   const [sessionTitle, setSessionTitle] = useState("");
@@ -45,15 +49,37 @@ const AIChat = () => {
   const recognitionRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  const isUsageLimitReached = usageInfo && usageInfo.remaining <= 0;
+
+  /**
+   * Keep frontend message list bounded.
+   */
   const limitMessages = (messages, max = 100) => {
     if (messages.length <= max) return messages;
     return messages.slice(messages.length - max);
   };
 
+  /**
+   * Calculate usage percentage safely.
+   */
+  const getUsagePercentage = () => {
+    if (!usageInfo || !usageInfo.limit) return 0;
+
+    const percentage = (usageInfo.used / usageInfo.limit) * 100;
+
+    return Math.min(Math.max(percentage, 0), 100);
+  };
+
+  /**
+   * Scroll chat to latest message.
+   */
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  /**
+   * Clear selected image and release preview memory.
+   */
   const clearSelectedImage = () => {
     if (selectedImagePreview) {
       URL.revokeObjectURL(selectedImagePreview);
@@ -156,7 +182,7 @@ const AIChat = () => {
    */
   useEffect(() => {
     if (!pendingVoiceText) return;
-    if (!selectedAccount || !token || chatLoading) return;
+    if (!selectedAccount || !token || chatLoading || isUsageLimitReached) return;
 
     const timer = setTimeout(() => {
       handleSend(pendingVoiceText);
@@ -164,8 +190,18 @@ const AIChat = () => {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [pendingVoiceText, selectedAccount, token, chatLoading, sessionId]);
+  }, [
+    pendingVoiceText,
+    selectedAccount,
+    token,
+    chatLoading,
+    sessionId,
+    isUsageLimitReached,
+  ]);
 
+  /**
+   * Reset chat state when account changes.
+   */
   const handleAccountChange = (e) => {
     const accountId = e.target.value;
     const account = socialAccounts.find((a) => a._id === accountId);
@@ -175,6 +211,7 @@ const AIChat = () => {
     setSelectedAccount(account);
     setChatMessages([]);
     setRemainingUsage(null);
+    setUsageInfo(null);
     setSessionId(null);
     setSessionTitle("");
     setInput("");
@@ -183,8 +220,11 @@ const AIChat = () => {
     setError("");
   };
 
+  /**
+   * Start or stop voice input.
+   */
   const handleMicClick = () => {
-    if (chatLoading) return;
+    if (chatLoading || isUsageLimitReached) return;
 
     if (!speechSupported || !recognitionRef.current) {
       setError("Speech recognition is not supported in this browser.");
@@ -203,6 +243,9 @@ const AIChat = () => {
     }
   };
 
+  /**
+   * Handle image selection.
+   */
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
 
@@ -236,7 +279,8 @@ const AIChat = () => {
       (!currentInput && !selectedImage) ||
       !selectedAccount ||
       !token ||
-      chatLoading
+      chatLoading ||
+      isUsageLimitReached
     ) {
       return;
     }
@@ -274,6 +318,12 @@ const AIChat = () => {
         setSessionTitle(data.sessionTitle);
       }
 
+      if (data.usage) {
+        setUsageInfo(data.usage);
+      }
+
+      setRemainingUsage(data.remainingUsage ?? null);
+
       const aiMessage = {
         id: Date.now() + 1,
         role: "assistant",
@@ -281,7 +331,6 @@ const AIChat = () => {
       };
 
       setChatMessages((prev) => limitMessages([...prev, aiMessage]));
-      setRemainingUsage(data.remainingUsage ?? null);
 
       clearSelectedImage();
     } catch (err) {
@@ -289,6 +338,10 @@ const AIChat = () => {
 
       const cleanError =
         err.response?.data?.message || "AI is currently busy, please try again.";
+
+      if (err.response?.data?.usage) {
+        setUsageInfo(err.response.data.usage);
+      }
 
       setError(cleanError);
 
@@ -305,6 +358,9 @@ const AIChat = () => {
     }
   };
 
+  /**
+   * Render assistant message with simple readable formatting.
+   */
   const renderMessageContent = (content) => {
     const lines = content
       .split("\n")
@@ -337,6 +393,7 @@ const AIChat = () => {
 
   return (
     <div>
+      {/* Page Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-800">AI Chat</h1>
         <p className="mt-3 text-gray-600">
@@ -345,12 +402,14 @@ const AIChat = () => {
         </p>
       </div>
 
+      {/* Global Error */}
       {error && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
+      {/* Empty Account State */}
       {!loading && socialAccounts.length === 0 && (
         <div className="mt-6 rounded-2xl bg-white p-6 shadow-md">
           <h2 className="text-xl font-semibold text-gray-700">
@@ -362,25 +421,74 @@ const AIChat = () => {
         </div>
       )}
 
+      {/* Account + Usage Card */}
       {selectedAccount && (
         <div className="mt-6 rounded-2xl bg-white p-5 shadow-md">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
+            <div className="w-full">
               <h2 className="text-lg font-semibold text-gray-700">
                 Active Account
               </h2>
+
               <p className="mt-1 text-sm text-gray-500">
                 Switch account to ask account-specific questions.
               </p>
 
-              {typeof remainingUsage === "number" && (
+              {/* SaaS Usage UI */}
+              {usageInfo && (
+                <div className="mt-4 max-w-md rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">
+                        AI Usage
+                      </p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {usageInfo.used} / {usageInfo.limit} used
+                      </p>
+                    </div>
+
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                      {usageInfo.plan}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 h-2 w-full rounded-full bg-gray-200">
+                    <div
+                      className="h-2 rounded-full bg-blue-600 transition-all"
+                      style={{
+                        width: `${getUsagePercentage()}%`,
+                      }}
+                    ></div>
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="text-xs text-gray-500">
+                      Remaining: {usageInfo.remaining}
+                    </p>
+
+                    {usageInfo.remaining <= 3 && usageInfo.remaining > 0 && (
+                      <p className="text-xs font-medium text-amber-600">
+                        Low usage remaining
+                      </p>
+                    )}
+
+                    {usageInfo.remaining <= 0 && (
+                      <p className="text-xs font-medium text-red-600">
+                        Limit reached
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!usageInfo && typeof remainingUsage === "number" && (
                 <p className="mt-3 text-sm text-gray-500">
                   Remaining AI usage: {remainingUsage}
                 </p>
               )}
 
               {sessionTitle && (
-                <p className="mt-2 text-sm text-gray-500">
+                <p className="mt-3 text-sm text-gray-500">
                   Current session:{" "}
                   <span className="font-medium">{sessionTitle}</span>
                 </p>
@@ -409,6 +517,7 @@ const AIChat = () => {
         </div>
       )}
 
+      {/* Chat Window */}
       {selectedAccount && (
         <div className="mt-6 rounded-2xl bg-white p-5 shadow-md">
           <div className="h-[500px] overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50 p-4">
@@ -485,6 +594,7 @@ const AIChat = () => {
             )}
           </div>
 
+          {/* Selected Image Preview */}
           {selectedImagePreview && (
             <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-3">
               <div className="flex items-start justify-between gap-4">
@@ -511,7 +621,15 @@ const AIChat = () => {
             </div>
           )}
 
+          {/* Input Area */}
           <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-3">
+            {isUsageLimitReached && (
+              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                Daily AI usage limit reached. Please try again after reset or
+                upgrade your plan.
+              </div>
+            )}
+
             <div className="flex flex-col gap-3 md:flex-row">
               <textarea
                 rows={2}
@@ -523,8 +641,12 @@ const AIChat = () => {
                     handleSend();
                   }
                 }}
-                disabled={chatLoading}
-                placeholder="Ask AI about this account..."
+                disabled={chatLoading || isUsageLimitReached}
+                placeholder={
+                  isUsageLimitReached
+                    ? "Daily AI limit reached"
+                    : "Ask AI about this account..."
+                }
                 className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-gray-700 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
               />
 
@@ -534,14 +656,14 @@ const AIChat = () => {
                   type="file"
                   accept="image/*"
                   onChange={handleImageChange}
-                  disabled={chatLoading}
+                  disabled={chatLoading || isUsageLimitReached}
                   className="hidden"
                 />
 
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={chatLoading}
+                  disabled={chatLoading || isUsageLimitReached}
                   className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                   title="Upload image"
                 >
@@ -551,7 +673,7 @@ const AIChat = () => {
                 <button
                   type="button"
                   onClick={handleMicClick}
-                  disabled={chatLoading}
+                  disabled={chatLoading || isUsageLimitReached}
                   className={`rounded-xl border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
                     isListening
                       ? "border-red-300 bg-red-50 text-red-600"
@@ -566,7 +688,9 @@ const AIChat = () => {
                   type="button"
                   onClick={() => handleSend()}
                   disabled={
-                    chatLoading || (!input.trim() && !selectedImage)
+                    chatLoading ||
+                    (!input.trim() && !selectedImage) ||
+                    isUsageLimitReached
                   }
                   className="rounded-xl bg-blue-600 px-5 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
