@@ -1,24 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { getSocialAccounts } from "../services/socialAnalyticsService.js";
-import { chatWithAI } from "../services/chatService.js";
+import ChatSidebar from "../components/ChatSideBar.jsx";
 
-/**
- * AI Chat Page
- *
- * Features:
- * - Account selector
- * - Session-aware AI chat
- * - Text-only chat
- * - Image-only chat
- * - Text + image chat
- * - Voice input with auto-send
- * - Loading state
- * - Clean AI busy/error handling
- * - AI usage progress UI
- * - Limit reached handling
- * - Auto-scroll to latest message
- */
+import {
+  chatWithAI,
+  getChatSessions,
+  getSessionMessages,
+  renameChatSession,
+  deleteChatSession,
+} from "../services/chatService.js";
+
 const AIChat = () => {
   const { token } = useAuth();
 
@@ -38,6 +30,9 @@ const AIChat = () => {
   const [sessionId, setSessionId] = useState(null);
   const [sessionTitle, setSessionTitle] = useState("");
 
+  const [chatSessions, setChatSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
   const [pendingVoiceText, setPendingVoiceText] = useState("");
@@ -51,35 +46,22 @@ const AIChat = () => {
 
   const isUsageLimitReached = usageInfo && usageInfo.remaining <= 0;
 
-  /**
-   * Keep frontend message list bounded.
-   */
   const limitMessages = (messages, max = 100) => {
     if (messages.length <= max) return messages;
     return messages.slice(messages.length - max);
   };
 
-  /**
-   * Calculate usage percentage safely.
-   */
   const getUsagePercentage = () => {
     if (!usageInfo || !usageInfo.limit) return 0;
 
     const percentage = (usageInfo.used / usageInfo.limit) * 100;
-
     return Math.min(Math.max(percentage, 0), 100);
   };
 
-  /**
-   * Scroll chat to latest message.
-   */
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  /**
-   * Clear selected image and release preview memory.
-   */
   const clearSelectedImage = () => {
     if (selectedImagePreview) {
       URL.revokeObjectURL(selectedImagePreview);
@@ -90,6 +72,32 @@ const AIChat = () => {
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  };
+
+  const formatBackendMessages = (messages = []) => {
+    return messages.map((message) => ({
+      id: message._id,
+      role: message.role,
+      content: message.content,
+      imagePreview: message.imageUrl || "",
+    }));
+  };
+
+  const loadChatSessions = async (accountId = selectedAccount?._id) => {
+    if (!accountId || !token) return;
+
+    try {
+      setSessionsLoading(true);
+
+      const data = await getChatSessions(accountId, token);
+
+      setChatSessions(data.sessions || []);
+    } catch (err) {
+      console.error("Load chat sessions error:", err);
+      setError("Failed to load chat sessions.");
+    } finally {
+      setSessionsLoading(false);
     }
   };
 
@@ -105,9 +113,6 @@ const AIChat = () => {
     };
   }, [selectedImagePreview]);
 
-  /**
-   * Setup browser speech recognition.
-   */
   useEffect(() => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -150,9 +155,6 @@ const AIChat = () => {
     recognitionRef.current = recognition;
   }, []);
 
-  /**
-   * Load connected social accounts.
-   */
   useEffect(() => {
     const loadAccounts = async () => {
       if (!token) return;
@@ -177,9 +179,12 @@ const AIChat = () => {
     loadAccounts();
   }, [token]);
 
-  /**
-   * Auto-send voice transcript.
-   */
+  useEffect(() => {
+    if (!selectedAccount?._id || !token) return;
+
+    loadChatSessions(selectedAccount._id);
+  }, [selectedAccount?._id, token]);
+
   useEffect(() => {
     if (!pendingVoiceText) return;
     if (!selectedAccount || !token || chatLoading || isUsageLimitReached) return;
@@ -199,9 +204,6 @@ const AIChat = () => {
     isUsageLimitReached,
   ]);
 
-  /**
-   * Reset chat state when account changes.
-   */
   const handleAccountChange = (e) => {
     const accountId = e.target.value;
     const account = socialAccounts.find((a) => a._id === accountId);
@@ -210,6 +212,7 @@ const AIChat = () => {
 
     setSelectedAccount(account);
     setChatMessages([]);
+    setChatSessions([]);
     setRemainingUsage(null);
     setUsageInfo(null);
     setSessionId(null);
@@ -220,9 +223,6 @@ const AIChat = () => {
     setError("");
   };
 
-  /**
-   * Start or stop voice input.
-   */
   const handleMicClick = () => {
     if (chatLoading || isUsageLimitReached) return;
 
@@ -243,9 +243,6 @@ const AIChat = () => {
     }
   };
 
-  /**
-   * Handle image selection.
-   */
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
 
@@ -269,9 +266,86 @@ const AIChat = () => {
     clearSelectedImage();
   };
 
-  /**
-   * Send message to backend AI chat API.
-   */
+  const handleSelectSession = async (selectedSessionId) => {
+    if (!selectedSessionId || !token || chatLoading) return;
+
+    try {
+      setError("");
+      setSessionId(selectedSessionId);
+
+      const data = await getSessionMessages(selectedSessionId, token);
+
+      setChatMessages(formatBackendMessages(data.messages || []));
+
+      const selectedSession = chatSessions.find(
+        (session) => session.sessionId === selectedSessionId
+      );
+
+      setSessionTitle(selectedSession?.title || "");
+      clearSelectedImage();
+      setInput("");
+    } catch (err) {
+      console.error("Load session messages error:", err);
+      setError("Failed to load chat messages.");
+    }
+  };
+
+  const handleNewChat = () => {
+    setSessionId(null);
+    setSessionTitle("");
+    setChatMessages([]);
+    setInput("");
+    setPendingVoiceText("");
+    clearSelectedImage();
+    setError("");
+  };
+
+  const handleRenameSession = async (selectedSessionId, newTitle) => {
+    if (!selectedSessionId || !newTitle || !token) return;
+
+    try {
+      const data = await renameChatSession(selectedSessionId, newTitle, token);
+
+      setChatSessions((prev) =>
+        prev.map((session) =>
+          session.sessionId === selectedSessionId
+            ? { ...session, title: data.session.title }
+            : session
+        )
+      );
+
+      if (sessionId === selectedSessionId) {
+        setSessionTitle(data.session.title);
+      }
+    } catch (err) {
+      console.error("Rename session error:", err);
+      setError("Failed to rename chat session.");
+    }
+  };
+
+  const handleDeleteSession = async (selectedSessionId) => {
+    if (!selectedSessionId || !token) return;
+
+    const confirmDelete = window.confirm("Delete this chat session?");
+
+    if (!confirmDelete) return;
+
+    try {
+      await deleteChatSession(selectedSessionId, token);
+
+      setChatSessions((prev) =>
+        prev.filter((session) => session.sessionId !== selectedSessionId)
+      );
+
+      if (sessionId === selectedSessionId) {
+        handleNewChat();
+      }
+    } catch (err) {
+      console.error("Delete session error:", err);
+      setError("Failed to delete chat session.");
+    }
+  };
+
   const handleSend = async (messageText = input) => {
     const currentInput = messageText.trim();
 
@@ -333,6 +407,8 @@ const AIChat = () => {
       setChatMessages((prev) => limitMessages([...prev, aiMessage]));
 
       clearSelectedImage();
+
+      await loadChatSessions(selectedAccount._id);
     } catch (err) {
       console.error("AI Chat error:", err);
 
@@ -358,9 +434,6 @@ const AIChat = () => {
     }
   };
 
-  /**
-   * Render assistant message with simple readable formatting.
-   */
   const renderMessageContent = (content) => {
     const lines = content
       .split("\n")
@@ -393,7 +466,6 @@ const AIChat = () => {
 
   return (
     <div>
-      {/* Page Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-800">AI Chat</h1>
         <p className="mt-3 text-gray-600">
@@ -402,14 +474,12 @@ const AIChat = () => {
         </p>
       </div>
 
-      {/* Global Error */}
       {error && (
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
 
-      {/* Empty Account State */}
       {!loading && socialAccounts.length === 0 && (
         <div className="mt-6 rounded-2xl bg-white p-6 shadow-md">
           <h2 className="text-xl font-semibold text-gray-700">
@@ -421,7 +491,6 @@ const AIChat = () => {
         </div>
       )}
 
-      {/* Account + Usage Card */}
       {selectedAccount && (
         <div className="mt-6 rounded-2xl bg-white p-5 shadow-md">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -434,7 +503,6 @@ const AIChat = () => {
                 Switch account to ask account-specific questions.
               </p>
 
-              {/* SaaS Usage UI */}
               {usageInfo && (
                 <div className="mt-4 max-w-md rounded-xl border border-gray-100 bg-gray-50 p-4">
                   <div className="flex items-center justify-between gap-3">
@@ -517,197 +585,209 @@ const AIChat = () => {
         </div>
       )}
 
-      {/* Chat Window */}
       {selectedAccount && (
-        <div className="mt-6 rounded-2xl bg-white p-5 shadow-md">
-          <div className="h-[500px] overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50 p-4">
-            {chatMessages.length === 0 && !chatLoading ? (
-              <div className="flex h-full items-center justify-center">
-                <div className="max-w-lg text-center">
-                  <h3 className="text-lg font-semibold text-gray-700">
-                    Start a conversation
-                  </h3>
-                  <p className="mt-2 text-sm text-gray-500">
-                    Ask about followers, engagement, content ideas, growth
-                    strategy, post performance, or upload an image for analysis.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {chatMessages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${
-                      message.role === "user" ? "justify-end" : "justify-start"
-                    }`}
-                  >
-                    <div className="max-w-[80%]">
-                      <div
-                        className={`rounded-2xl px-4 py-3 shadow-sm ${
-                          message.role === "user"
-                            ? "rounded-br-md bg-blue-600 text-white"
-                            : message.isError
-                            ? "rounded-bl-md border border-red-200 bg-red-50 text-red-700"
-                            : "rounded-bl-md bg-white text-gray-800"
-                        }`}
-                      >
-                        {message.imagePreview && (
-                          <img
-                            src={message.imagePreview}
-                            alt="Uploaded preview"
-                            className="mb-3 max-h-52 rounded-xl border object-cover"
-                          />
-                        )}
+        <div className="mt-6 flex overflow-hidden rounded-2xl bg-white shadow-md">
+          <ChatSidebar
+            sessions={chatSessions}
+            activeSessionId={sessionId}
+            onSelectSession={handleSelectSession}
+            onNewChat={handleNewChat}
+            onRenameSession={handleRenameSession}
+            onDeleteSession={handleDeleteSession}
+            isLoading={sessionsLoading}
+          />
 
-                        {message.role === "user" ? (
-                          <p className="text-sm leading-6">
-                            {message.content}
-                          </p>
-                        ) : (
-                          renderMessageContent(message.content)
-                        )}
-                      </div>
-                    </div>
+          <div className="flex-1 p-5">
+            <div className="h-[500px] overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              {chatMessages.length === 0 && !chatLoading ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="max-w-lg text-center">
+                    <h3 className="text-lg font-semibold text-gray-700">
+                      Start a conversation
+                    </h3>
+                    <p className="mt-2 text-sm text-gray-500">
+                      Ask about followers, engagement, content ideas, growth
+                      strategy, post performance, or upload an image for
+                      analysis.
+                    </p>
                   </div>
-                ))}
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {chatMessages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${
+                        message.role === "user"
+                          ? "justify-end"
+                          : "justify-start"
+                      }`}
+                    >
+                      <div className="max-w-[80%]">
+                        <div
+                          className={`rounded-2xl px-4 py-3 shadow-sm ${
+                            message.role === "user"
+                              ? "rounded-br-md bg-blue-600 text-white"
+                              : message.isError
+                              ? "rounded-bl-md border border-red-200 bg-red-50 text-red-700"
+                              : "rounded-bl-md bg-white text-gray-800"
+                          }`}
+                        >
+                          {message.imagePreview && (
+                            <img
+                              src={message.imagePreview}
+                              alt="Uploaded preview"
+                              className="mb-3 max-h-52 rounded-xl border object-cover"
+                            />
+                          )}
 
-                {chatLoading && (
-                  <div className="flex justify-start">
-                    <div className="max-w-[80%] rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400"></span>
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]"></span>
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]"></span>
+                          {message.role === "user" ? (
+                            <p className="text-sm leading-6">
+                              {message.content}
+                            </p>
+                          ) : (
+                            renderMessageContent(message.content)
+                          )}
                         </div>
-                        <span className="text-sm text-gray-500">
-                          AI is thinking...
-                        </span>
                       </div>
                     </div>
-                  </div>
-                )}
+                  ))}
 
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-          </div>
+                  {chatLoading && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%] rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400"></span>
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]"></span>
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]"></span>
+                          </div>
+                          <span className="text-sm text-gray-500">
+                            AI is thinking...
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-          {/* Selected Image Preview */}
-          {selectedImagePreview && (
-            <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-3">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="mb-2 text-sm font-medium text-gray-700">
-                    Selected image
-                  </p>
-                  <img
-                    src={selectedImagePreview}
-                    alt="Selected preview"
-                    className="max-h-44 rounded-xl border object-cover"
-                  />
+                  <div ref={messagesEndRef} />
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleRemoveImage}
-                  disabled={chatLoading}
-                  className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Remove
-                </button>
-              </div>
+              )}
             </div>
-          )}
 
-          {/* Input Area */}
-          <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-3">
-            {isUsageLimitReached && (
-              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                Daily AI usage limit reached. Please try again after reset or
-                upgrade your plan.
+            {selectedImagePreview && (
+              <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-gray-700">
+                      Selected image
+                    </p>
+                    <img
+                      src={selectedImagePreview}
+                      alt="Selected preview"
+                      className="max-h-44 rounded-xl border object-cover"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    disabled={chatLoading}
+                    className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             )}
 
-            <div className="flex flex-col gap-3 md:flex-row">
-              <textarea
-                rows={2}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                disabled={chatLoading || isUsageLimitReached}
-                placeholder={
-                  isUsageLimitReached
-                    ? "Daily AI limit reached"
-                    : "Ask AI about this account..."
-                }
-                className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-gray-700 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
-              />
+            <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-3">
+              {isUsageLimitReached && (
+                <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  Daily AI usage limit reached. Please try again after reset or
+                  upgrade your plan.
+                </div>
+              )}
 
-              <div className="flex items-center gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
+              <div className="flex flex-col gap-3 md:flex-row">
+                <textarea
+                  rows={2}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
                   disabled={chatLoading || isUsageLimitReached}
-                  className="hidden"
+                  placeholder={
+                    isUsageLimitReached
+                      ? "Daily AI limit reached"
+                      : "Ask AI about this account..."
+                  }
+                  className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-gray-700 outline-none focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
                 />
 
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={chatLoading || isUsageLimitReached}
-                  className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  title="Upload image"
-                >
-                  Image
-                </button>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    disabled={chatLoading || isUsageLimitReached}
+                    className="hidden"
+                  />
 
-                <button
-                  type="button"
-                  onClick={handleMicClick}
-                  disabled={chatLoading || isUsageLimitReached}
-                  className={`rounded-xl border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
-                    isListening
-                      ? "border-red-300 bg-red-50 text-red-600"
-                      : "border-gray-200 text-gray-700 hover:bg-gray-50"
-                  }`}
-                  title="Voice input"
-                >
-                  {isListening ? "Listening..." : "Voice Ask"}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={chatLoading || isUsageLimitReached}
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    title="Upload image"
+                  >
+                    Image
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleSend()}
-                  disabled={
-                    chatLoading ||
-                    (!input.trim() && !selectedImage) ||
-                    isUsageLimitReached
-                  }
-                  className="rounded-xl bg-blue-600 px-5 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {chatLoading ? "Sending..." : "Send"}
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleMicClick}
+                    disabled={chatLoading || isUsageLimitReached}
+                    className={`rounded-xl border px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-60 ${
+                      isListening
+                        ? "border-red-300 bg-red-50 text-red-600"
+                        : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                    }`}
+                    title="Voice input"
+                  >
+                    {isListening ? "Listening..." : "Voice Ask"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSend()}
+                    disabled={
+                      chatLoading ||
+                      (!input.trim() && !selectedImage) ||
+                      isUsageLimitReached
+                    }
+                    className="rounded-xl bg-blue-600 px-5 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {chatLoading ? "Sending..." : "Send"}
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <p className="mt-2 text-xs text-gray-500">
-              Press Enter to send. Press Shift + Enter for a new line.
-            </p>
-
-            {!speechSupported && (
-              <p className="mt-1 text-xs text-amber-600">
-                Voice input is not supported in this browser.
+              <p className="mt-2 text-xs text-gray-500">
+                Press Enter to send. Press Shift + Enter for a new line.
               </p>
-            )}
+
+              {!speechSupported && (
+                <p className="mt-1 text-xs text-amber-600">
+                  Voice input is not supported in this browser.
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}
