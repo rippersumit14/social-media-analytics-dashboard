@@ -2,52 +2,30 @@
  * AI Service
  *
  * Responsibilities:
- * 1. Generate analytics insights from account snapshots
- * 2. Generate AI chat responses with optional image analysis
- * 3. Provide a reliability layer:
- *    - retry failed model calls
- *    - fallback to next model
- *    - hide raw provider errors from frontend
- *    - log backend-only debugging details
+ * - Generate analytics insights
+ * - Generate AI chat responses
+ * - Support text + image chat
+ * - Use smart model router
+ * - Track model success/failure in Redis
+ * - Apply timeout protection
+ * - Avoid slow linear fallback through all models
  */
 
-const AI_MODELS = [
-  "inclusionai/ling-2.6-flash:free",
-  "nvidia/nemotron-3-super:free",
-  "z-ai/glm-4.5-air:free",
-  "openai/gpt-oss-120b:free",
-  "google/gemma-4-31b:free",
-  "google/gemma-4-26b-a4b:free",
-  "openai/gpt-oss-20b:free",
-];
+import { AI_ROUTER_CONFIG } from "../config/aiModels.js";
+import { getBestModelsForRequest } from "./modelSelectorService.js";
+import {
+  markModelSuccess,
+  markModelFailure,
+} from "./modelHealthService.js";
 
-/**
- * Vision-capable models for image-based AI chat.
- * These are used only when the user uploads an image.
- */
-const VISION_MODELS = [
-  "qwen/qwen2.5-vl-72b-instruct:free",
-  "qwen/qwen2.5-vl-32b-instruct:free",
-  "google/gemini-2.0-flash-exp:free",
-  "google/gemma-3-27b-it:free",
-  "openrouter/free",
-];
-
-/**
- * Reliability configuration
- */
-const MAX_MODEL_RETRIES = 2;
-const RETRY_DELAY_MS = 600;
 const SAFE_AI_ERROR_MESSAGE = "AI is currently busy, please try again";
+const MAX_MODEL_RETRIES = 1;
+const RETRY_DELAY_MS = 500;
 
-/**
- * Small delay helper used between retry attempts.
- */
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Extracts useful provider error details for backend logs only.
- * This error should never be directly sent to the frontend.
+ * Extract safe backend-only provider error.
  */
 const extractOpenRouterError = (data) => {
   return (
@@ -58,19 +36,7 @@ const extractOpenRouterError = (data) => {
 };
 
 /**
- * Backend-only model failure logger.
- */
-const logModelFailure = ({ model, attempt, error }) => {
-  console.error("[AI_MODEL_FAILED]", {
-    model,
-    attempt,
-    message: error?.message || "Unknown AI error",
-    timestamp: new Date().toISOString(),
-  });
-};
-
-/**
- * Calls a single OpenRouter model once.
+ * Calls one OpenRouter model with timeout protection.
  */
 const callOpenRouterModel = async ({
   model,
@@ -78,43 +44,87 @@ const callOpenRouterModel = async ({
   temperature = 0.5,
   maxTokens = 500,
 }) => {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    }),
-  });
+  const timeoutMs = model.timeoutMs || AI_ROUTER_CONFIG.defaultTimeoutMs;
 
-  const data = await response.json();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!response.ok) {
-    throw new Error(extractOpenRouterError(data));
+  const startTime = Date.now();
+
+  try {
+    const response = await fetch(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer":
+            process.env.APP_PUBLIC_URL || "http://localhost:5173",
+          "X-Title": "Social Media Analytics SaaS",
+        },
+        body: JSON.stringify({
+          model: model.id,
+          messages,
+          temperature,
+          max_tokens: maxTokens,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractOpenRouterError(data));
+    }
+
+    const content = data?.choices?.[0]?.message?.content;
+
+    if (!content || typeof content !== "string") {
+      throw new Error("No usable response text returned by model");
+    }
+
+    const latencyMs = Date.now() - startTime;
+
+    await markModelSuccess(model.id, latencyMs);
+
+    console.log("[AI_MODEL_SUCCESS]", {
+      model: model.id,
+      latencyMs,
+      timestamp: new Date().toISOString(),
+    });
+
+    return content.trim();
+  } catch (error) {
+    await markModelFailure(model.id);
+
+    console.error("[AI_MODEL_FAILED]", {
+      model: model.id,
+      message:
+        error.name === "AbortError"
+          ? `Model timed out after ${timeoutMs}ms`
+          : error.message,
+      timestamp: new Date().toISOString(),
+    });
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  const content = data?.choices?.[0]?.message?.content;
-
-  if (!content || typeof content !== "string") {
-    throw new Error("No usable response text returned by model");
-  }
-
-  return content.trim();
 };
 
 /**
- * Retries the same model before moving to another model.
+ * Retry one selected model.
+ *
+ * Important:
+ * We keep retry low because trying too many retries increases latency.
  */
-const trySingleModelWithRetry = async ({
+const tryModelWithRetry = async ({
   model,
   messages,
-  temperature = 0.5,
-  maxTokens = 500,
+  temperature,
+  maxTokens,
 }) => {
   let lastError = null;
 
@@ -129,12 +139,6 @@ const trySingleModelWithRetry = async ({
     } catch (error) {
       lastError = error;
 
-      logModelFailure({
-        model,
-        attempt,
-        error,
-      });
-
       if (attempt < MAX_MODEL_RETRIES) {
         await wait(RETRY_DELAY_MS * attempt);
       }
@@ -145,48 +149,69 @@ const trySingleModelWithRetry = async ({
 };
 
 /**
- * Smart fallback system.
+ * Smart fallback using best healthy models only.
  *
  * Flow:
- * 1. Try first model
- * 2. Retry same model if it fails
- * 3. Move to next model if retries fail
- * 4. Return safe fallback message if all models fail
+ * - Select best 3 models from router
+ * - Try first healthy model
+ * - If failed, mark failure in Redis
+ * - Try next selected model
+ * - If all fail, return safe message
  */
-const tryModelsWithFallback = async ({
-  models = AI_MODELS,
+const trySmartModelsWithFallback = async ({
   messages,
+  needsVision = false,
   temperature = 0.5,
   maxTokens = 500,
 }) => {
-  for (const model of models) {
+  const selectedModels = await getBestModelsForRequest({
+    needsVision,
+    maxModels: AI_ROUTER_CONFIG.maxModelsPerRequest,
+  });
+
+  if (!selectedModels.length) {
+    console.error("[AI_NO_HEALTHY_MODELS]", {
+      needsVision,
+      timestamp: new Date().toISOString(),
+    });
+
+    return SAFE_AI_ERROR_MESSAGE;
+  }
+
+  console.log("[AI_SELECTED_MODELS]", {
+    models: selectedModels.map((model) => ({
+      id: model.id,
+      score: model.score,
+      avgLatencyMs: model.health?.avgLatencyMs,
+      failures: model.health?.failures,
+    })),
+    needsVision,
+  });
+
+  for (const model of selectedModels) {
     try {
-      const result = await trySingleModelWithRetry({
+      return await tryModelWithRetry({
         model,
         messages,
         temperature,
         maxTokens,
       });
-
-      console.log("[AI_MODEL_SUCCESS]", {
-        model,
-        timestamp: new Date().toISOString(),
-      });
-
-      return result;
     } catch {
       continue;
     }
   }
 
-  console.error("[AI_ALL_MODELS_FAILED]", {
-    totalModelsTried: models.length,
+  console.error("[AI_ALL_SELECTED_MODELS_FAILED]", {
+    totalModelsTried: selectedModels.length,
     timestamp: new Date().toISOString(),
   });
 
   return SAFE_AI_ERROR_MESSAGE;
 };
 
+/**
+ * Generate AI insights for dashboard analytics.
+ */
 export const generateAnalyticsInsights = async (
   socialAccount,
   snapshots,
@@ -285,18 +310,32 @@ Generate a professional structured response now.
       },
     ];
 
-    return await tryModelsWithFallback({
-      models: AI_MODELS,
+    return await trySmartModelsWithFallback({
       messages,
+      needsVision: false,
       temperature: 0.5,
       maxTokens: 700,
     });
   } catch (error) {
-    console.error("AI Service Error (Insights):", error.message);
+    console.error("[AI_SERVICE_INSIGHTS_ERROR]", {
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
+
     return SAFE_AI_ERROR_MESSAGE;
   }
 };
 
+/**
+ * Generate AI chat response.
+ *
+ * Supports:
+ * - text-only chat
+ * - image-only chat
+ * - text + image chat
+ * - chat history context
+ * - analytics context
+ */
 export const generateAnalyticsResponse = async ({
   analyticsContext,
   historyMessages = [],
@@ -343,7 +382,9 @@ ${analyticsContext}
       ? [
           {
             type: "text",
-            text: latestUserMessage,
+            text:
+              latestUserMessage ||
+              "Please analyze this uploaded image in the context of social media growth.",
           },
           {
             type: "image_url",
@@ -366,14 +407,18 @@ ${analyticsContext}
       },
     ];
 
-    return await tryModelsWithFallback({
-      models: hasImage ? VISION_MODELS : AI_MODELS,
+    return await trySmartModelsWithFallback({
       messages,
+      needsVision: hasImage,
       temperature: 0.6,
       maxTokens: 800,
     });
   } catch (error) {
-    console.error("AI Service Error (Chat):", error.message);
+    console.error("[AI_SERVICE_CHAT_ERROR]", {
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
+
     return SAFE_AI_ERROR_MESSAGE;
   }
 };
