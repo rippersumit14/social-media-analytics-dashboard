@@ -1,18 +1,7 @@
 import api from "./api.js";
 
 /**
- * Send message to AI chat API.
- *
- * Supports:
- * - Text-only messages using JSON
- * - Image-only messages using FormData
- * - Text + image messages using FormData
- *
- * @param {string} accountId - Selected social account id
- * @param {string} message - User message text
- * @param {string} token - JWT token
- * @param {string|null} sessionId - Existing chat session id
- * @param {File|null} imageFile - Optional uploaded image
+ * Send normal non-streaming AI chat request.
  */
 export const chatWithAI = async (
   accountId,
@@ -21,10 +10,6 @@ export const chatWithAI = async (
   sessionId = null,
   imageFile = null
 ) => {
-  /**
-   * Image request:
-   * FormData is required because files cannot be sent as normal JSON.
-   */
   if (imageFile) {
     const formData = new FormData();
 
@@ -39,20 +24,12 @@ export const chatWithAI = async (
     const response = await api.post(`/ai/chat/${accountId}`, formData, {
       headers: {
         Authorization: `Bearer ${token}`,
-        // Important:
-        // Axios/browser will set the correct multipart boundary automatically.
-        // If this causes issues, remove this Content-Type line.
-        "Content-Type": "multipart/form-data",
       },
     });
 
     return response.data;
   }
 
-  /**
-   * Text-only request:
-   * Normal JSON body is enough.
-   */
   const response = await api.post(
     `/ai/chat/${accountId}`,
     {
@@ -71,11 +48,6 @@ export const chatWithAI = async (
 
 /**
  * Get all chat sessions for selected social account.
- *
- * Used by Chat History Sidebar.
- *
- * @param {string} socialAccountId - Selected social account id
- * @param {string} token - JWT token
  */
 export const getChatSessions = async (socialAccountId, token) => {
   const response = await api.get(`/ai/chat/sessions/${socialAccountId}`, {
@@ -89,11 +61,6 @@ export const getChatSessions = async (socialAccountId, token) => {
 
 /**
  * Get all messages of selected chat session.
- *
- * Used when user clicks an old chat from sidebar.
- *
- * @param {string} sessionId - Chat session id
- * @param {string} token - JWT token
  */
 export const getSessionMessages = async (sessionId, token) => {
   const response = await api.get(`/ai/chat/session/${sessionId}/messages`, {
@@ -107,10 +74,6 @@ export const getSessionMessages = async (sessionId, token) => {
 
 /**
  * Rename chat session title.
- *
- * @param {string} sessionId - Chat session id
- * @param {string} title - New session title
- * @param {string} token - JWT token
  */
 export const renameChatSession = async (sessionId, title, token) => {
   const response = await api.patch(
@@ -128,9 +91,6 @@ export const renameChatSession = async (sessionId, title, token) => {
 
 /**
  * Delete chat session and its messages.
- *
- * @param {string} sessionId - Chat session id
- * @param {string} token - JWT token
  */
 export const deleteChatSession = async (sessionId, token) => {
   const response = await api.delete(`/ai/chat/session/${sessionId}`, {
@@ -140,4 +100,95 @@ export const deleteChatSession = async (sessionId, token) => {
   });
 
   return response.data;
+};
+
+/**
+ * Stream AI chat response.
+ *
+ * Uses fetch because browser streaming works better with fetch than Axios.
+ */
+export const streamChatWithAI = async ({
+  accountId,
+  message,
+  token,
+  sessionId = null,
+  imageFile = null,
+  onSession,
+  onModel,
+  onChunk,
+  onDone,
+  onError,
+}) => {
+  const API_URL =
+    import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+  const formData = new FormData();
+
+  formData.append("message", message || "");
+
+  if (sessionId) {
+    formData.append("sessionId", sessionId);
+  }
+
+  if (imageFile) {
+    formData.append("image", imageFile);
+  }
+
+  const response = await fetch(`${API_URL}/ai/chat/${accountId}/stream`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok || !response.body) {
+    const errorData = await response.json().catch(() => null);
+    throw new Error(errorData?.message || "Streaming request failed");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+
+  let buffer = "";
+
+  const handleEventBlock = (block) => {
+    const eventLine = block
+      .split("\n")
+      .find((line) => line.startsWith("event:"));
+
+    const dataLine = block
+      .split("\n")
+      .find((line) => line.startsWith("data:"));
+
+    if (!eventLine || !dataLine) return;
+
+    const event = eventLine.replace("event:", "").trim();
+    const data = JSON.parse(dataLine.replace("data:", "").trim());
+
+    if (event === "session") onSession?.(data);
+    if (event === "model") onModel?.(data);
+    if (event === "chunk") onChunk?.(data.chunk);
+    if (event === "done") onDone?.(data);
+    if (event === "error") onError?.(data);
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    const blocks = buffer.split("\n\n");
+    buffer = blocks.pop() || "";
+
+    for (const block of blocks) {
+      handleEventBlock(block);
+    }
+  }
+
+  if (buffer.trim()) {
+    handleEventBlock(buffer);
+  }
 };

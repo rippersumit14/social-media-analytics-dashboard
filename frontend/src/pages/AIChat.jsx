@@ -3,12 +3,14 @@ import { useAuth } from "../context/AuthContext.jsx";
 import { getSocialAccounts } from "../services/socialAnalyticsService.js";
 import ChatSidebar from "../components/ChatSideBar.jsx";
 
+
 import {
   chatWithAI,
   getChatSessions,
   getSessionMessages,
   renameChatSession,
   deleteChatSession,
+  streamChatWithAI,
 } from "../services/chatService.js";
 
 const AIChat = () => {
@@ -349,104 +351,165 @@ const AIChat = () => {
     }
   };
 
-  const handleSend = async (messageText = input) => {
-    const currentInput = messageText.trim();
+  /**
+ * Send message using streaming API.
+ *
+ * Flow:
+ * 1. Show user message immediately
+ * 2. Create empty assistant bubble
+ * 3. Append chunks as they arrive
+ * 4. Finalize usage/session/model info after stream ends
+ */
+const handleSend = async (messageText = input) => {
+  const currentInput = messageText.trim();
 
-    if (
-      (!currentInput && !selectedImage) ||
-      !selectedAccount ||
-      !token ||
-      chatLoading ||
-      isUsageLimitReached
-    ) {
-      return;
-    }
+  if (
+    (!currentInput && !selectedImage) ||
+    !selectedAccount ||
+    !token ||
+    chatLoading ||
+    isUsageLimitReached
+  ) {
+    return;
+  }
 
-    const userVisibleContent =
-      currentInput || "Uploaded an image for analysis.";
+  const userVisibleContent =
+    currentInput || "Uploaded an image for analysis.";
 
-    const userMessage = {
-      id: Date.now(),
-      role: "user",
-      content: userVisibleContent,
-      imagePreview: selectedImagePreview || "",
-    };
-
-    setChatMessages((prev) => limitMessages([...prev, userMessage]));
-    setInput("");
-    setError("");
-
-    try {
-      setChatLoading(true);
-
-      const data = await chatWithAI(
-        selectedAccount._id,
-        currentInput,
-        token,
-        sessionId,
-        selectedImage
-      );
-
-      if (data.sessionId) {
-        setSessionId(data.sessionId);
-      }
-
-      if (data.sessionTitle) {
-        setSessionTitle(data.sessionTitle);
-      }
-
-      if (data.usage) {
-        setUsageInfo(data.usage);
-      }
-
-      //Store active AI model info for UI
-      if (data.modelName){
-        setActiveModelName(data.modelName);
-      }
-
-      if(data.latencyMs){
-        setLastLatencyMs(data.latencyMs);
-      }
-
-      setRemainingUsage(data.remainingUsage ?? null)
-
-      setRemainingUsage(data.remainingUsage ?? null);
-
-      const aiMessage = {
-        id: Date.now() + 1,
-        role: "assistant",
-        content: data.reply || "AI is currently busy, please try again.",
-      };
-
-      setChatMessages((prev) => limitMessages([...prev, aiMessage]));
-
-      clearSelectedImage();
-
-      await loadChatSessions(selectedAccount._id);
-    } catch (err) {
-      console.error("AI Chat error:", err);
-
-      const cleanError =
-        err.response?.data?.message || "AI is currently busy, please try again.";
-
-      if (err.response?.data?.usage) {
-        setUsageInfo(err.response.data.usage);
-      }
-
-      setError(cleanError);
-
-      const failMessage = {
-        id: Date.now() + 1,
-        role: "assistant",
-        content: cleanError,
-        isError: true,
-      };
-
-      setChatMessages((prev) => limitMessages([...prev, failMessage]));
-    } finally {
-      setChatLoading(false);
-    }
+  const userMessage = {
+    id: Date.now(),
+    role: "user",
+    content: userVisibleContent,
+    imagePreview: selectedImagePreview || "",
   };
+
+  const assistantMessageId = Date.now() + 1;
+
+  const emptyAssistantMessage = {
+    id: assistantMessageId,
+    role: "assistant",
+    content: "",
+  };
+
+  setChatMessages((prev) =>
+    limitMessages([...prev, userMessage, emptyAssistantMessage])
+  );
+
+  setInput("");
+  setError("");
+  setChatLoading(true);
+
+  try {
+    let streamedText = "";
+
+    await streamChatWithAI({
+      accountId: selectedAccount._id,
+      message: currentInput,
+      token,
+      sessionId,
+      imageFile: selectedImage,
+
+      onSession: (data) => {
+        if (data.sessionId) {
+          setSessionId(data.sessionId);
+        }
+
+        if (data.sessionTitle) {
+          setSessionTitle(data.sessionTitle);
+        }
+      },
+
+      onModel: (data) => {
+        if (data.modelName) {
+          setActiveModelName(data.modelName);
+        }
+      },
+
+      onChunk: (chunk) => {
+        streamedText += chunk;
+
+        setChatMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMessageId
+              ? {
+                  ...message,
+                  content: streamedText,
+                }
+              : message
+          )
+        );
+      },
+
+      onDone: async (data) => {
+        if (data.sessionId) {
+          setSessionId(data.sessionId);
+        }
+
+        if (data.sessionTitle) {
+          setSessionTitle(data.sessionTitle);
+        }
+
+        if (data.modelName) {
+          setActiveModelName(data.modelName);
+        }
+
+        if (data.latencyMs) {
+          setLastLatencyMs(data.latencyMs);
+        }
+
+        if (data.usage) {
+          setUsageInfo(data.usage);
+        }
+
+        setRemainingUsage(data.remainingUsage ?? null);
+
+        await loadChatSessions(selectedAccount._id);
+      },
+
+      onError: (data) => {
+        const cleanError =
+          data?.message || "AI is currently busy, please try again.";
+
+        setError(cleanError);
+
+        setChatMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantMessageId
+              ? {
+                  ...message,
+                  content: cleanError,
+                  isError: true,
+                }
+              : message
+          )
+        );
+      },
+    });
+
+    clearSelectedImage();
+  } catch (err) {
+    console.error("AI Streaming error:", err);
+
+    const cleanError =
+      err.message || "AI is currently busy, please try again.";
+
+    setError(cleanError);
+
+    setChatMessages((prev) =>
+      prev.map((message) =>
+        message.id === assistantMessageId
+          ? {
+              ...message,
+              content: cleanError,
+              isError: true,
+            }
+          : message
+      )
+    );
+  } finally {
+    setChatLoading(false);
+  }
+};
 
   const renderMessageContent = (content) => {
     const lines = content
