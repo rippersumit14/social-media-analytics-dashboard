@@ -4,6 +4,7 @@ import protect from "../middleware/authMiddleware.js";
 import aiRateLimiter from "../middleware/aiRateLimiter.js";
 import {
   chatWithAI,
+  chatWithAIStream,
   getChatSessions,
   getSessionMessages,
   renameChatSession,
@@ -14,9 +15,7 @@ import { uploadImage } from "../middleware/uploadMiddleware.js";
 const router = express.Router();
 
 /**
- * @route   POST /api/ai/insights/:socialAccountId
- * @desc    Generate AI insights
- * @access  Private
+ * Generate AI insights for selected social account.
  */
 router.post(
   "/insights/:socialAccountId",
@@ -26,22 +25,35 @@ router.post(
 );
 
 /**
- * @route   POST /api/ai/chat/:socialAccountId
- * @desc    Chat with AI
- * @access  Private
+ * Stream AI chat response.
+ *
+ * Used for ChatGPT-like typing response.
+ *
+ * Note:
+ * aiRateLimiter is temporarily removed here because
+ * usage limit is already handled inside chatController.
+ */
+router.post(
+  "/chat/:socialAccountId/stream",
+  protect,
+  uploadImage.single("image"),
+  chatWithAIStream
+);
+
+/**
+ * Normal non-streaming AI chat route.
+ *
+ * Kept as fallback route.
  */
 router.post(
   "/chat/:socialAccountId",
   protect,
-  aiRateLimiter,
   uploadImage.single("image"),
   chatWithAI
 );
 
 /**
- * @route   GET /api/ai/chat/sessions/:socialAccountId
- * @desc    Get all chat sessions for selected social account
- * @access  Private
+ * Get all chat sessions for selected account.
  */
 router.get(
   "/chat/sessions/:socialAccountId",
@@ -50,9 +62,7 @@ router.get(
 );
 
 /**
- * @route   GET /api/ai/chat/session/:sessionId/messages
- * @desc    Get messages of selected chat session
- * @access  Private
+ * Get messages of selected chat session.
  */
 router.get(
   "/chat/session/:sessionId/messages",
@@ -61,9 +71,7 @@ router.get(
 );
 
 /**
- * @route   PATCH /api/ai/chat/session/:sessionId
- * @desc    Rename chat session
- * @access  Private
+ * Rename selected chat session.
  */
 router.patch(
   "/chat/session/:sessionId",
@@ -72,9 +80,7 @@ router.patch(
 );
 
 /**
- * @route   DELETE /api/ai/chat/session/:sessionId
- * @desc    Delete chat session
- * @access  Private
+ * Delete selected chat session and its messages.
  */
 router.delete(
   "/chat/session/:sessionId",

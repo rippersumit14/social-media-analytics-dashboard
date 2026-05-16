@@ -22,6 +22,12 @@ const chatSessionSchema = new mongoose.Schema(
       trim: true,
       maxlength: 80,
     },
+
+    //adding the model selection field in the schema
+    selectModel: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,

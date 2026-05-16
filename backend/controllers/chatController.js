@@ -1,46 +1,37 @@
 import SocialAccount from "../models/SocialAccount.js";
 import AnalyticsSnapshot from "../models/AnalyticsSnapshot.js";
 import User, { PLAN_AI_LIMITS } from "../models/User.js";
-import { generateAnalyticsResponse } from "../services/aiService.js";
 import ChatSession from "../models/ChatSession.js";
 import ChatMessage from "../models/ChatMessage.js";
+import {
+  generateAnalyticsResponse,
+  generateAnalyticsResponseStream,
+} from "../services/aiService.js";
 
 /**
- * Chat Controller
- *
- * Handles:
- * - AI chat requests
- * - text-only messages
- * - image-only messages
- * - text + image messages
- * - chat session storage
- * - chat message storage
- * - analytics context injection
- * - daily AI usage enforcement
+ * Hard limits for SaaS-style chat history.
  */
-
-// ---------- Chat Limits ----------
 const MAX_SESSIONS_PER_ACCOUNT = 20;
 const MAX_MESSAGES_PER_SESSION = 100;
 const MAX_CONTEXT_MESSAGES = 12;
 
-// ---------- Usage Limits ----------
+/**
+ * Daily usage reset window.
+ */
 const ONE_DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Checks if daily AI usage should reset.
+ * Check if user's AI usage should reset.
  */
 const shouldResetAIUsage = (resetDate) => {
   if (!resetDate) return true;
 
   const lastResetTime = new Date(resetDate).getTime();
-  const now = Date.now();
-
-  return now - lastResetTime >= ONE_DAY_IN_MS;
+  return Date.now() - lastResetTime >= ONE_DAY_IN_MS;
 };
 
 /**
- * Syncs user AI usage limit with plan and resets daily count if needed.
+ * Prepare user's daily AI usage before each AI request.
  */
 const prepareAIUsageForRequest = async (user) => {
   const planLimit = PLAN_AI_LIMITS[user.plan] || PLAN_AI_LIMITS.FREE;
@@ -58,7 +49,7 @@ const prepareAIUsageForRequest = async (user) => {
 };
 
 /**
- * Builds frontend-friendly usage response.
+ * Build usage object for frontend UI.
  */
 const buildUsageInfo = (user) => {
   return {
@@ -71,7 +62,7 @@ const buildUsageInfo = (user) => {
 };
 
 /**
- * Creates readable session title from first user message.
+ * Generate a readable session title from first message.
  */
 const buildSessionTitle = (message) => {
   const clean = message?.replace(/\s+/g, " ").trim();
@@ -82,7 +73,7 @@ const buildSessionTitle = (message) => {
 };
 
 /**
- * Builds safe user message text for text/image chats.
+ * Normalize user message for text-only, image-only, and text+image requests.
  */
 const buildUserMessageText = (message, hasImage) => {
   const cleanMessage = message?.trim() || "";
@@ -95,7 +86,7 @@ const buildUserMessageText = (message, hasImage) => {
 };
 
 /**
- * Builds analytics context for AI prompt.
+ * Build social-account analytics context for the AI prompt.
  */
 const buildAnalyticsContext = (socialAccount, snapshots) => {
   const first = snapshots[0] || null;
@@ -110,7 +101,7 @@ Account information:
 Analytics availability:
 - No detailed analytics snapshots are available yet.
 - Use general social media expertise where helpful.
-- If the user asks about performance, mention that more accurate insights require synced analytics.
+- If user asks about performance, mention that better insights require synced analytics.
 `;
   }
 
@@ -152,7 +143,7 @@ Change summary:
 };
 
 /**
- * Deletes old sessions if user has more than allowed sessions per account.
+ * Keep only the latest 20 sessions for a user/account.
  */
 const trimOldSessions = async (userId, socialAccountId) => {
   const sessions = await ChatSession.find({
@@ -177,7 +168,7 @@ const trimOldSessions = async (userId, socialAccountId) => {
 };
 
 /**
- * Deletes old messages if session has more than allowed messages.
+ * Keep only the latest 100 messages in one session.
  */
 const trimOldMessages = async (sessionId) => {
   const messages = await ChatMessage.find({
@@ -201,7 +192,98 @@ const trimOldMessages = async (sessionId) => {
 };
 
 /**
- * @desc    AI assistant chat for analytics + strategy
+ * Get existing session or create a new one.
+ */
+const getOrCreateChatSession = async ({
+  sessionId,
+  userId,
+  socialAccountId,
+  userMessageText,
+}) => {
+  if (sessionId) {
+    const existingSession = await ChatSession.findOne({
+      _id: sessionId,
+      user: userId,
+      socialAccount: socialAccountId,
+    });
+
+    return existingSession;
+  }
+
+  const newSession = await ChatSession.create({
+    user: userId,
+    socialAccount: socialAccountId,
+    title: buildSessionTitle(userMessageText),
+    selectedModel: null,
+  });
+
+  await trimOldSessions(userId, socialAccountId);
+
+  return newSession;
+};
+
+/**
+ * Load recent messages and convert them into OpenAI/OpenRouter chat format.
+ */
+const buildHistoryMessages = async (sessionId) => {
+  const recentMessages = await ChatMessage.find({
+    session: sessionId,
+  })
+    .sort({ createdAt: -1 })
+    .limit(MAX_CONTEXT_MESSAGES)
+    .lean();
+
+  return recentMessages.reverse().map((msg) => ({
+    role: msg.role,
+    content: msg.content,
+  }));
+};
+
+/**
+ * Save assistant reply, session model, usage, and cleanup.
+ */
+const finalizeAIResponse = async ({
+  user,
+  activeSession,
+  userId,
+  socialAccountId,
+  aiResult,
+}) => {
+  const aiReply = aiResult.reply;
+
+  await ChatMessage.create({
+    session: activeSession._id,
+    user: userId,
+    socialAccount: socialAccountId,
+    role: "assistant",
+    content: aiReply,
+  });
+
+  if (aiResult.modelUsed) {
+    activeSession.selectedModel = aiResult.modelUsed;
+  }
+
+  activeSession.updatedAt = new Date();
+  await activeSession.save();
+
+  await trimOldMessages(activeSession._id);
+
+  const isAISuccess =
+    aiReply && !aiResult.failed && !aiReply.includes("AI is currently busy");
+
+  if (isAISuccess) {
+    user.aiUsageCount += 1;
+    await user.save();
+  }
+
+  return {
+    aiReply,
+    isAISuccess,
+  };
+};
+
+/**
+ * @desc    Normal non-streaming AI chat
  * @route   POST /api/ai/chat/:socialAccountId
  * @access  Private
  */
@@ -213,15 +295,8 @@ export const chatWithAI = async (req, res) => {
 
     const uploadedImage = req.file || null;
     const hasImage = Boolean(uploadedImage);
-
     const userMessageText = buildUserMessageText(message, hasImage);
 
-    /**
-     * Allow:
-     * - text-only
-     * - image-only
-     * - text + image
-     */
     if (!userMessageText && !hasImage) {
       return res.status(400).json({
         success: false,
@@ -229,9 +304,6 @@ export const chatWithAI = async (req, res) => {
       });
     }
 
-    /**
-     * Check authenticated user.
-     */
     const user = await User.findById(userId);
 
     if (!user) {
@@ -241,9 +313,6 @@ export const chatWithAI = async (req, res) => {
       });
     }
 
-    /**
-     * Prepare usage before AI call.
-     */
     await prepareAIUsageForRequest(user);
 
     const usageInfoBeforeAI = buildUsageInfo(user);
@@ -257,9 +326,6 @@ export const chatWithAI = async (req, res) => {
       });
     }
 
-    /**
-     * Ensure selected social account belongs to logged-in user.
-     */
     const socialAccount = await SocialAccount.findOne({
       _id: socialAccountId,
       user: userId,
@@ -272,46 +338,26 @@ export const chatWithAI = async (req, res) => {
       });
     }
 
-    /**
-     * Find existing session or create new session.
-     */
-    let activeSession;
+    const activeSession = await getOrCreateChatSession({
+      sessionId,
+      userId,
+      socialAccountId,
+      userMessageText,
+    });
 
-    if (sessionId) {
-      activeSession = await ChatSession.findOne({
-        _id: sessionId,
-        user: userId,
-        socialAccount: socialAccountId,
+    if (!activeSession) {
+      return res.status(404).json({
+        success: false,
+        message: "Chat session not found",
       });
-
-      if (!activeSession) {
-        return res.status(404).json({
-          success: false,
-          message: "Chat session not found",
-        });
-      }
-    } else {
-      activeSession = await ChatSession.create({
-        user: userId,
-        socialAccount: socialAccountId,
-        title: buildSessionTitle(userMessageText),
-      });
-
-      await trimOldSessions(userId, socialAccountId);
     }
 
-    /**
-     * Prepare image for AI vision model.
-     */
     const imageBase64 = uploadedImage
       ? uploadedImage.buffer.toString("base64")
       : null;
 
     const imageMimeType = uploadedImage?.mimetype || null;
 
-    /**
-     * Save user message.
-     */
     await ChatMessage.create({
       session: activeSession._id,
       user: userId,
@@ -321,76 +367,39 @@ export const chatWithAI = async (req, res) => {
       imageUrl: null,
     });
 
-    /**
-     * Load recent chat history for AI continuity.
-     */
-    const recentMessages = await ChatMessage.find({
-      session: activeSession._id,
-    })
-      .sort({ createdAt: -1 })
-      .limit(MAX_CONTEXT_MESSAGES)
-      .lean();
+    const historyMessages = await buildHistoryMessages(activeSession._id);
 
-    const historyMessages = recentMessages.reverse().map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
-
-    /**
-     * Load analytics snapshots for context-aware replies.
-     */
     const snapshots = await AnalyticsSnapshot.find({
       socialAccount: socialAccountId,
     }).sort({ capturedAt: 1 });
 
     const analyticsContext = buildAnalyticsContext(socialAccount, snapshots);
 
-    /**
-     * Generate AI reply.
-     * Retry, fallback, and provider reliability are handled inside aiService.js.
-     */
-    const aiReply = await generateAnalyticsResponse({
+    const aiResult = await generateAnalyticsResponse({
       analyticsContext,
       historyMessages,
       latestUserMessage: userMessageText,
       imageBase64,
       imageMimeType,
+      preferredModelId: activeSession.selectedModel,
     });
 
-    const isAISuccess = aiReply && !aiReply.includes("AI is currently busy");
-
-    /**
-     * Save assistant reply.
-     */
-    await ChatMessage.create({
-      session: activeSession._id,
-      user: userId,
-      socialAccount: socialAccountId,
-      role: "assistant",
-      content: aiReply,
+    const { aiReply } = await finalizeAIResponse({
+      user,
+      activeSession,
+      userId,
+      socialAccountId,
+      aiResult,
     });
-
-    /**
-     * Update session latest activity.
-     */
-    activeSession.updatedAt = new Date();
-    await activeSession.save();
-
-    await trimOldMessages(activeSession._id);
-
-    /**
-     * Increment usage only when AI reply is successful.
-     */
-    if (isAISuccess) {
-      user.aiUsageCount += 1;
-      await user.save();
-    }
 
     return res.status(200).json({
       success: true,
       reply: aiReply,
       sessionId: activeSession._id,
       sessionTitle: activeSession.title,
+      modelUsed: aiResult.modelUsed,
+      modelName: aiResult.modelName,
+      latencyMs: aiResult.latencyMs,
       usage: buildUsageInfo(user),
       remainingUsage: Math.max(user.aiUsageLimit - user.aiUsageCount, 0),
     });
@@ -404,6 +413,181 @@ export const chatWithAI = async (req, res) => {
       success: false,
       message: "AI is currently busy, please try again",
     });
+  }
+};
+
+/**
+ * @desc    Streaming AI chat using Server-Sent Events
+ * @route   POST /api/ai/chat/:socialAccountId/stream
+ * @access  Private
+ */
+export const chatWithAIStream = async (req, res) => {
+  try {
+    const { socialAccountId } = req.params;
+    const { message, sessionId } = req.body || {};
+    const userId = req.user._id;
+
+    const uploadedImage = req.file || null;
+    const hasImage = Boolean(uploadedImage);
+    const userMessageText = buildUserMessageText(message, hasImage);
+
+    if (!userMessageText && !hasImage) {
+      return res.status(400).json({
+        success: false,
+        message: "Message or image is required",
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    await prepareAIUsageForRequest(user);
+
+    const usageInfoBeforeAI = buildUsageInfo(user);
+
+    if (usageInfoBeforeAI.remaining <= 0) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Daily AI usage limit reached. Please try again after reset or upgrade your plan.",
+        usage: usageInfoBeforeAI,
+      });
+    }
+
+    const socialAccount = await SocialAccount.findOne({
+      _id: socialAccountId,
+      user: userId,
+    });
+
+    if (!socialAccount) {
+      return res.status(404).json({
+        success: false,
+        message: "Social account not found or not authorized",
+      });
+    }
+
+    const activeSession = await getOrCreateChatSession({
+      sessionId,
+      userId,
+      socialAccountId,
+      userMessageText,
+    });
+
+    if (!activeSession) {
+      return res.status(404).json({
+        success: false,
+        message: "Chat session not found",
+      });
+    }
+
+    const imageBase64 = uploadedImage
+      ? uploadedImage.buffer.toString("base64")
+      : null;
+
+    const imageMimeType = uploadedImage?.mimetype || null;
+
+    await ChatMessage.create({
+      session: activeSession._id,
+      user: userId,
+      socialAccount: socialAccountId,
+      role: "user",
+      content: userMessageText,
+      imageUrl: null,
+    });
+
+    const historyMessages = await buildHistoryMessages(activeSession._id);
+
+    const snapshots = await AnalyticsSnapshot.find({
+      socialAccount: socialAccountId,
+    }).sort({ capturedAt: 1 });
+
+    const analyticsContext = buildAnalyticsContext(socialAccount, snapshots);
+
+    /**
+     * Start Server-Sent Events stream.
+     */
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    /**
+     * Send one SSE event block to frontend.
+     */
+    const sendEvent = (event, data) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    sendEvent("session", {
+      sessionId: activeSession._id,
+      sessionTitle: activeSession.title,
+    });
+
+    const aiResult = await generateAnalyticsResponseStream({
+      analyticsContext,
+      historyMessages,
+      latestUserMessage: userMessageText,
+      imageBase64,
+      imageMimeType,
+      preferredModelId: activeSession.selectedModel,
+
+      onModelSelected: (modelInfo) => {
+        sendEvent("model", modelInfo);
+      },
+
+      onChunk: (chunk) => {
+        sendEvent("chunk", { chunk });
+      },
+    });
+
+    const { aiReply } = await finalizeAIResponse({
+      user,
+      activeSession,
+      userId,
+      socialAccountId,
+      aiResult,
+    });
+
+    sendEvent("done", {
+      success: true,
+      reply: aiReply,
+      sessionId: activeSession._id,
+      sessionTitle: activeSession.title,
+      modelUsed: aiResult.modelUsed,
+      modelName: aiResult.modelName,
+      latencyMs: aiResult.latencyMs,
+      usage: buildUsageInfo(user),
+      remainingUsage: Math.max(user.aiUsageLimit - user.aiUsageCount, 0),
+    });
+
+    res.end();
+  } catch (error) {
+    console.error("[CHAT_WITH_AI_STREAM_ERROR]", {
+      message: error.message,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        message: "AI is currently busy, please try again",
+      });
+    }
+
+    res.write("event: error\n");
+    res.write(
+      `data: ${JSON.stringify({
+        message: "AI is currently busy, please try again",
+      })}\n\n`
+    );
+    res.end();
   }
 };
 
@@ -457,6 +641,7 @@ export const getChatSessions = async (req, res) => {
       title: session.title,
       lastMessagePreview:
         lastMessageMap[session._id.toString()]?.slice(0, 80) || "",
+      selectedModel: session.selectedModel || null,
       updatedAt: session.updatedAt,
     }));
 
@@ -478,7 +663,7 @@ export const getChatSessions = async (req, res) => {
 };
 
 /**
- * @desc    Get all messages of a chat session
+ * @desc    Get all messages of selected chat session
  * @route   GET /api/ai/chat/session/:sessionId/messages
  * @access  Private
  */
@@ -508,6 +693,11 @@ export const getSessionMessages = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      session: {
+        sessionId: session._id,
+        title: session.title,
+        selectedModel: session.selectedModel || null,
+      },
       messages,
     });
   } catch (error) {
