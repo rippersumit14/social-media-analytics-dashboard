@@ -1,10 +1,66 @@
 import mongoose from "mongoose";
 
+/**
+ * Image metadata schema.
+ *
+ * Stores persistent cloud image details.
+ */
+const imageSchema = new mongoose.Schema(
+  {
+    imageUrl: {
+      type: String,
+      default: null,
+    },
+
+    publicId: {
+      type: String,
+      default: null,
+    },
+
+    provider: {
+      type: String,
+      enum: ["cloudinary", null],
+      default: null,
+    },
+
+    mimeType: {
+      type: String,
+      default: null,
+    },
+
+    size: {
+      type: Number,
+      default: null,
+    },
+
+    width: {
+      type: Number,
+      default: null,
+    },
+
+    height: {
+      type: Number,
+      default: null,
+    },
+
+    format: {
+      type: String,
+      default: null,
+    },
+  },
+
+  {
+    _id: false,
+  }
+);
+
+/**
+ * Chat message schema.
+ */
 const chatMessageSchema = new mongoose.Schema(
   {
     /**
-     * Chat session reference.
-     * Groups all messages belonging to one AI conversation.
+     * Parent chat session.
      */
     session: {
       type: mongoose.Schema.Types.ObjectId,
@@ -14,7 +70,7 @@ const chatMessageSchema = new mongoose.Schema(
     },
 
     /**
-     * User who owns this message.
+     * Message owner.
      */
     user: {
       type: mongoose.Schema.Types.ObjectId,
@@ -24,9 +80,7 @@ const chatMessageSchema = new mongoose.Schema(
     },
 
     /**
-     * Connected social account related to this AI chat.
-     * Example:
-     * Instagram account / LinkedIn page / etc.
+     * Connected social account.
      */
     socialAccount: {
       type: mongoose.Schema.Types.ObjectId,
@@ -37,8 +91,6 @@ const chatMessageSchema = new mongoose.Schema(
 
     /**
      * Message role.
-     * user      -> human message
-     * assistant -> AI response
      */
     role: {
       type: String,
@@ -47,99 +99,24 @@ const chatMessageSchema = new mongoose.Schema(
     },
 
     /**
-     * Main text message content.
-     * Supports:
-     * - text-only
-     * - image + text
-     * - assistant responses
+     * Text message content.
      */
     content: {
       type: String,
-      default: "",
+      required: true,
       trim: true,
     },
 
     /**
-     * Persistent uploaded image metadata.
-     * Actual image file lives in Cloudinary.
-     * MongoDB stores only metadata + delivery URL.
+     * Multiple uploaded images.
      */
-    image: {
-      /**
-       * Public CDN URL used by frontend.
-       */
-      imageUrl: {
-        type: String,
-        default: null,
-      },
-
-      /**
-       * Cloudinary internal file identifier.
-       * Used later for delete/update operations.
-       */
-      publicId: {
-        type: String,
-        default: null,
-      },
-
-      /**
-       * Storage provider.
-       * Helpful if migrating providers later.
-       */
-      provider: {
-        type: String,
-        enum: ["cloudinary", null],
-        default: null,
-      },
-
-      /**
-       * Original uploaded mime type.
-       * Example:
-       * image/png
-       */
-      mimeType: {
-        type: String,
-        default: null,
-      },
-
-      /**
-       * File size in bytes.
-       */
-      size: {
-        type: Number,
-        default: null,
-      },
-
-      /**
-       * Image width returned by Cloudinary.
-       */
-      width: {
-        type: Number,
-        default: null,
-      },
-
-      /**
-       * Image height returned by Cloudinary.
-       */
-      height: {
-        type: Number,
-        default: null,
-      },
-
-      /**
-       * Image format.
-       * Example:
-       * png / jpg / webp
-       */
-      format: {
-        type: String,
-        default: null,
-      },
+    images: {
+      type: [imageSchema],
+      default: [],
     },
 
     /**
-     * Optional voice/audio message URL.
-     * Reserved for future voice-chat support.
+     * Future voice/audio support.
      */
     audioUrl: {
       type: String,
@@ -147,39 +124,35 @@ const chatMessageSchema = new mongoose.Schema(
     },
 
     /**
-     * AI model used for assistant response.
-     * Example:
-     * openai/gpt-4o
+     * AI model metadata.
      */
     model: {
       type: String,
       default: null,
     },
 
-    /**
-     * AI response generation latency in milliseconds.
-     * Useful for analytics + model performance tracking.
-     */
     latencyMs: {
       type: Number,
       default: null,
     },
   },
+
   {
     timestamps: true,
   }
 );
 
 /**
- * Optimized index for:
- * - loading session chat history
- * - sorting messages chronologically
+ * Optimized session message loading.
  */
 chatMessageSchema.index({
   session: 1,
   createdAt: 1,
 });
 
-const ChatMessage = mongoose.model("ChatMessage", chatMessageSchema);
+const ChatMessage = mongoose.model(
+  "ChatMessage",
+  chatMessageSchema
+);
 
 export default ChatMessage;
