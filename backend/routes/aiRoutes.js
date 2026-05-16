@@ -1,7 +1,10 @@
 import express from "express";
+
 import { getAIInsights } from "../controllers/aiController.js";
+
 import protect from "../middleware/authMiddleware.js";
 import aiRateLimiter from "../middleware/aiRateLimiter.js";
+
 import {
   chatWithAI,
   chatWithAIStream,
@@ -10,12 +13,25 @@ import {
   renameChatSession,
   deleteChatSession,
 } from "../controllers/chatController.js";
+
 import { uploadImage } from "../middleware/uploadMiddleware.js";
 
 const router = express.Router();
 
 /**
+ * =========================================================
+ * AI INSIGHTS ROUTES
+ * =========================================================
+ */
+
+/**
  * Generate AI insights for selected social account.
+ *
+ * Features:
+ * - analytics-aware prompting
+ * - AI recommendations
+ * - engagement analysis
+ * - growth suggestions
  */
 router.post(
   "/insights/:socialAccountId",
@@ -25,35 +41,83 @@ router.post(
 );
 
 /**
- * Stream AI chat response.
- *
- * Used for ChatGPT-like typing response.
- *
- * Note:
- * aiRateLimiter is temporarily removed here because
- * usage limit is already handled inside chatController.
+ * =========================================================
+ * AI CHAT ROUTES
+ * =========================================================
  */
-router.post(
-  "/chat/:socialAccountId/stream",
-  protect,
-  uploadImage.single("image"),
-  chatWithAIStream
-);
 
 /**
- * Normal non-streaming AI chat route.
+ * Normal AI chat route.
  *
- * Kept as fallback route.
+ * Supports:
+ * - text-only chat
+ * - image-only chat
+ * - image + text chat
+ *
+ * Frontend request:
+ * multipart/form-data
+ *
+ * Expected image field:
+ * image
  */
 router.post(
   "/chat/:socialAccountId",
   protect,
+  aiRateLimiter,
+
+  /**
+   * Parse uploaded image from multipart/form-data.
+   *
+   * Creates:
+   * req.file
+   */
   uploadImage.single("image"),
+
   chatWithAI
 );
 
 /**
- * Get all chat sessions for selected account.
+ * Streaming AI chat route.
+ *
+ * Used for:
+ * - ChatGPT-style typing UI
+ * - live token streaming
+ * - SSE response streaming
+ *
+ * Supports:
+ * - text-only chat
+ * - image-only chat
+ * - image + text chat
+ *
+ * Note:
+ * aiRateLimiter intentionally removed because
+ * usage validation already happens inside controller.
+ */
+router.post(
+  "/chat/:socialAccountId/stream",
+  protect,
+
+  /**
+   * Parse uploaded image from multipart/form-data.
+   */
+  uploadImage.single("image"),
+
+  chatWithAIStream
+);
+
+/**
+ * =========================================================
+ * CHAT SESSION ROUTES
+ * =========================================================
+ */
+
+/**
+ * Get all chat sessions for selected social account.
+ *
+ * Used for:
+ * - chat history sidebar
+ * - recent conversations
+ * - session switching
  */
 router.get(
   "/chat/sessions/:socialAccountId",
@@ -62,7 +126,12 @@ router.get(
 );
 
 /**
- * Get messages of selected chat session.
+ * Get all messages of selected chat session.
+ *
+ * Used when:
+ * - opening old chat
+ * - restoring chat history
+ * - loading previous messages
  */
 router.get(
   "/chat/session/:sessionId/messages",
@@ -72,6 +141,11 @@ router.get(
 
 /**
  * Rename selected chat session.
+ *
+ * Example:
+ * "Instagram growth ideas"
+ * →
+ * "Q2 marketing strategy"
  */
 router.patch(
   "/chat/session/:sessionId",
@@ -80,7 +154,14 @@ router.patch(
 );
 
 /**
- * Delete selected chat session and its messages.
+ * Delete selected chat session.
+ *
+ * Removes:
+ * - session
+ * - related chat messages
+ *
+ * Future enhancement:
+ * - delete associated Cloudinary images
  */
 router.delete(
   "/chat/session/:sessionId",

@@ -1,35 +1,30 @@
 import multer from "multer";
 
 /**
- * Multer upload middleware for AI Chat image uploads.
- *
- * We use memoryStorage because:
- * - We do not need to permanently store the image yet.
- * - The image will be available as req.file.buffer.
- * - Later we can convert this buffer to base64 and send it to a vision model.
+ * memoryStorage stores uploaded file in RAM
+ * Then we upload that buffer directly to cloudinary
  */
 
 const storage = multer.memoryStorage();
 
-//allowing only the images files 
+const allowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
 
-const fileFilter = (req, file, cb) => {
-    if (!file.mimetype.startsWith("image/")) {
-        return cb(new Error("only the image files are allowed"), false);
+const imageFileFilter = (req, file, cb) => {
+    if(!allowedImageTypes.includes(file.mimetype)) {
+        const error = new Error(
+            "Invalid image type. Only JPG, PNG and WEBP are allowed"
+        );
+        error.statusCode = 400;
+        return cb(error, false);
     }
 
     cb(null, true);
-}
-
-//upload config
-//image size limit: 5MB
-//single image upload only
+};
 
 export const uploadImage = multer({
     storage,
-    fileFilter,
+    fileFilter: imageFileFilter,
     limits:{
         fileSize: 5 * 1024 * 1024,
     },
-
 });
