@@ -1,9 +1,10 @@
 import express from "express";
 
 import protect from "../middleware/authMiddleware.js";
+
 import aiRateLimiter from "../middleware/aiRateLimiter.js";
 
-import { getAIInsights } from "../controllers/aiController.js";
+import { uploadImages } from "../middleware/uploadMiddleware.js";
 
 import {
   chatWithAI,
@@ -14,113 +15,138 @@ import {
   deleteChatSession,
 } from "../controllers/chatController.js";
 
-import { uploadImages } from "../middleware/uploadMiddleware.js";
+import {
+  getAIInsights,
+} from "../controllers/aiController.js";
 
 const router = express.Router();
 
 /**
- * Generate AI insights
- * for selected social account.
+ * Generate analytics AI insights.
+ *
+ * Example:
+ * - growth analysis
+ * - engagement insights
+ * - recommendations
  */
 router.post(
   "/insights/:socialAccountId",
+
   protect,
+
   aiRateLimiter,
+
   getAIInsights
 );
 
 /**
- * Normal AI chat route.
+ * Normal AI chat endpoint.
  *
  * Supports:
  * - text-only
  * - image-only
  * - text + multiple images
  *
- * Frontend sends:
  * multipart/form-data
  *
- * images field:
- * images[]
+ * Frontend fields:
+ * - message
+ * - sessionId (optional)
+ * - images[]
  */
 router.post(
   "/chat/:socialAccountId",
+
   protect,
+
   aiRateLimiter,
 
   /**
-   * Parse multiple uploaded images.
+   * Parse multiple image uploads.
    *
    * Max:
-   * - 5 images
+   * 5 images
    */
-  uploadImages.array("images", 5),
+  uploadImages.array(
+    "images",
+    5
+  ),
 
   chatWithAI
 );
 
 /**
- * Streaming AI chat route.
+ * Streaming AI endpoint.
  *
- * Used for ChatGPT-like
- * live typing UI.
+ * IMPORTANT:
+ * Temporarily disabled during
+ * stabilization phase.
  *
- * Supports:
- * - text
- * - multiple images
- * - streaming responses
+ * Route preserved for
+ * future SSE rebuild.
  */
 router.post(
   "/chat/:socialAccountId/stream",
+
   protect,
 
-  /**
-   * Parse uploaded images.
-   */
-  uploadImages.array("images", 5),
+  aiRateLimiter,
+
+  uploadImages.array(
+    "images",
+    5
+  ),
 
   chatWithAIStream
 );
 
 /**
  * Get all chat sessions
- * of selected social account.
+ * for selected social account.
  */
 router.get(
   "/chat/sessions/:socialAccountId",
+
   protect,
+
   getChatSessions
 );
 
 /**
  * Get all messages
- * of selected session.
+ * for selected chat session.
  */
 router.get(
   "/chat/session/:sessionId/messages",
+
   protect,
+
   getSessionMessages
 );
 
 /**
- * Rename chat session.
+ * Rename existing chat session.
  */
 router.patch(
   "/chat/session/:sessionId",
+
   protect,
+
   renameChatSession
 );
 
 /**
  * Delete chat session.
  *
- * Also deletes:
- * - messages
- * - uploaded cloud images
+ * Also cleans:
+ * - chat messages
+ * - cloud images
  */
 router.delete(
   "/chat/session/:sessionId",
+
   protect,
+
   deleteChatSession
 );
 

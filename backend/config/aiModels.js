@@ -1,321 +1,158 @@
-export const AI_MODEL_CAPABILITIES = {
-  TEXT: "text",
-  VISION: "vision",
-};
+/**
+ * config/aiModels.js
+ *
+ * Production-safe AI model registry.
+ *
+ * IMPORTANT:
+ * We use:
+ * - curated text models
+ * - curated vision models
+ * - capability routing
+ *
+ * NOT random unstable models.
+ */
 
-export const AI_MODEL_GROUPS = {
-  FAST: "fast",
-  BALANCED: "balanced",
-  REASONING: "reasoning",
-  CODING: "coding",
-  VISION: "vision",
-  FALLBACK: "fallback",
-};
-
-export const AI_MODELS = [
+/**
+ * TEXT MODELS
+ *
+ * Used for:
+ * - normal AI chat
+ * - analytics
+ * - summaries
+ * - recommendations
+ */
+export const TEXT_MODELS = [
   {
-    id: "openrouter/free",
-    name: "OpenRouter Free Router",
+    id: "deepseek/deepseek-chat-v3-0324:free",
+    name: "DeepSeek Chat V3",
     provider: "openrouter",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.FAST,
-    supportsVision: true,
-    enabled: true,
-    priority: 1,
-    timeoutMs: 18000,
-  },
-
-  {
-    id: "liquid/lfm-2.5-1.2b-instruct:free",
-    name: "Liquid LFM 2.5 1.2B Instruct Free",
-    provider: "liquid",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.FAST,
     supportsVision: false,
-    enabled: true,
-    priority: 2,
-    timeoutMs: 8000,
-  },
-  {
-    id: "nvidia/nemotron-nano-9b-v2:free",
-    name: "NVIDIA Nemotron Nano 9B V2 Free",
-    provider: "nvidia",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.FAST,
-    supportsVision: false,
-    enabled: true,
-    priority: 3,
-    timeoutMs: 9000,
-  },
-  {
-    id: "openai/gpt-oss-20b:free",
-    name: "GPT OSS 20B Free",
-    provider: "openai",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.FAST,
-    supportsVision: false,
-    enabled: true,
-    priority: 4,
-    timeoutMs: 10000,
-  },
-  {
-    id: "z-ai/glm-4.5-air:free",
-    name: "GLM 4.5 Air Free",
-    provider: "z-ai",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.FAST,
-    supportsVision: false,
-    enabled: true,
-    priority: 5,
-    timeoutMs: 11000,
   },
 
   {
     id: "meta-llama/llama-3.3-70b-instruct:free",
-    name: "Llama 3.3 70B Instruct Free",
-    provider: "meta",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.BALANCED,
-    supportsVision: false,
-    enabled: true,
-    priority: 6,
-    timeoutMs: 13000,
-  },
-  {
-    id: "qwen/qwen3-next-80b-a3b-instruct:free",
-    name: "Qwen3 Next 80B A3B Instruct Free",
-    provider: "qwen",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.BALANCED,
-    supportsVision: false,
-    enabled: true,
-    priority: 7,
-    timeoutMs: 13000,
-  },
-  {
-    id: "minimax/minimax-m2.5:free",
-    name: "MiniMax M2.5 Free",
-    provider: "minimax",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.BALANCED,
-    supportsVision: false,
-    enabled: true,
-    priority: 8,
-    timeoutMs: 13000,
-  },
-  {
-    id: "baidu/cobuddy:free",
-    name: "Baidu Cobuddy Free",
-    provider: "baidu",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.BALANCED,
-    supportsVision: false,
-    enabled: true,
-    priority: 9,
-    timeoutMs: 13000,
-  },
-  {
-    id: "moonshotai/kimi-k2:free",
-    name: "Kimi K2 Free",
-    provider: "moonshotai",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.BALANCED,
-    supportsVision: false,
-    enabled: true,
-    priority: 10,
-    timeoutMs: 14000,
-  },
-
-  {
-    id: "openai/gpt-oss-120b:free",
-    name: "GPT OSS 120B Free",
-    provider: "openai",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.REASONING,
-    supportsVision: false,
-    enabled: true,
-    priority: 11,
-    timeoutMs: 16000,
-  },
-  {
-    id: "nvidia/nemotron-3-super-120b-a12b:free",
-    name: "NVIDIA Nemotron 3 Super 120B A12B Free",
-    provider: "nvidia",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.REASONING,
-    supportsVision: false,
-    enabled: true,
-    priority: 12,
-    timeoutMs: 16000,
-  },
-  {
-    id: "nvidia/nemotron-3-nano-30b-a3b:free",
-    name: "NVIDIA Nemotron 3 Nano 30B A3B Free",
-    provider: "nvidia",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.REASONING,
-    supportsVision: false,
-    enabled: true,
-    priority: 13,
-    timeoutMs: 15000,
-  },
-  {
-    id: "liquid/lfm-2.5-1.2b-thinking:free",
-    name: "Liquid LFM 2.5 1.2B Thinking Free",
-    provider: "liquid",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.REASONING,
-    supportsVision: false,
-    enabled: true,
-    priority: 14,
-    timeoutMs: 12000,
-  },
-  {
-    id: "inclusionai/ring-2.6-1t:free",
-    name: "inclusionAI Ring 2.6 1T Free",
-    provider: "inclusionai",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.REASONING,
-    supportsVision: false,
-    enabled: true,
-    priority: 15,
-    timeoutMs: 18000,
-  },
-
-  {
-    id: "qwen/qwen3-coder:free",
-    name: "Qwen3 Coder Free",
-    provider: "qwen",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.CODING,
-    supportsVision: false,
-    enabled: true,
-    priority: 16,
-    timeoutMs: 18000,
-  },
-  {
-    id: "poolside/laguna-xs.2:free",
-    name: "Poolside Laguna XS.2 Free",
-    provider: "poolside",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.CODING,
-    supportsVision: false,
-    enabled: true,
-    priority: 17,
-    timeoutMs: 14000,
-  },
-  {
-    id: "poolside/laguna-m.1:free",
-    name: "Poolside Laguna M.1 Free",
-    provider: "poolside",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.CODING,
-    supportsVision: false,
-    enabled: true,
-    priority: 18,
-    timeoutMs: 15000,
-  },
-  {
-    id: "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-    name: "Dolphin Mistral 24B Venice Free",
-    provider: "cognitivecomputations",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.CODING,
-    supportsVision: false,
-    enabled: true,
-    priority: 19,
-    timeoutMs: 14000,
-  },
-  {
-    id: "openrouter/auto",
-    name: "OpenRouter Auto Router",
+    name: "Llama 3.3 70B",
     provider: "openrouter",
-    capability: AI_MODEL_CAPABILITIES.TEXT,
-    group: AI_MODEL_GROUPS.FALLBACK,
-    supportsVision: true,
-    enabled: true,
-    priority: 20,
-    timeoutMs: 18000,
+    supportsVision: false,
   },
 
   {
-    id: "google/gemma-4-31b-it:free",
-    name: "Gemma 4 31B IT Free",
-    provider: "google",
-    capability: AI_MODEL_CAPABILITIES.VISION,
-    group: AI_MODEL_GROUPS.VISION,
-    supportsVision: true,
-    enabled: true,
-    priority: 1,
-    timeoutMs: 16000,
+    id: "mistralai/mistral-7b-instruct:free",
+    name: "Mistral 7B",
+    provider: "openrouter",
+    supportsVision: false,
   },
+
   {
-    id: "google/gemma-4-26b-a4b-it:free",
-    name: "Gemma 4 26B A4B IT Free",
-    provider: "google",
-    capability: AI_MODEL_CAPABILITIES.VISION,
-    group: AI_MODEL_GROUPS.VISION,
-    supportsVision: true,
-    enabled: true,
-    priority: 2,
-    timeoutMs: 16000,
+    id: "qwen/qwen-2.5-72b-instruct:free",
+    name: "Qwen 72B",
+    provider: "openrouter",
+    supportsVision: false,
   },
+
   {
-    id: "nvidia/nemotron-nano-12b-v2-vl:free",
-    name: "NVIDIA Nemotron Nano 12B V2 VL Free",
-    provider: "nvidia",
-    capability: AI_MODEL_CAPABILITIES.VISION,
-    group: AI_MODEL_GROUPS.VISION,
-    supportsVision: true,
-    enabled: true,
-    priority: 3,
-    timeoutMs: 15000,
+    id: "google/gemma-2-9b-it:free",
+    name: "Gemma 2 9B",
+    provider: "openrouter",
+    supportsVision: false,
   },
+
   {
-    id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-    name: "NVIDIA Nemotron 3 Nano Omni 30B A3B Reasoning Free",
-    provider: "nvidia",
-    capability: AI_MODEL_CAPABILITIES.VISION,
-    group: AI_MODEL_GROUPS.VISION,
-    supportsVision: true,
-    enabled: true,
-    priority: 4,
-    timeoutMs: 17000,
+    id: "nousresearch/hermes-3-llama-3.1-405b:free",
+    name: "Hermes 3",
+    provider: "openrouter",
+    supportsVision: false,
   },
+
   {
-    id: "baidu/qianfan-ocr-fast:free",
-    name: "Baidu Qianfan OCR Fast Free",
-    provider: "baidu",
-    capability: AI_MODEL_CAPABILITIES.VISION,
-    group: AI_MODEL_GROUPS.VISION,
-    supportsVision: true,
-    enabled: true,
-    priority: 5,
-    timeoutMs: 12000,
+    id: "openchat/openchat-7b:free",
+    name: "OpenChat 7B",
+    provider: "openrouter",
+    supportsVision: false,
+  },
+
+  {
+    id: "gryphe/mythomax-l2-13b:free",
+    name: "MythoMax",
+    provider: "openrouter",
+    supportsVision: false,
+  },
+
+  {
+    id: "undi95/toppy-m-7b:free",
+    name: "Toppy M 7B",
+    provider: "openrouter",
+    supportsVision: false,
+  },
+
+  {
+    id: "teknium/openhermes-2.5-mistral-7b:free",
+    name: "OpenHermes",
+    provider: "openrouter",
+    supportsVision: false,
   },
 ];
 
+/**
+ * VISION MODELS
+ *
+ * IMPORTANT:
+ * ONLY verified multimodal models.
+ */
+export const VISION_MODELS = [
+  {
+    id: "qwen/qwen2-vl-72b-instruct:free",
+    name: "Qwen VL",
+    provider: "openrouter",
+    supportsVision: true,
+  },
+
+  {
+    id: "google/gemini-2.0-flash-exp:free",
+    name: "Gemini Flash Vision",
+    provider: "openrouter",
+    supportsVision: true,
+  },
+
+  {
+    id: "llava-hf/llava-1.5-7b-hf",
+    name: "LLaVA 1.5",
+    provider: "openrouter",
+    supportsVision: true,
+  },
+
+  {
+    id: "openai/gpt-4o-mini",
+    name: "GPT-4o Mini",
+    provider: "openrouter",
+    supportsVision: true,
+  },
+];
+
+/**
+ * Unified export.
+ */
+export const AI_MODELS = {
+  TEXT_MODELS,
+  VISION_MODELS,
+};
+
+/**
+ * AI router configuration.
+ */
 export const AI_ROUTER_CONFIG = {
+  /**
+   * Request timeout.
+   */
+  defaultTimeoutMs: 45000,
+
+  /**
+   * Max models tried per request.
+   */
   maxModelsPerRequest: 5,
-  failureThreshold: 2,
-  circuitBreakerCooldownMs: 10 * 60 * 1000,
-  defaultTimeoutMs: 12000,
-};
 
-export const getEnabledModels = () => {
-  return AI_MODELS.filter((model) => model.enabled);
-};
-
-export const getTextModels = () => {
-  return getEnabledModels().filter((model) => !model.supportsVision);
-};
-
-export const getVisionModels = () => {
-  return getEnabledModels().filter((model) => model.supportsVision);
-};
-
-export const getCandidateModels = ({ needsVision = false } = {}) => {
-  const candidates = needsVision ? getVisionModels() : getTextModels();
-
-  return candidates.sort((a, b) => a.priority - b.priority);
+  /**
+   * Failed model cooldown.
+   */
+  disableDurationMs: 5 * 60 * 1000,
 };

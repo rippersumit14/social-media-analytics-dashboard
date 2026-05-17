@@ -1,15 +1,9 @@
-import dotenv from "dotenv";
 import { v2 as cloudinary } from "cloudinary";
 
 /**
- * Load environment variables locally
- * This guarantees env availability
- * even if import order changes.
- */
-dotenv.config();
-
-/**
- * Validate required Cloudinary variables
+ * Validate required Cloudinary environment variables.
+ *
+ * Prevents silent production failures.
  */
 const requiredEnvVars = [
   "CLOUDINARY_CLOUD_NAME",
@@ -17,25 +11,51 @@ const requiredEnvVars = [
   "CLOUDINARY_API_SECRET",
 ];
 
-for (const key of requiredEnvVars) {
-  if (!process.env[key]) {
-    throw new Error(`Missing required environment variable: ${key}`);
-  }
+/**
+ * Check missing env variables.
+ */
+const missingEnvVars = requiredEnvVars.filter(
+  (key) => !process.env[key]
+);
+
+if (missingEnvVars.length > 0) {
+  console.error(
+    "[CLOUDINARY_CONFIG_ERROR] Missing environment variables:",
+    missingEnvVars
+  );
+
+  throw new Error(
+    "Cloudinary configuration is incomplete"
+  );
 }
 
 /**
- * Configure Cloudinary SDK
+ * Configure Cloudinary provider.
  */
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name:
+    process.env.CLOUDINARY_CLOUD_NAME,
+
+  api_key:
+    process.env.CLOUDINARY_API_KEY,
+
+  api_secret:
+    process.env.CLOUDINARY_API_SECRET,
+
   secure: true,
 });
 
 /**
- * Startup debug logs
+ * Startup confirmation log.
+ *
+ * Helpful during deployment debugging.
  */
-console.log("✅ Cloudinary configured successfully");
+console.log(
+  "[CLOUDINARY_READY]",
+  {
+    cloudName:
+      process.env.CLOUDINARY_CLOUD_NAME,
+  }
+);
 
 export default cloudinary;
