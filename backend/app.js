@@ -6,6 +6,7 @@ import authRoutes from "./routes/authRoutes.js";
 import socialAccountRoutes from "./routes/socialAccountRoutes.js";
 import analyticsSnapshotRoutes from "./routes/analyticsSnapshotRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
+import instagramRoutes from "./routes/instagramRoutes.js";
 
 const app = express();
 
@@ -44,5 +45,18 @@ app.use("/api/auth", authRoutes);
 app.use("/api/social-accounts", socialAccountRoutes);
 app.use("/api/analytics-snapshots", analyticsSnapshotRoutes);
 app.use("/api/ai", aiRoutes);
+
+/**
+ * Instagram OAuth + Graph API routes
+ *
+ * Current endpoints:
+ * GET /api/instagram/oauth/url
+ * GET /api/instagram/oauth/callback
+ *
+ * Why separate:
+ * Instagram integration will grow into OAuth, analytics sync,
+ * account refresh, token checks, and insights fetching.
+ */
+app.use("/api/instagram", instagramRoutes);
 
 export default app;
