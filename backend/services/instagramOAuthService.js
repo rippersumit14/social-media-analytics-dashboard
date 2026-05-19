@@ -8,11 +8,18 @@ import jwt from "jsonwebtoken";
  * Instagram professional accounts are connected through Meta Pages,
  * so we need both Instagram and Page permissions.
  */
-const INSTAGRAM_SCOPES = [
-  "pages_show_list",
-  "pages_read_engagement",
-  "instagram_basic",
-  "instagram_manage_insights",
+const INSTAGRAM_SCOPES = [];
+
+
+/**
+ * Placeholder values are treated like missing env config.
+ *
+ * Why:
+ * This prevents local placeholder strings from producing fake OAuth URLs.
+ */
+const PLACEHOLDER_VALUES = [
+  "your_meta_app_id_here",
+  "your_meta_app_secret_here",
 ];
 
 /**
@@ -28,10 +35,6 @@ const createConfigError = (key) => {
   error.missingKey = key;
   return error;
 };
-const PLACEHOLDER_VALUES = [
-  "your_meta_app_id_here",
-  "your_meta_app_secret_here",
-];
 
 const getRequiredEnv = (key) => {
   const value = process.env[key];
@@ -47,6 +50,7 @@ const getRequiredEnv = (key) => {
 
   return value;
 };
+
 /**
  * Pins Meta Graph API version for predictable behavior.
  */
@@ -87,12 +91,12 @@ export const createInstagramOAuthUrl = ({ userId }) => {
   const state = createOAuthState({ userId });
 
   const params = new URLSearchParams({
-    client_id: getRequiredEnv("META_APP_ID"),
-    redirect_uri: getRequiredEnv("INSTAGRAM_REDIRECT_URI"),
-    response_type: "code",
-    scope: INSTAGRAM_SCOPES.join(","),
-    state,
-  });
+  client_id: getRequiredEnv("META_APP_ID"),
+  redirect_uri: getRequiredEnv("INSTAGRAM_REDIRECT_URI"),
+  response_type: "code",
+  config_id: getRequiredEnv("META_LOGIN_CONFIG_ID"),
+  state,
+});
 
   return `https://www.facebook.com/${getGraphVersion()}/dialog/oauth?${params.toString()}`;
 };
@@ -187,4 +191,31 @@ export const fetchInstagramProfessionalAccounts = async (userAccessToken) => {
   }
 
   return accounts;
+};
+
+/**
+ * Checks whether Instagram OAuth has the required backend configuration.
+ *
+ * Why:
+ * Frontend can use this to show a disabled setup state instead of
+ * letting users start an OAuth flow that cannot work yet.
+ */
+export const getInstagramOAuthConfigStatus = () => {
+  const requiredKeys = [
+    "META_APP_ID",
+    "META_APP_SECRET",
+    "INSTAGRAM_REDIRECT_URI",
+    "JWT_SECRET",
+    "META_LOGIN_CONFIG_ID"
+  ];
+
+  const missingKeys = requiredKeys.filter((key) => {
+    const value = process.env[key];
+    return !value || PLACEHOLDER_VALUES.includes(value);
+  });
+
+  return {
+    configured: missingKeys.length === 0,
+    missingKeys,
+  };
 };

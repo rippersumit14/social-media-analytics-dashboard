@@ -5,6 +5,7 @@ import {
   exchangeForLongLivedToken,
   fetchInstagramProfessionalAccounts,
   verifyInstagramOAuthState,
+  getInstagramOAuthConfigStatus,
 } from "../services/instagramOAuthService.js";
 
 /**
@@ -124,9 +125,9 @@ export const handleInstagramOAuthCallback = async (req, res) => {
     );
 
     if (!instagramAccounts.length) {
-      return res.status(400).json({
-        message: "No Instagram professional account found for this Meta account",
-      });
+      const error = new Error("No Instagram professional account found");
+      error.code = "NO_INSTAGRAM_PROFESSIONAL_ACCOUNT";
+      throw error;
     }
 
     /**
@@ -184,9 +185,9 @@ export const handleInstagramOAuthCallback = async (req, res) => {
     return res.redirect(
       buildFrontendRedirectUrl({
         status: "failed",
-        reason: "connection_failed",
+        reason: getInstagramOAuthFailureReason(error),
       })
-    )
+    );
   }
 };
 
@@ -212,4 +213,48 @@ const buildFrontendRedirectUrl = ({ status, reason, accountId }) => {
   }
 
   return redirectUrl.toString();
+};
+
+
+/**
+ * Converts backend/provider errors into safe frontend query reasons.
+ *
+ * Why:
+ * Frontend should know the type of failure, but should not receive raw
+ * provider errors, stack traces, or sensitive details.
+ */
+const getInstagramOAuthFailureReason = (error) => {
+  if (error.code === "INSTAGRAM_CONFIG_MISSING") {
+    return "missing_config";
+  }
+
+  if (error.code === "INVALID_OAUTH_STATE" || error.name === "JsonWebTokenError") {
+    return "invalid_state";
+  }
+
+  if (error.name === "TokenExpiredError") {
+    return "state_expired";
+  }
+
+  if (error.code === "NO_INSTAGRAM_PROFESSIONAL_ACCOUNT") {
+    return "no_professional_account";
+  }
+
+  if (error.response?.status) {
+    return "meta_error";
+  }
+
+  return "connection_failed";
+};
+
+
+/**
+ * @desc    Check Instagram OAuth configuration status
+ * @route   GET /api/instagram/status
+ * @access  Private
+ */
+export const getInstagramStatus = async (req, res) => {
+  const status = getInstagramOAuthConfigStatus();
+
+  return res.status(200).json(status);
 };

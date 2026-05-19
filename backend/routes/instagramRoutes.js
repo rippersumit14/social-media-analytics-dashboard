@@ -2,6 +2,7 @@ import express from "express";
 import {
   getInstagramOAuthUrl,
   handleInstagramOAuthCallback,
+  getInstagramStatus,
 } from "../controllers/instagramController.js";
 import protect from "../middleware/authMiddleware.js";
 
@@ -28,5 +29,15 @@ router.get("/oauth/url", protect, getInstagramOAuthUrl);
  * Security is handled by the signed OAuth state token instead.
  */
 router.get("/oauth/callback", handleInstagramOAuthCallback);
+
+ /* @route   GET /api/instagram/status
+ * @desc    Check whether Instagram OAuth is configured
+ * @access  Private
+ *
+ * Why protected:
+ * Configuration status is app behavior metadata, and this route belongs
+ * to authenticated dashboard usage.
+ */
+router.get("/status", protect, getInstagramStatus);
 
 export default router;
