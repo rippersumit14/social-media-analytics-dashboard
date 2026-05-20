@@ -3,6 +3,7 @@ import {
   createInstagramOAuthUrl,
   exchangeCodeForUserToken,
   exchangeForLongLivedToken,
+  fetchGrantedInstagramPermissions,
   fetchInstagramProfessionalAccounts,
   verifyInstagramOAuthState,
   getInstagramOAuthConfigStatus,
@@ -21,28 +22,14 @@ const buildTokenExpiryDate = (expiresInSeconds) => {
   return new Date(Date.now() + Number(expiresInSeconds) * 1000);
 };
 
-/**
- * Returns a safe account response without exposing accessToken.
- *
- * Why:
- * Instagram tokens must never be sent to frontend.
- * The frontend only needs account/profile metadata.
- */
-const toSafeInstagramAccount = (account) => ({
-  _id: account._id,
-  platform: account.platform,
-  username: account.username,
-  displayName: account.displayName,
-  profileId: account.profileId,
-  instagramUserId: account.instagramUserId,
-  pageId: account.pageId,
-  profileImage: account.profileImage,
-  accountType: account.accountType,
-  isActive: account.isActive,
-  lastSyncedAt: account.lastSyncedAt,
-  createdAt: account.createdAt,
-  updatedAt: account.updatedAt,
-});
+const normalizeInstagramAccountType = (accountType) => {
+  const normalized = String(accountType || "").toLowerCase();
+
+  if (normalized === "creator") return "creator";
+  if (normalized === "business") return "business";
+
+  return "unknown";
+};
 
 /**
  * Converts known Instagram OAuth errors into stable API responses.
@@ -130,6 +117,23 @@ export const handleInstagramOAuthCallback = async (req, res) => {
       throw error;
     }
 
+    let permissions = [];
+
+    try {
+      permissions = await fetchGrantedInstagramPermissions(
+        longToken.access_token
+      );
+    } catch (error) {
+      /**
+       * Permissions are useful metadata, but failure to read them should not
+       * block a successful account connection.
+       */
+      console.error("[INSTAGRAM_PERMISSION_LOOKUP_ERROR]", {
+        status: error.response?.status,
+        message: error.response?.data?.error?.message || error.message,
+      });
+    }
+
     /**
      * MVP behavior:
      * Connect the first available Instagram professional account.
@@ -158,12 +162,13 @@ export const handleInstagramOAuthCallback = async (req, res) => {
           profileImage: instagram.profile_picture_url || "",
           accessToken: selectedAccount.pageAccessToken,
           tokenExpiresAt: buildTokenExpiryDate(longToken.expires_in),
-          permissions: [],
-          accountType: "business",
+          permissions,
+          accountType: normalizeInstagramAccountType(instagram.account_type),
           providerMetadata: {
             pageName: selectedAccount.pageName,
             followersCountAtConnect: instagram.followers_count,
             mediaCountAtConnect: instagram.media_count,
+            connectedAt: new Date(),
           },
           isActive: true,
         },
@@ -182,6 +187,12 @@ export const handleInstagramOAuthCallback = async (req, res) => {
       })
     );
   } catch (error) {
+    console.error("[INSTAGRAM_OAUTH_CALLBACK_ERROR]", {
+      reason: getInstagramOAuthFailureReason(error),
+      status: error.response?.status,
+      message: error.response?.data?.error?.message || error.message,
+    });
+
     return res.redirect(
       buildFrontendRedirectUrl({
         status: "failed",

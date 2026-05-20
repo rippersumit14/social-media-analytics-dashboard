@@ -19,6 +19,8 @@ import {
   deleteImageFromCloudinary,
 } from "../services/cloudinaryStorageService.js";
 
+import { isValidObjectId } from "../utils/validateObjectId.js";
+
 /**
  * Limits
  */
@@ -491,6 +493,27 @@ export const chatWithAIStream =
         sessionId,
       } = req.body || {};
 
+      if (!isValidObjectId(socialAccountId)) {
+        return res.status(400).json({
+          success: false,
+
+          message:
+            "Invalid social account id",
+        });
+      }
+
+      if (
+        sessionId &&
+        !isValidObjectId(sessionId)
+      ) {
+        return res.status(400).json({
+          success: false,
+
+          message:
+            "Invalid session id",
+        });
+      }
+
       const userId =
         req.user._id;
 
@@ -542,6 +565,25 @@ export const chatWithAIStream =
         user
       );
 
+      if (
+        user.aiUsageCount >=
+        user.aiUsageLimit
+      ) {
+        return res
+          .status(403)
+          .json({
+            success: false,
+
+            message:
+              "AI usage limit reached. Upgrade your plan or try again later.",
+
+            usage:
+              buildUsageInfo(
+                user
+              ),
+          });
+      }
+
       const socialAccount =
         await SocialAccount.findOne(
           {
@@ -575,6 +617,17 @@ export const chatWithAIStream =
             userMessageText,
           }
         );
+
+      if (!activeSession) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+
+            message:
+              "Chat session not found",
+          });
+      }
 
       const uploadedImages =
         await handleOptionalImageUploads(
@@ -848,6 +901,15 @@ export const getChatSessions =
       const userId =
         req.user._id;
 
+      if (!isValidObjectId(socialAccountId)) {
+        return res.status(400).json({
+          success: false,
+
+          message:
+            "Invalid social account id",
+        });
+      }
+
       const sessions =
         await ChatSession.find({
           user: userId,
@@ -936,6 +998,15 @@ export const getSessionMessages =
       const userId =
         req.user._id;
 
+      if (!isValidObjectId(sessionId)) {
+        return res.status(400).json({
+          success: false,
+
+          message:
+            "Invalid session id",
+        });
+      }
+
       const messages =
         await ChatMessage.find({
           session: sessionId,
@@ -982,6 +1053,15 @@ export const renameChatSession =
 
       const userId =
         req.user._id;
+
+      if (!isValidObjectId(sessionId)) {
+        return res.status(400).json({
+          success: false,
+
+          message:
+            "Invalid session id",
+        });
+      }
 
       if (
         !title ||
@@ -1069,6 +1149,15 @@ export const deleteChatSession =
 
       const userId =
         req.user._id;
+
+      if (!isValidObjectId(sessionId)) {
+        return res.status(400).json({
+          success: false,
+
+          message:
+            "Invalid session id",
+        });
+      }
 
       const session =
         await ChatSession.findOne(

@@ -2,16 +2,6 @@ import axios from "axios";
 import jwt from "jsonwebtoken";
 
 /**
- * These are the permissions our app asks Meta for.
- *
- * Why:
- * Instagram professional accounts are connected through Meta Pages,
- * so we need both Instagram and Page permissions.
- */
-const INSTAGRAM_SCOPES = [];
-
-
-/**
  * Placeholder values are treated like missing env config.
  *
  * Why:
@@ -20,7 +10,12 @@ const INSTAGRAM_SCOPES = [];
 const PLACEHOLDER_VALUES = [
   "your_meta_app_id_here",
   "your_meta_app_secret_here",
+  "your_meta_login_config_id_here",
 ];
+
+const PAGE_FIELDS = "id,name,access_token";
+const INSTAGRAM_ACCOUNT_FIELDS =
+  "id,username,name,account_type,profile_picture_url,followers_count,media_count";
 
 /**
  * Creates a clear config error when required Instagram env variables are missing.
@@ -91,12 +86,12 @@ export const createInstagramOAuthUrl = ({ userId }) => {
   const state = createOAuthState({ userId });
 
   const params = new URLSearchParams({
-  client_id: getRequiredEnv("META_APP_ID"),
-  redirect_uri: getRequiredEnv("INSTAGRAM_REDIRECT_URI"),
-  response_type: "code",
-  config_id: getRequiredEnv("META_LOGIN_CONFIG_ID"),
-  state,
-});
+    client_id: getRequiredEnv("META_APP_ID"),
+    redirect_uri: getRequiredEnv("INSTAGRAM_REDIRECT_URI"),
+    response_type: "code",
+    config_id: getRequiredEnv("META_LOGIN_CONFIG_ID"),
+    state,
+  });
 
   return `https://www.facebook.com/${getGraphVersion()}/dialog/oauth?${params.toString()}`;
 };
@@ -157,40 +152,72 @@ export const exchangeForLongLivedToken = async (shortLivedToken) => {
  * Finds Instagram professional accounts connected to user's Meta Pages.
  */
 export const fetchInstagramProfessionalAccounts = async (userAccessToken) => {
-  const { data: pagesResponse } = await axios.get(`${getGraphBaseUrl()}/me/accounts`, {
-    params: {
-      fields: "id,name,access_token",
-      access_token: userAccessToken,
-    },
-    timeout: 10000,
-  });
+  const { data: pagesResponse } = await axios.get(
+    `${getGraphBaseUrl()}/me/accounts`,
+    {
+      params: {
+        fields: PAGE_FIELDS,
+        access_token: userAccessToken,
+      },
+      timeout: 10000,
+    }
+  );
 
   const pages = pagesResponse.data || [];
   const accounts = [];
 
   for (const page of pages) {
-    const pageToken = page.access_token || userAccessToken;
+    try {
+      const pageToken = page.access_token || userAccessToken;
+      const { data: pageDetails } = await axios.get(
+        `${getGraphBaseUrl()}/${page.id}`,
+        {
+          params: {
+            fields: `instagram_business_account{${INSTAGRAM_ACCOUNT_FIELDS}}`,
+            access_token: pageToken,
+          },
+          timeout: 10000,
+        }
+      );
 
-    const { data: pageDetails } = await axios.get(`${getGraphBaseUrl()}/${page.id}`, {
-      params: {
-        fields:
-          "instagram_business_account{id,username,name,profile_picture_url,followers_count,media_count}",
-        access_token: pageToken,
-      },
-      timeout: 10000,
-    });
-
-    if (pageDetails.instagram_business_account) {
-      accounts.push({
+      if (pageDetails.instagram_business_account) {
+        accounts.push({
+          pageId: page.id,
+          pageName: page.name,
+          pageAccessToken: pageToken,
+          instagram: pageDetails.instagram_business_account,
+        });
+      }
+    } catch (error) {
+      /**
+       * One inaccessible Page should not block other Pages from being checked.
+       * Mixed roles and partial permissions are common in real Meta accounts.
+       */
+      console.error("[INSTAGRAM_PAGE_LOOKUP_ERROR]", {
         pageId: page.id,
-        pageName: page.name,
-        pageAccessToken: pageToken,
-        instagram: pageDetails.instagram_business_account,
+        status: error.response?.status,
+        message: error.response?.data?.error?.message || error.message,
       });
     }
   }
 
   return accounts;
+};
+
+/**
+ * Fetch granted Meta permissions for diagnostics and future sync decisions.
+ */
+export const fetchGrantedInstagramPermissions = async (userAccessToken) => {
+  const { data } = await axios.get(`${getGraphBaseUrl()}/me/permissions`, {
+    params: {
+      access_token: userAccessToken,
+    },
+    timeout: 10000,
+  });
+
+  return (data.data || [])
+    .filter((permission) => permission.status === "granted")
+    .map((permission) => permission.permission);
 };
 
 /**
@@ -206,7 +233,7 @@ export const getInstagramOAuthConfigStatus = () => {
     "META_APP_SECRET",
     "INSTAGRAM_REDIRECT_URI",
     "JWT_SECRET",
-    "META_LOGIN_CONFIG_ID"
+    "META_LOGIN_CONFIG_ID",
   ];
 
   const missingKeys = requiredKeys.filter((key) => {

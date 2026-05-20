@@ -1,7 +1,7 @@
 import SocialAccount from "../models/SocialAccount.js";
 import { fetchMockAnalyticsData } from "../services/analyticsSyncService.js";
 import AnalyticsSnapshot from "../models/AnalyticsSnapshot.js";
-
+import { isValidObjectId } from "../utils/validateObjectId.js";
 
 /**
  * @desc    Create a new social account
@@ -12,64 +12,66 @@ export const createSocialAccount = async (req, res) => {
   try {
     const { platform, username, profileId, profileImage } = req.body;
 
-    // Basic validation
     if (!platform || !username) {
       return res.status(400).json({
         message: "Platform and username are required",
       });
     }
 
-    // Create new social account
     const account = await SocialAccount.create({
-      user: req.user._id, // from auth middleware
+      user: req.user._id,
       platform,
-      username,
+      username: username.trim(),
       profileId,
       profileImage,
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Social account connected successfully",
       account,
     });
   } catch (error) {
-    // Handle duplicate account error
     if (error.code === 11000) {
       return res.status(400).json({
         message: "This account is already connected",
       });
     }
 
-    res.status(500).json({
+    console.error("[CREATE_SOCIAL_ACCOUNT_ERROR]", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
       message: "Server error while creating social account",
-      error: error.message,
     });
   }
 };
 
 
 /**
- * @desec Get all social accounts of logged-in user
+ * @desc Get all social accounts of logged-in user
  * @route GET /api/social-accounts
  * @access Private
  */
+export const getUserSocialAccount = async (req, res) => {
+  try {
+    const accounts = await SocialAccount.find({
+      user: req.user._id,
+    }).sort({ createdAt: -1 });
 
-export const getUserSocialAccount = async(req, res) => {
-    try{
-        const accounts = await SocialAccount.find({
-            user: req.user._id,
-        }).sort({ createdAt: -1 });
+    return res.status(200).json({
+      count: accounts.length,
+      accounts,
+    });
+  } catch (error) {
+    console.error("[GET_SOCIAL_ACCOUNTS_ERROR]", {
+      message: error.message,
+    });
 
-        res.status(200).json({
-            count: accounts.length,
-            accounts,
-        })
-    }catch (error){
-        res.status(500).json({
-            message: "Server error while fetching accounts",
-            error: error.message,
-        });
-    }
+    return res.status(500).json({
+      message: "Server error while fetching accounts",
+    });
+  }
 };
 
 /**
@@ -79,25 +81,32 @@ export const getUserSocialAccount = async(req, res) => {
  */
 
 export const syncSocialAccountAnalytics = async (req, res) => {
-  try{
-    const { id } = req.params; //id will come from the url path 
+  try {
+    const { id } = req.params;
 
-    //Make sure the social account exists and belongs to the logged in user
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({
+        message: "Invalid social account id",
+      });
+    }
+
     const socialAccount = await SocialAccount.findOne({
       _id: id,
       user: req.user._id,
     });
 
-    if(!socialAccount){
+    if (!socialAccount) {
       return res.status(404).json({
         message: "Social account not found or not authorized",
       });
     }
 
-    //Fetch mock analytics data (Later we will replace with real API integration)
+    /**
+     * Current MVP sync source.
+     * Later this becomes the Instagram Graph analytics service.
+     */
     const analyticsData = await fetchMockAnalyticsData(socialAccount);
 
-      // Create a new analytics snapshot
     const snapshot = await AnalyticsSnapshot.create({
       socialAccount: analyticsData.socialAccount,
       followers: analyticsData.followers,
@@ -111,21 +120,21 @@ export const syncSocialAccountAnalytics = async (req, res) => {
       capturedAt: analyticsData.capturedAt,
     });
 
-    //upadte sync time on the social account 
     socialAccount.lastSyncedAt = new Date();
     await socialAccount.save();
 
-    res.status(201).json({
-      message:"Social account synced successfully",
+    return res.status(201).json({
+      message: "Social account synced successfully",
       socialAccount,
       snapshot,
-
     });
-  } catch(error){
-    res.status(500).json({
-      message:"Server error while syncing social account",
-      error: error.message,
+  } catch (error) {
+    console.error("[SYNC_SOCIAL_ACCOUNT_ERROR]", {
+      message: error.message,
+    });
+
+    return res.status(500).json({
+      message: "Server error while syncing social account",
     });
   }
 };
-

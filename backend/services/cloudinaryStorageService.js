@@ -2,7 +2,9 @@
 
 import streamifier from "streamifier";
 
-import cloudinary from "../config/cloudinary.js";
+import cloudinary, {
+  getMissingCloudinaryEnvVars,
+} from "../config/cloudinary.js";
 
 /**
  * Default upload folder
@@ -12,6 +14,17 @@ const DEFAULT_FOLDER =
     .CLOUDINARY_AI_CHAT_FOLDER ||
   "mern-ai-social-saas/ai-chat";
 
+const assertCloudinaryConfigured = () => {
+  const missingEnvVars = getMissingCloudinaryEnvVars();
+
+  if (missingEnvVars.length > 0) {
+    const error = new Error("Cloudinary image storage is not configured");
+    error.statusCode = 503;
+    error.missingEnvVars = missingEnvVars;
+    throw error;
+  }
+};
+
 /**
  * Upload image buffer to Cloudinary
  */
@@ -20,6 +33,8 @@ export const uploadImageToCloudinary =
     file,
     folder = DEFAULT_FOLDER
   ) => {
+    assertCloudinaryConfigured();
+
     return new Promise(
       (resolve, reject) => {
         const uploadStream =
@@ -111,6 +126,8 @@ export const deleteImageFromCloudinary =
     if (!publicId) {
       return null;
     }
+
+    assertCloudinaryConfigured();
 
     return await cloudinary.uploader.destroy(
       publicId

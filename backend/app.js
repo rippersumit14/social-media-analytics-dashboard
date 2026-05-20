@@ -59,4 +59,34 @@ app.use("/api/ai", aiRoutes);
  */
 app.use("/api/instagram", instagramRoutes);
 
+/**
+ * JSON error boundary for middleware errors.
+ *
+ * Main use today:
+ * - Multer upload validation errors
+ * - request body parsing errors
+ *
+ * Controllers still handle their own expected domain errors.
+ */
+app.use((error, req, res, next) => {
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  console.error("[API_ERROR]", {
+    path: req.originalUrl,
+    message: error.message,
+  });
+
+  const statusCode =
+    error.statusCode || (error.code === "LIMIT_FILE_SIZE" ? 400 : 500);
+
+  return res.status(statusCode).json({
+    message:
+      statusCode === 500
+        ? "Internal server error"
+        : error.message || "Invalid request",
+  });
+});
+
 export default app;

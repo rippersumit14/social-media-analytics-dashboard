@@ -1,125 +1,77 @@
-/**
- * AI Service
- *
- * FINAL STABLE ARCHITECTURE
- *
- * TEXT:
- * → Groq
- *
- * IMAGE:
- * → OCR extraction
- * → Groq analysis
- *
- * Why?
- * - reliable
- * - scalable
- * - free-tier friendly
- * - production practical
- *
- * Streaming:
- * - handled in controller
- * - simulated SSE streaming
- */
-
 import Groq from "groq-sdk";
 
-import {
-  extractTextFromImage,
-} from "./ocrService.js";
+import { extractTextFromImage } from "./ocrService.js";
+
+const GROQ_MODEL = "llama-3.3-70b-versatile";
+const MAX_IMAGE_CONTEXT = 3000;
+const MAX_HISTORY_MESSAGES = 20;
+
+let groqClient = null;
 
 /**
- * Groq client
- */
-const groq = new Groq({
-  apiKey:
-    process.env.GROQ_API_KEY,
-});
-
-/**
- * Stable production model
- */
-const GROQ_MODEL =
-  "llama-3.3-70b-versatile";
-
-/**
- * OCR text size limit
+ * Lazily create the Groq client when AI is actually used.
  *
- * Prevents:
- * - token explosion
- * - huge prompts
- * - server overload
+ * This keeps auth, OAuth, and dashboard routes bootable while provider keys
+ * are still being configured, and the AI route can return a clean fallback.
  */
-const MAX_IMAGE_CONTEXT =
-  3000;
+const getGroqClient = () => {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY is required for AI responses");
+  }
 
-/**
- * Build system prompt
- */
-const buildSystemPrompt = (
-  analyticsContext
-) => {
+  if (!groqClient) {
+    groqClient = new Groq({
+      apiKey: process.env.GROQ_API_KEY,
+    });
+  }
+
+  return groqClient;
+};
+
+const buildSystemPrompt = (analyticsContext = "") => {
   return `
-You are a professional AI assistant inside a social media analytics SaaS platform.
+You are a professional AI assistant inside a creator analytics SaaS platform.
 
-Your personality:
+Style:
 - professional
 - concise
 - strategic
 - practical
 - conversational
-- analytical
 
-Your job:
+Responsibilities:
 - analyze social media performance
-- analyze screenshots
-- understand analytics
-- suggest growth strategies
-- explain engagement metrics
-- provide actionable insights
+- analyze OCR text extracted from screenshots
+- explain analytics metrics clearly
+- suggest creator growth strategies
+- provide actionable recommendations
 
 Analytics Context:
 ${analyticsContext}
 `;
 };
 
-/**
- * Convert history to text
- */
-const buildHistoryText = (
-  historyMessages = []
-) => {
+const buildHistoryText = (historyMessages = []) => {
   return historyMessages
-    .map(
-      (message) =>
-        `${message.role}: ${message.content}`
-    )
+    .slice(-MAX_HISTORY_MESSAGES)
+    .map((message) => `${message.role}: ${message.content}`)
     .join("\n");
 };
 
-/**
- * Build OCR context
- */
-const buildOCRContext = (
-  extractedText
-) => {
+const buildOCRContext = (extractedText) => {
   if (!extractedText) {
     return "";
   }
 
   return `
-Image OCR Extracted Text:
-${extractedText.slice(
-  0,
-  MAX_IMAGE_CONTEXT
-)}
+OCR Extracted From Uploaded Image:
+${extractedText.slice(0, MAX_IMAGE_CONTEXT)}
 
-Analyze this image intelligently based on the extracted content.
+Use the OCR text as screenshot context. If OCR is incomplete, say what can and
+cannot be inferred instead of pretending to see details that are not present.
 `;
 };
 
-/**
- * Final AI prompt
- */
 const buildFinalPrompt = ({
   analyticsContext,
   historyMessages,
@@ -127,221 +79,118 @@ const buildFinalPrompt = ({
   extractedOCRText,
 }) => {
   return `
-${buildSystemPrompt(
-  analyticsContext
-)}
+${buildSystemPrompt(analyticsContext)}
 
 Conversation History:
-${buildHistoryText(
-  historyMessages
-)}
+${buildHistoryText(historyMessages)}
 
-${buildOCRContext(
-  extractedOCRText
-)}
+${buildOCRContext(extractedOCRText)}
 
 Latest User Message:
 ${latestUserMessage}
 
-Provide:
-- clear analysis
-- useful insights
-- practical suggestions
-- structured response
+Provide a clear answer with useful insights and practical next actions.
 `;
 };
 
-/**
- * Generate Groq response
- */
-const generateGroqResponse =
-  async ({
-    finalPrompt,
-  }) => {
-    const completion =
-      await groq.chat.completions.create(
-        {
-          model:
-            GROQ_MODEL,
+const generateGroqResponse = async ({ finalPrompt }) => {
+  const completion = await getGroqClient().chat.completions.create({
+    model: GROQ_MODEL,
+    messages: [
+      {
+        role: "user",
+        content: finalPrompt,
+      },
+    ],
+    temperature: 0.7,
+    max_tokens: 2048,
+  });
 
-          messages: [
-            {
-              role: "user",
+  return completion.choices?.[0]?.message?.content || "No response generated.";
+};
 
-              content:
-                finalPrompt,
-            },
-          ],
+const extractOCRContext = async (imageBase64) => {
+  if (!imageBase64) {
+    return "";
+  }
 
-          temperature: 0.7,
+  try {
+    const imageBuffer = Buffer.from(imageBase64, "base64");
+    const extractedText = await extractTextFromImage(imageBuffer);
 
-          max_tokens: 2048,
-        }
-      );
+    console.log("[OCR_TEXT_EXTRACTED]", {
+      length: extractedText.length,
+    });
 
-    return (
-      completion.choices?.[0]
-        ?.message?.content ||
-      "No response generated."
-    );
-  };
+    return extractedText;
+  } catch (error) {
+    /**
+     * OCR should not take down chat. The model can still answer using the
+     * user's text and analytics context.
+     */
+    console.error("[OCR_PIPELINE_ERROR]", {
+      message: error.message,
+    });
 
-/**
- * Main AI router
- */
-export const generateAnalyticsResponse =
-  async ({
-    analyticsContext,
-    historyMessages = [],
-    latestUserMessage,
-    imageBase64 = null,
-    imageMimeType = null,
-  }) => {
-    const startTime =
-      Date.now();
+    return "";
+  }
+};
 
-    try {
-      let extractedOCRText =
-        "";
+export const generateAnalyticsResponse = async ({
+  analyticsContext,
+  historyMessages = [],
+  latestUserMessage,
+  imageBase64 = null,
+}) => {
+  const startTime = Date.now();
 
-      /**
-       * IMAGE ANALYSIS FLOW
-       *
-       * OCR → Groq
-       */
-      if (imageBase64) {
-        try {
-          /**
-           * Convert base64 to buffer
-           */
-          const imageBuffer =
-            Buffer.from(
-              imageBase64,
-              "base64"
-            );
+  try {
+    const extractedOCRText = await extractOCRContext(imageBase64);
 
-          /**
-           * Extract OCR text
-           */
-          extractedOCRText =
-            await extractTextFromImage(
-              imageBuffer
-            );
+    const finalPrompt = buildFinalPrompt({
+      analyticsContext,
+      historyMessages,
+      latestUserMessage,
+      extractedOCRText,
+    });
 
-          console.log(
-            "[OCR_TEXT_EXTRACTED]",
-            {
-              length:
-                extractedOCRText.length,
-            }
-          );
-        } catch (ocrError) {
-          console.error(
-            "[OCR_PIPELINE_ERROR]",
-            {
-              message:
-                ocrError.message,
-            }
-          );
+    const reply = await generateGroqResponse({
+      finalPrompt,
+    });
 
-          /**
-           * OCR should NEVER crash AI
-           */
-          extractedOCRText =
-            "";
-        }
-      }
+    return {
+      reply,
+      modelUsed: GROQ_MODEL,
+      modelName: "Groq Llama 3.3",
+      latencyMs: Date.now() - startTime,
+      failed: false,
+    };
+  } catch (error) {
+    console.error("[AI_RESPONSE_ERROR]", {
+      message: error.message,
+    });
 
-      /**
-       * Build final prompt
-       */
-      const finalPrompt =
-        buildFinalPrompt({
-          analyticsContext,
+    return {
+      reply: "AI is currently busy, please try again.",
+      modelUsed: "fallback",
+      modelName: "Fallback",
+      latencyMs: Date.now() - startTime,
+      failed: true,
+    };
+  }
+};
 
-          historyMessages,
+export const generateAnalyticsInsights = async (
+  socialAccount,
+  snapshots,
+  customPrompt = null
+) => {
+  try {
+    const latestSnapshot = snapshots?.[snapshots.length - 1] || {};
 
-          latestUserMessage,
-
-          extractedOCRText,
-        });
-
-      /**
-       * Generate AI response
-       */
-      const reply =
-        await generateGroqResponse(
-          {
-            finalPrompt,
-          }
-        );
-
-      return {
-        reply,
-
-        modelUsed:
-          GROQ_MODEL,
-
-        modelName:
-          "Groq Llama 3.3",
-
-        latencyMs:
-          Date.now() -
-          startTime,
-
-        failed: false,
-      };
-    } catch (error) {
-      console.error(
-        "[AI_RESPONSE_ERROR]",
-        {
-          message:
-            error.message,
-
-          stack:
-            error.stack,
-        }
-      );
-
-      return {
-        reply:
-          "AI is currently busy, please try again.",
-
-        modelUsed:
-          "fallback",
-
-        modelName:
-          "Fallback",
-
-        latencyMs:
-          Date.now() -
-          startTime,
-
-        failed: true,
-      };
-    }
-  };
-
-/**
- * Analytics insights helper
- *
- * Compatibility layer
- */
-export const generateAnalyticsInsights =
-  async (
-    socialAccount,
-    snapshots,
-    customPrompt = null
-  ) => {
-    try {
-      const latestSnapshot =
-        snapshots?.[
-          snapshots.length - 1
-        ] || {};
-
-      const analyticsPrompt =
-        customPrompt ||
-        `
+    const analyticsPrompt =
+      customPrompt ||
+      `
 Analyze this social media account professionally.
 
 Account:
@@ -361,30 +210,18 @@ Provide:
 4. Actionable recommendations
 `;
 
-      const result =
-        await generateAnalyticsResponse(
-          {
-            analyticsContext:
-              "Social media analytics expert.",
+    const result = await generateAnalyticsResponse({
+      analyticsContext: "Social media analytics expert.",
+      historyMessages: [],
+      latestUserMessage: analyticsPrompt,
+    });
 
-            historyMessages:
-              [],
+    return result.reply;
+  } catch (error) {
+    console.error("[GENERATE_ANALYTICS_INSIGHTS_ERROR]", {
+      message: error.message,
+    });
 
-            latestUserMessage:
-              analyticsPrompt,
-          }
-        );
-
-      return result.reply;
-    } catch (error) {
-      console.error(
-        "[GENERATE_ANALYTICS_INSIGHTS_ERROR]",
-        {
-          message:
-            error.message,
-        }
-      );
-
-      return "Unable to generate analytics insights.";
-    }
-  };
+    return "Unable to generate analytics insights.";
+  }
+};

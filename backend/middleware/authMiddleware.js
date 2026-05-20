@@ -2,32 +2,29 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
 /**
- * Protect middleware
- * Verifies JWT token and attaches the authenticated user to req.user
+ * Verify JWT auth and attach the authenticated user to req.user.
  */
 const protect = async (req, res, next) => {
   try {
-    let token;
+    const authHeader = req.headers.authorization || "";
+    const [scheme, token] = authHeader.split(" ");
 
-    // Check if Authorization header exists and starts with "Bearer "
-    if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith("Bearer ")
-    ) {
-      token = req.headers.authorization.split(" ")[1];
-    }
-
-    // If token is missing, block access
-    if (!token) {
+    if (scheme !== "Bearer" || !token) {
       return res.status(401).json({
         message: "Not authorized, no token provided",
       });
     }
 
-    // Verify token
+    if (!process.env.JWT_SECRET) {
+      console.error("[AUTH_CONFIG_ERROR] JWT_SECRET is missing");
+
+      return res.status(500).json({
+        message: "Authentication is not configured",
+      });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Find user by decoded id and exclude password
     const user = await User.findById(decoded.id).select("-password");
 
     if (!user) {
@@ -36,18 +33,17 @@ const protect = async (req, res, next) => {
       });
     }
 
-    // Attach user to request object
     req.user = user;
-
-    next();
+    return next();
   } catch (error) {
+    console.error("[AUTH_ERROR]", {
+      message: error.message,
+    });
+
     return res.status(401).json({
       message: "Not authorized, invalid token",
-      error: error.message,
     });
   }
 };
-
-
 
 export default protect;

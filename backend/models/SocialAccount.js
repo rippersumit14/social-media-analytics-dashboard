@@ -186,6 +186,17 @@ socialAccountSchema.index(
   { unique: true, sparse: true }
 );
 
+/**
+ * Never expose sensitive provider data in JSON responses.
+ */
+socialAccountSchema.set("toJSON", {
+  transform: (_, ret) => {
+    delete ret.accessToken;
+    delete ret.__v;
+    return ret;
+  },
+});
+
 const SocialAccount = mongoose.model("SocialAccount", socialAccountSchema);
 
 export default SocialAccount;

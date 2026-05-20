@@ -11,8 +11,8 @@ import {
  * Architecture:
  *
  * TRY STREAM
- * → if fail
- * → fallback to normal endpoint
+ * -> if fail
+ * -> fallback to normal endpoint
  *
  * Supports:
  * - live chunk streaming

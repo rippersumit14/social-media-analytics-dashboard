@@ -1,26 +1,9 @@
-/**
- * config/env.js
- *
- * Centralized environment loader.
- *
- * Important:
- * This MUST execute before:
- * - Cloudinary config
- * - Redis config
- * - AI services
- * - Database services
- */
-
 import dotenv from "dotenv";
 
 /**
- * Load environment variables.
+ * Load environment variables before any app/config modules are imported.
+ *
+ * Keeping this import first prevents config modules from reading undefined
+ * values during startup.
  */
 dotenv.config();
-
-/**
- * Optional startup debug log.
- */
-console.log(
-  "[ENV] Environment variables loaded"
-);

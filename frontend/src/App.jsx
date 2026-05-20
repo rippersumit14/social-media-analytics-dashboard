@@ -20,13 +20,13 @@ import NotFound from "./pages/NotFound.jsx";
  * App Routing Structure
  *
  * Public Routes:
- * - /          → Login
- * - /signup    → Signup
+ * - /          -> Login
+ * - /signup    -> Signup
  *
  * Protected Routes (inside Layout):
- * - /dashboard → Overview page
- * - /analytics → Charts + metrics + AI insights
- * - /ai-chat   → Full chatbot page
+ * - /dashboard -> Overview page
+ * - /analytics -> Charts + metrics + AI insights
+ * - /ai-chat   -> Full chatbot page
  *
  * Layout:
  * - Sidebar

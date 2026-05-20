@@ -1,16 +1,19 @@
 import rateLimit from "express-rate-limit";
 
-//Ai rate limiter 
-//Restricts how often AI inshights can be requested 
-
+/**
+ * Short-window limiter for AI routes.
+ *
+ * This protects provider quotas and keeps one client from saturating the
+ * simulated streaming endpoint.
+ */
 const aiRateLimiter = rateLimit({
-    windowMs: 60 * 100, //1 minute
-    max: 5, //5 requests per minute
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: {
-        message: "Too many Ai requests, Please wait a miunte and try again.",
-    },
+  windowMs: 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Too many AI requests. Please wait a minute and try again.",
+  },
 });
 
 export default aiRateLimiter;
