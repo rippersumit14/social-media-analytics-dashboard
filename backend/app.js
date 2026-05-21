@@ -2,6 +2,10 @@ import express from "express";
 import cors from "cors";
 import morgan from "morgan";
 
+// Global error middleware
+import errorMiddleware from "./middlewares/errorMiddleware.js";
+
+// Routes
 import authRoutes from "./routes/authRoutes.js";
 import socialAccountRoutes from "./routes/socialAccountRoutes.js";
 import analyticsSnapshotRoutes from "./routes/analyticsSnapshotRoutes.js";
@@ -11,27 +15,50 @@ import instagramRoutes from "./routes/instagramRoutes.js";
 const app = express();
 
 /**
- * Global middleware
+ * ---------------------------------------------------
+ * Global Middlewares
+ * ---------------------------------------------------
  */
+
+// Enable CORS
 app.use(cors());
+
+// Parse incoming JSON payloads
 app.use(express.json());
+
+// Parse URL encoded form data
 app.use(express.urlencoded({ extended: true }));
+
+// HTTP request logger
 app.use(morgan("dev"));
 
 /**
- * Base route
+ * ---------------------------------------------------
+ * Base Route
+ * ---------------------------------------------------
  */
+
 app.get("/", (req, res) => {
-  res.json({
-    message: "Social media Analytics API is running",
+  return res.status(200).json({
+    success: true,
+    message: "Social Media Analytics API is running",
   });
 });
 
 /**
- * Health check route
+ * ---------------------------------------------------
+ * Health Check Route
+ * ---------------------------------------------------
+ *
+ * Used for:
+ * - deployment monitoring
+ * - uptime checks
+ * - health verification
  */
+
 app.get("/api/health", (req, res) => {
-  res.status(200).json({
+  return res.status(200).json({
+    success: true,
     status: "OK",
     uptime: process.uptime(),
     timestamp: new Date(),
@@ -39,11 +66,21 @@ app.get("/api/health", (req, res) => {
 });
 
 /**
- * API routes
+ * ---------------------------------------------------
+ * API Routes
+ * ---------------------------------------------------
  */
+
+// Authentication routes
 app.use("/api/auth", authRoutes);
+
+// Social account routes
 app.use("/api/social-accounts", socialAccountRoutes);
+
+// Analytics snapshot routes
 app.use("/api/analytics-snapshots", analyticsSnapshotRoutes);
+
+// AI routes
 app.use("/api/ai", aiRoutes);
 
 /**
@@ -53,40 +90,29 @@ app.use("/api/ai", aiRoutes);
  * GET /api/instagram/oauth/url
  * GET /api/instagram/oauth/callback
  *
- * Why separate:
- * Instagram integration will grow into OAuth, analytics sync,
- * account refresh, token checks, and insights fetching.
+ * Future scalability:
+ * - token refresh
+ * - analytics sync
+ * - insights fetching
+ * - account linking
  */
 app.use("/api/instagram", instagramRoutes);
 
 /**
- * JSON error boundary for middleware errors.
+ * ---------------------------------------------------
+ * Global Error Middleware
+ * ---------------------------------------------------
  *
- * Main use today:
- * - Multer upload validation errors
- * - request body parsing errors
+ * IMPORTANT:
+ * Must always be registered LAST.
  *
- * Controllers still handle their own expected domain errors.
+ * Handles:
+ * - AppError custom errors
+ * - asyncHandler forwarded errors
+ * - Multer upload errors
+ * - unexpected server errors
  */
-app.use((error, req, res, next) => {
-  if (res.headersSent) {
-    return next(error);
-  }
 
-  console.error("[API_ERROR]", {
-    path: req.originalUrl,
-    message: error.message,
-  });
-
-  const statusCode =
-    error.statusCode || (error.code === "LIMIT_FILE_SIZE" ? 400 : 500);
-
-  return res.status(statusCode).json({
-    message:
-      statusCode === 500
-        ? "Internal server error"
-        : error.message || "Invalid request",
-  });
-});
+app.use(errorMiddleware);
 
 export default app;

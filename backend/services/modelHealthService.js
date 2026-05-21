@@ -19,11 +19,11 @@ const getDefaultHealth = () => {
   };
 };
 
-export const getModelHealth = async (modelId) => {
+export const getModelHealth = async (modelId) => {=
   const key = getModelHealthKey(modelId);
   const data = await redisClient.get(key);
 
-  if (!data) {
+  if (!data) {// addding the current
     return getDefaultHealth();
   }
 
