@@ -8,6 +8,10 @@ import cloudinary, {
 
 import AppError from "../utils/AppError.js";
 
+import {
+  optimizeImage,
+} from "./imageOptimizer.js";
+
 /**
  * ---------------------------------------------------
  * Cloudinary Configuration
@@ -305,8 +309,8 @@ const uploadBufferToCloudinary =
          */
         streamifier
           .createReadStream(
-            file.buffer
-          )
+            optimizedFile.buffer
+  )
           .pipe(uploadStream);
       }
     );
@@ -320,7 +324,13 @@ const uploadBufferToCloudinary =
  * Main upload orchestration
  */
 
+/**
+ * Optimize uploaded image
+ */
+
 export const uploadImageToCloudinary =
+
+  
   async (
     file,
     folder = DEFAULT_FOLDER
@@ -340,6 +350,14 @@ export const uploadImageToCloudinary =
         file
       );
 
+
+      //optimize uploaded image
+      const optimizedFile =
+        await optimizeImage(
+          file
+      );
+
+
       /**
        * Upload with timeout protection
        */
@@ -348,7 +366,8 @@ export const uploadImageToCloudinary =
 
           uploadBufferToCloudinary({
 
-            file,
+            file:
+              optimizedFile,
 
             folder,
           }),
