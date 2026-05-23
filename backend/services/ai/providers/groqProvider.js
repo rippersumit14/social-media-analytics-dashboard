@@ -76,3 +76,28 @@ export const generateGroqResponse =
       latencyMs,
     };
   };
+
+//GENERATE Groq Streaming Response
+export const generateGroqStreamResponse = 
+   async({
+    prompt,
+   }) => {
+    const stream = 
+      await groqClient.chat.completions.create({
+        model:
+          "llama-3.3-70b-versatile",
+
+          messages: [
+            {
+                role: "user",
+
+                content: 
+                   prompt,
+            },
+          ],
+
+          stream: true,
+      });
+
+      return stream;
+   };

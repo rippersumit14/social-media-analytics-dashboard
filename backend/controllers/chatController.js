@@ -86,19 +86,12 @@ const handleOptionalImageUploads =
  * already uses asyncHandler.
  */
 
-export const chatWithAI =
-  async (
-    req,
-    res,
-    next
-  ) => {
+/**
+ * ---------------------------------------------------
+ * Stream AI Chat Response
+ * ---------------------------------------------------
+ */
 
-    return await chatWithAIStream(
-      req,
-      res,
-      next
-    );
-  };
 
 /**
  * ---------------------------------------------------

@@ -8,6 +8,10 @@ import {
   generateAIResponse,
 } from "./ai/aiOrchestrator.js";
 
+import {
+  generateStreamingAIResponse,
+} from "./ai/aiOrchestrator.js";
+
 /**
  * ---------------------------------------------------
  * AI Configuration
@@ -282,4 +286,43 @@ export const generateAnalyticsResponse =
         500
       );
     }
+  };
+
+
+  /**
+ * ---------------------------------------------------
+ * Generate Streaming AI Response
+ * ---------------------------------------------------
+ */
+
+export const generateStreamingAnalyticsResponse =
+  async ({
+
+    analyticsContext,
+
+    historyMessages = [],
+
+    latestUserMessage,
+  }) => {
+
+    /**
+     * Build prompt
+     */
+    const prompt =
+      buildPrompt({
+
+        analyticsContext,
+
+        historyMessages,
+
+        latestUserMessage,
+      });
+
+    /**
+     * Start streaming
+     */
+    return await generateStreamingAIResponse({
+
+      prompt,
+    });
   };

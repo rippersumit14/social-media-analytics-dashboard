@@ -1,5 +1,8 @@
 import {
   generateGroqResponse,
+
+  generateGroqStreamResponse,
+
 } from "./providers/groqProvider.js";
 
 import {
@@ -19,11 +22,13 @@ import {
 } from "../../utils/retryHandler.js";
 
 import {
-    isProviderAvailable,
 
-    recordProviderFailure,
-    
-    recordProviderSuccess,
+  isProviderAvailable,
+
+  recordProviderFailure,
+
+  recordProviderSuccess,
+
 } from "../../utils/circuitBreaker.js";
 
 /**
@@ -69,7 +74,7 @@ const AI_PROVIDERS = [
 
 /**
  * ---------------------------------------------------
- * Generate AI Response
+ * Generate Standard AI Response
  * ---------------------------------------------------
  */
 
@@ -85,95 +90,96 @@ export const generateAIResponse =
      * Try providers sequentially
      */
     for (
-  const provider
-  of AI_PROVIDERS
-) {
+      const provider
+      of AI_PROVIDERS
+    ) {
 
-  /**
-   * Skip unavailable providers
-   */
-  const available =
-    isProviderAvailable(
+      /**
+       * Skip unavailable providers
+       */
+      const available =
+        isProviderAvailable(
 
-      provider.name
-    );
+          provider.name
+        );
 
-  if (!available) {
+      if (!available) {
 
-    console.warn(
+        console.warn(
 
-      `[AI_ORCHESTRATOR] Skipping unavailable provider: ${provider.name}`
-    );
+          `[AI_ORCHESTRATOR] Skipping unavailable provider: ${provider.name}`
+        );
 
-    continue;
-  }
-
-  try {
-
-    console.log(
-
-      `[AI_ORCHESTRATOR] Trying provider: ${provider.name}`
-    );
-
-    const response =
-      await retryAsyncOperation(
-
-        async () => {
-
-          return await provider.handler({
-
-            prompt,
-          });
-        },
-
-        1,
-
-        1000
-      );
-
-    /**
-     * Record success
-     */
-    recordProviderSuccess(
-      provider.name
-    );
-
-    console.log(
-
-      `[AI_ORCHESTRATOR] Success from: ${provider.name}`
-    );
-
-    return response;
-
-  } catch (error) {
-
-    /**
-     * Record failure
-     */
-    recordProviderFailure(
-      provider.name
-    );
-
-    console.error(
-
-      `[AI_ORCHESTRATOR_ERROR] ${provider.name}`,
-
-      {
-        message:
-          error.message,
+        continue;
       }
-    );
 
-    errors.push({
+      try {
 
-      provider:
-        provider.name,
+        console.log(
 
-      error:
-        error.message,
-    });
-  }
-}
+          `[AI_ORCHESTRATOR] Trying provider: ${provider.name}`
+        );
+
+        const response =
+          await retryAsyncOperation(
+
+            async () => {
+
+              return await provider.handler({
+
+                prompt,
+              });
+            },
+
+            1,
+
+            1000
+          );
+
+        /**
+         * Record provider success
+         */
+        recordProviderSuccess(
+          provider.name
+        );
+
+        console.log(
+
+          `[AI_ORCHESTRATOR] Success from: ${provider.name}`
+        );
+
+        return response;
+
+      } catch (error) {
+
+        /**
+         * Record provider failure
+         */
+        recordProviderFailure(
+          provider.name
+        );
+
+        console.error(
+
+          `[AI_ORCHESTRATOR_ERROR] ${provider.name}`,
+
+          {
+            message:
+              error.message,
+          }
+        );
+
+        errors.push({
+
+          provider:
+            provider.name,
+
+          error:
+            error.message,
+        });
+      }
+    }
+
     /**
      * All providers failed
      */
@@ -181,4 +187,28 @@ export const generateAIResponse =
 
       `All AI providers failed: ${JSON.stringify(errors)}`
     );
+  };
+
+/**
+ * ---------------------------------------------------
+ * Generate Streaming AI Response
+ * ---------------------------------------------------
+ *
+ * Initial streaming provider:
+ * Groq
+ */
+
+export const generateStreamingAIResponse =
+  async ({
+
+    prompt,
+  }) => {
+
+    /**
+     * Stream from Groq
+     */
+    return await generateGroqStreamResponse({
+
+      prompt,
+    });
   };

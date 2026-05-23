@@ -1,16 +1,17 @@
-import express from "express";
+import express
+  from "express";
 
-import protect from "../middlewares/authMiddleware.js";
+import protect
+  from "../middlewares/authMiddleware.js";
 
-import aiRateLimiter from "../middlewares/aiRateLimiter.js";
+import aiRateLimiter
+  from "../middlewares/aiRateLimiter.js";
 
 import {
   uploadImages,
 } from "../middlewares/uploadMiddleware.js";
 
 import {
-
-  chatWithAI,
 
   chatWithAIStream,
 
@@ -21,9 +22,7 @@ import {
 } from "../controllers/chatController.js";
 
 import {
-
   getAIInsights,
-
 } from "../controllers/aiController.js";
 
 const router =
@@ -31,14 +30,8 @@ const router =
 
 /**
  * ---------------------------------------------------
- * AI Analytics Insights
+ * Generate AI Insights
  * ---------------------------------------------------
- *
- * Generates:
- * - growth analysis
- * - engagement insights
- * - content recommendations
- * - audience analysis
  */
 
 router.post(
@@ -54,57 +47,11 @@ router.post(
 
 /**
  * ---------------------------------------------------
- * Standard AI Chat Route
+ * Streaming AI Chat
  * ---------------------------------------------------
  *
- * Supports:
- * - text chat
- * - image uploads
- * - multimodal AI
- * - OCR analysis
- *
- * multipart/form-data
- *
- * Frontend fields:
- * - message
- * - sessionId (optional)
- * - images[]
- */
-
-router.post(
-
-  "/chat/:socialAccountId",
-
-  protect,
-
-  aiRateLimiter,
-
-  /**
-   * Multiple image uploads
-   *
-   * Max:
-   * 5 images
-   */
-  uploadImages.array(
-
-    "images",
-
-    5
-  ),
-
-  chatWithAI
-);
-
-/**
- * ---------------------------------------------------
- * SSE Streaming AI Chat Route
- * ---------------------------------------------------
- *
- * Features:
- * - realtime chunk streaming
- * - AI typing effect
- * - SSE synchronization
- * - multimodal AI streaming
+ * Main AI chat route
+ * using SSE streaming.
  */
 
 router.post(
@@ -127,14 +74,37 @@ router.post(
 
 /**
  * ---------------------------------------------------
- * Get All Chat Sessions
+ * Temporary Alias Route
  * ---------------------------------------------------
  *
- * Returns:
- * - session list
- * - titles
- * - previews
- * - updated timestamps
+ * Keeps frontend compatibility.
+ *
+ * Internally redirects
+ * to streaming controller.
+ */
+
+router.post(
+
+  "/chat/:socialAccountId",
+
+  protect,
+
+  aiRateLimiter,
+
+  uploadImages.array(
+
+    "images",
+
+    5
+  ),
+
+  chatWithAIStream
+);
+
+/**
+ * ---------------------------------------------------
+ * Get Chat Sessions
+ * ---------------------------------------------------
  */
 
 router.get(
@@ -150,12 +120,6 @@ router.get(
  * ---------------------------------------------------
  * Get Session Messages
  * ---------------------------------------------------
- *
- * Returns:
- * - chat history
- * - AI responses
- * - uploaded images
- * - timestamps
  */
 
 router.get(
@@ -166,21 +130,5 @@ router.get(
 
   getSessionMessages
 );
-
-/**
- * ---------------------------------------------------
- * Future Routes
- * ---------------------------------------------------
- *
- * Planned:
- * - rename chat session
- * - delete chat session
- * - pin sessions
- * - AI summaries
- * - export chats
- *
- * Temporarily disabled during
- * stabilization phase.
- */
 
 export default router;
