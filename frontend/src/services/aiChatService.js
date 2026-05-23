@@ -1,13 +1,20 @@
 import api from "./api.js";
 
 /**
- * Build multipart/form-data payload
- * for multimodal AI chat requests.
- *
- * Backend contract:
- * - message
- * - sessionId (optional)
- * - images[] (multiple)
+ * Stable SSE event registry.
+ * Prevents magic strings across app.
+ */
+export const SSE_EVENTS = {
+  SESSION: "session",
+  USER_MESSAGE: "userMessage",
+  MODEL: "model",
+  CHUNK: "chunk",
+  DONE: "done",
+  ERROR: "error",
+};
+
+/**
+ * Build multipart AI payload.
  */
 const buildChatFormData = ({
   message,
@@ -16,17 +23,11 @@ const buildChatFormData = ({
 }) => {
   const formData = new FormData();
 
-  /**
-   * Backend always expects message field.
-   */
   formData.append(
     "message",
     message || ""
   );
 
-  /**
-   * Existing session support.
-   */
   if (sessionId) {
     formData.append(
       "sessionId",
@@ -37,30 +38,26 @@ const buildChatFormData = ({
   /**
    * Multiple image uploads.
    */
-  images.forEach(
-    (imageFile) => {
-      formData.append(
-        "images",
-        imageFile
-      );
-    }
-  );
+  images.forEach((imageFile) => {
+    formData.append(
+      "images",
+      imageFile
+    );
+  });
 
   return formData;
 };
 
 /**
- * Normalize backend AI response.
- *
- * Creates stable frontend-safe
- * contract layer.
+ * Stable backend response adapter.
+ * Protects frontend from backend shape drift.
  */
 const normalizeAIResponse = (
   data = {}
 ) => {
   return {
     success:
-      data.success || false,
+      Boolean(data.success),
 
     /**
      * Session metadata.
@@ -72,15 +69,12 @@ const normalizeAIResponse = (
       data.sessionTitle || "",
 
     /**
-     * Stable assistant message.
+     * Messages.
      */
     assistantMessage:
       data.assistantMessage ||
       null,
 
-    /**
-     * Stable user message.
-     */
     userMessage:
       data.userMessage || null,
 
@@ -109,9 +103,28 @@ const normalizeAIResponse = (
 };
 
 /**
- * Stable non-streaming AI request.
+ * Extract safe API error message.
+ */
+const extractErrorMessage = async (
+  response
+) => {
+  try {
+    const errorData =
+      await response.json();
+
+    return (
+      errorData?.message ||
+      "Request failed."
+    );
+  } catch {
+    return "Request failed.";
+  }
+};
+
+/**
+ * Production-safe non-streaming AI request.
  *
- * Used as:
+ * Used for:
  * - fallback mode
  * - backup lifecycle
  */
@@ -138,6 +151,8 @@ export const sendAIChat =
           headers: {
             Authorization: `Bearer ${token}`,
           },
+
+          timeout: 120000,
         }
       );
 
@@ -147,21 +162,90 @@ export const sendAIChat =
   };
 
 /**
- * Production-grade SSE AI streaming.
- *
- * Handles:
- * - session events
- * - model events
- * - chunk streaming
- * - done lifecycle
- * - error lifecycle
- *
- * Backend SSE contract:
- * event: session
- * event: model
- * event: chunk
- * event: done
- * event: error
+ * Parse raw SSE block safely.
+ */
+const parseSSEBlock = (block) => {
+  const lines =
+    block.split("\n");
+
+  const eventLine =
+    lines.find((line) =>
+      line.startsWith("event:")
+    );
+
+  const dataLine =
+    lines.find((line) =>
+      line.startsWith("data:")
+    );
+
+  if (!eventLine || !dataLine) {
+    return null;
+  }
+
+  const event =
+    eventLine
+      .replace("event:", "")
+      .trim();
+
+  try {
+    const parsedData = JSON.parse(
+      dataLine
+        .replace("data:", "")
+        .trim()
+    );
+
+    return {
+      event,
+      data: parsedData,
+    };
+  } catch (error) {
+    console.error(
+      "SSE JSON parse failed:",
+      error
+    );
+
+    return null;
+  }
+};
+
+/**
+ * Route SSE events safely.
+ */
+const handleSSEEvent = ({
+  event,
+  data,
+  handlers,
+}) => {
+  switch (event) {
+    case SSE_EVENTS.SESSION:
+      handlers.onSession?.(data);
+      break;
+
+    case SSE_EVENTS.MODEL:
+      handlers.onModel?.(data);
+      break;
+
+    case SSE_EVENTS.CHUNK:
+      handlers.onChunk?.(data);
+      break;
+
+    case SSE_EVENTS.DONE:
+      handlers.onDone?.(
+        normalizeAIResponse(data)
+      );
+      break;
+
+    case SSE_EVENTS.ERROR:
+      handlers.onError?.(data);
+      break;
+
+    default:
+      break;
+  }
+};
+
+/**
+ * Production-grade SSE streaming lifecycle.
  */
 export const streamAIChat =
   async ({
@@ -173,21 +257,19 @@ export const streamAIChat =
     images = [],
 
     /**
+     * Abort support.
+     */
+    signal,
+
+    /**
      * SSE callbacks.
      */
     onSession,
-
     onModel,
-
     onChunk,
-
     onDone,
-
     onError,
   }) => {
-    /**
-     * Build form payload.
-     */
     const formData =
       buildChatFormData({
         message,
@@ -196,7 +278,7 @@ export const streamAIChat =
       });
 
     /**
-     * API base URL.
+     * Stable API base URL.
      */
     const API_URL =
       import.meta.env
@@ -204,7 +286,7 @@ export const streamAIChat =
       "http://localhost:5000/api";
 
     /**
-     * Start SSE request.
+     * Start streaming request.
      */
     const response =
       await fetch(
@@ -217,31 +299,22 @@ export const streamAIChat =
           },
 
           body: formData,
+
+          signal,
         }
       );
 
     /**
-     * SSE-safe error handling.
+     * Transport-level validation.
      */
     if (
       !response.ok ||
       !response.body
     ) {
-      let errorMessage =
-        "Streaming failed.";
-
-      try {
-        const errorData =
-          await response.json();
-
-        errorMessage =
-          errorData?.message ||
-          errorMessage;
-      } catch {
-        /**
-         * Ignore JSON parsing failures.
-         */
-      }
+      const errorMessage =
+        await extractErrorMessage(
+          response
+        );
 
       throw new Error(
         errorMessage
@@ -255,169 +328,97 @@ export const streamAIChat =
       response.body.getReader();
 
     const decoder =
-      new TextDecoder(
-        "utf-8"
-      );
+      new TextDecoder("utf-8");
 
     let buffer = "";
 
     /**
-     * Parse individual SSE block.
+     * Centralized event handlers.
      */
-    const processEventBlock =
-      (block) => {
-        const lines =
-          block.split("\n");
+    const handlers = {
+      onSession,
+      onModel,
+      onChunk,
+      onDone,
+      onError,
+    };
 
-        const eventLine =
-          lines.find(
-            (line) =>
-              line.startsWith(
-                "event:"
-              )
-          );
+    try {
+      /**
+       * Continuous stream lifecycle.
+       */
+      while (true) {
+        const {
+          done,
+          value,
+        } =
+          await reader.read();
 
-        const dataLine =
-          lines.find(
-            (line) =>
-              line.startsWith(
-                "data:"
-              )
-          );
-
-        if (
-          !eventLine ||
-          !dataLine
-        ) {
-          return;
-        }
-
-        const event =
-          eventLine
-            .replace(
-              "event:",
-              ""
-            )
-            .trim();
-
-        let parsedData =
-          {};
-
-        try {
-          parsedData =
-            JSON.parse(
-              dataLine
-                .replace(
-                  "data:",
-                  ""
-                )
-                .trim()
-            );
-        } catch (
-          parseError
-        ) {
-          console.error(
-            "SSE parse error:",
-            parseError
-          );
-
-          return;
+        /**
+         * Stream completed.
+         */
+        if (done) {
+          break;
         }
 
         /**
-         * Route SSE events.
+         * Decode incoming chunks.
          */
-        switch (event) {
-          case "session":
-            onSession?.(
-              parsedData
-            );
-            break;
-
-          case "model":
-            onModel?.(
-              parsedData
-            );
-            break;
-
-          case "chunk":
-            onChunk?.(
-              parsedData
-            );
-            break;
-
-          case "done":
-            onDone?.(
-              normalizeAIResponse(
-                parsedData
-              )
-            );
-            break;
-
-          case "error":
-            onError?.(
-              parsedData
-            );
-            break;
-
-          default:
-            break;
-        }
-      };
-
-    /**
-     * Continuous stream parsing.
-     */
-    while (true) {
-      const {
-        done,
-        value,
-      } =
-        await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      /**
-       * Append incoming stream.
-       */
-      buffer +=
-        decoder.decode(
+        buffer += decoder.decode(
           value,
           {
             stream: true,
           }
         );
 
-      /**
-       * Split SSE blocks.
-       */
-      const blocks =
-        buffer.split("\n\n");
+        /**
+         * Split SSE blocks.
+         */
+        const blocks =
+          buffer.split("\n\n");
 
-      /**
-       * Preserve incomplete block.
-       */
-      buffer =
-        blocks.pop() || "";
+        /**
+         * Preserve incomplete block.
+         */
+        buffer =
+          blocks.pop() || "";
 
-      /**
-       * Process complete blocks.
-       */
-      for (const block of blocks) {
-        processEventBlock(
-          block
-        );
+        /**
+         * Process completed blocks.
+         */
+        for (const block of blocks) {
+          const parsedBlock =
+            parseSSEBlock(block);
+
+          if (!parsedBlock) {
+            continue;
+          }
+
+          handleSSEEvent({
+            ...parsedBlock,
+            handlers,
+          });
+        }
       }
-    }
 
-    /**
-     * Flush remaining buffer.
-     */
-    if (buffer.trim()) {
-      processEventBlock(
-        buffer
-      );
+      /**
+       * Flush remaining buffer safely.
+       */
+      if (buffer.trim()) {
+        const parsedBlock =
+          parseSSEBlock(buffer);
+
+        if (parsedBlock) {
+          handleSSEEvent({
+            ...parsedBlock,
+            handlers,
+          });
+        }
+      }
+    } finally {
+      /**
+       * Prevent stream reader leaks.
+       */
+      reader.releaseLock();
     }
   };

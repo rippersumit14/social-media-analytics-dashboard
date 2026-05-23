@@ -1,7 +1,29 @@
 import api from "./api.js";
 
 /**
- * Normalize chat session object.
+ * Shared request configuration.
+ */
+const createAuthConfig = (
+  token,
+  signal
+) => ({
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+
+  /**
+   * Prevent hanging requests.
+   */
+  timeout: 30000,
+
+  /**
+   * Abort-safe requests.
+   */
+  signal,
+});
+
+/**
+ * Normalize stable chat session.
  *
  * Backend contract:
  * {
@@ -35,10 +57,7 @@ const normalizeSession = (
 };
 
 /**
- * Normalize backend chat message.
- *
- * Backend ALWAYS returns:
- * images: []
+ * Normalize stable backend message.
  */
 const normalizeMessage = (
   message = {}
@@ -78,6 +97,42 @@ const normalizeMessage = (
 };
 
 /**
+ * Safely normalize array responses.
+ */
+const normalizeArrayResponse = (
+  data,
+  normalizer
+) => {
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data.map(normalizer);
+};
+
+/**
+ * Stable session sorting.
+ *
+ * Most recently updated first.
+ */
+const sortSessionsByRecent = (
+  sessions
+) => {
+  return [...sessions].sort(
+    (a, b) => {
+      return (
+        new Date(
+          b.updatedAt || 0
+        ) -
+        new Date(
+          a.updatedAt || 0
+        )
+      );
+    }
+  );
+};
+
+/**
  * Get all chat sessions
  * for selected social account.
  */
@@ -85,21 +140,30 @@ export const getChatSessions =
   async ({
     socialAccountId,
     token,
+    signal,
   }) => {
     const response = await api.get(
       `/ai/chat/sessions/${socialAccountId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      createAuthConfig(
+        token,
+        signal
+      )
     );
 
+    /**
+     * Stable backend extraction.
+     */
     const sessions =
-      response.data?.sessions || [];
+      normalizeArrayResponse(
+        response.data?.sessions,
+        normalizeSession
+      );
 
-    return sessions.map(
-      normalizeSession
+    /**
+     * Stable sidebar ordering.
+     */
+    return sortSessionsByRecent(
+      sessions
     );
   };
 
@@ -111,41 +175,39 @@ export const getSessionMessages =
   async ({
     sessionId,
     token,
+    signal,
   }) => {
     const response = await api.get(
       `/ai/chat/session/${sessionId}/messages`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      createAuthConfig(
+        token,
+        signal
+      )
     );
 
-    const messages =
-      response.data?.messages || [];
-
-    return messages.map(
+    return normalizeArrayResponse(
+      response.data?.messages,
       normalizeMessage
     );
   };
 
 /**
- * Rename session title.
+ * Rename existing session.
  */
 export const renameSession =
   async ({
     sessionId,
     title,
     token,
+    signal,
   }) => {
     const response = await api.patch(
       `/ai/chat/session/${sessionId}`,
       { title },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      createAuthConfig(
+        token,
+        signal
+      )
     );
 
     return normalizeSession(
@@ -154,25 +216,35 @@ export const renameSession =
   };
 
 /**
- * Delete chat session.
+ * Delete existing chat session.
  *
- * Backend also removes:
+ * Backend cleanup includes:
  * - cloud images
- * - old assets
+ * - old uploads
+ * - related assets
  */
 export const deleteSession =
   async ({
     sessionId,
     token,
+    signal,
   }) => {
     const response = await api.delete(
       `/ai/chat/session/${sessionId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
+      createAuthConfig(
+        token,
+        signal
+      )
     );
 
-    return response.data;
+    return {
+      success:
+        Boolean(
+          response.data?.success
+        ),
+
+      message:
+        response.data?.message ||
+        "Session deleted.",
+    };
   };

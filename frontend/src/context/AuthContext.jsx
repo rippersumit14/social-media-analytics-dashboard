@@ -1,89 +1,266 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import {
   loginUser as loginUserService,
+
   registerUser as registerUserService,
+
   getCurrentUser as getCurrentUserService,
 } from "../services/authService.js";
 
-const AuthContext = createContext(null);
+const AuthContext =
+  createContext(null);
 
 /**
- * Global authentication provider.
- * Handles: 
- * - token persistence
- * - loading current user on refresh
- * - login
- * - register
- * - logout
+ * Stable token storage key.
  */
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token") || null);
-  const [loading, setLoading] = useState(false);
+const TOKEN_KEY = "token";
 
-  useEffect(() => {
-    const loadUser = async () => {
-      if (!token) return;
-
-      try {
-        setLoading(true);
-        const data = await getCurrentUserService(token);
-        setUser(data.user);
-      } catch (error) {
-        console.error("Failed to load current user:", error);
-        localStorage.removeItem("token");
-        setToken(null);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadUser();
-  }, [token]);
+/**
+ * Production-grade authentication provider.
+ *
+ * Handles:
+ * - auth persistence
+ * - auth hydration
+ * - login/register lifecycle
+ * - logout lifecycle
+ * - token synchronization
+ */
+export const AuthProvider = ({
+  children,
+}) => {
+  /**
+   * Authenticated user state.
+   */
+  const [user, setUser] =
+    useState(null);
 
   /**
-   * Login user and store token
+   * Persisted auth token.
    */
-  const login = async (formData) => {
-    const data = await loginUserService(formData);
-    localStorage.setItem("token", data.token);
-    setToken(data.token);
-    setUser(data.user);
-    return data;
+  const [token, setToken] =
+    useState(
+      localStorage.getItem(
+        TOKEN_KEY
+      ) || null
+    );
+
+  /**
+   * Global auth loading state.
+   */
+  const [loading, setLoading] =
+    useState(false);
+
+  /**
+   * Persist token safely.
+   */
+  const persistToken = (
+    authToken
+  ) => {
+    if (!authToken) {
+      return;
+    }
+
+    localStorage.setItem(
+      TOKEN_KEY,
+      authToken
+    );
+
+    setToken(authToken);
   };
 
   /**
-   * Register user and store token
+   * Clear auth lifecycle safely.
    */
-  const register = async (formData) => {
-    const data = await registerUserService(formData);
-    localStorage.setItem("token", data.token);
-    setToken(data.token);
-    setUser(data.user);
-    return data;
-  };
+  const clearAuth = () => {
+    localStorage.removeItem(
+      TOKEN_KEY
+    );
 
-  /**
-   * Logout user
-   */
-  const logout = () => {
-    localStorage.removeItem("token");
     setToken(null);
+
     setUser(null);
   };
 
+  /**
+   * Restore authenticated session.
+   */
+  useEffect(() => {
+    /**
+     * No token available.
+     */
+    if (!token) {
+      return;
+    }
+
+    const controller =
+      new AbortController();
+
+    const hydrateUser =
+      async () => {
+        try {
+          setLoading(true);
+
+          const response =
+            await getCurrentUserService(
+              {
+                token,
+
+                signal:
+                  controller.signal,
+              }
+            );
+
+          /**
+           * Stable backend contract.
+           */
+          setUser(
+            response.data
+          );
+        } catch (error) {
+          /**
+           * Ignore cancelled hydration.
+           */
+          if (
+            error.cancelled
+          ) {
+            return;
+          }
+
+          console.error(
+            "[AUTH HYDRATION ERROR]",
+            error
+          );
+
+          /**
+           * Invalid token cleanup.
+           */
+          clearAuth();
+        } finally {
+          setLoading(false);
+        }
+      };
+
+    hydrateUser();
+
+    /**
+     * Cleanup hydration safely.
+     */
+    return () => {
+      controller.abort();
+    };
+  }, [token]);
+
+  /**
+   * Login existing user.
+   */
+  const login = async (
+    formData
+  ) => {
+    const response =
+      await loginUserService({
+        userData:
+          formData,
+      });
+
+    /**
+     * Stable backend contract.
+     */
+    const authData =
+      response.data || {};
+
+    persistToken(
+      authData.token
+    );
+
+    setUser(authData.user);
+
+    return response;
+  };
+
+  /**
+   * Register new user.
+   */
+  const register =
+    async (formData) => {
+      const response =
+        await registerUserService(
+          {
+            userData:
+              formData,
+          }
+        );
+
+      /**
+       * Stable backend contract.
+       */
+      const authData =
+        response.data || {};
+
+      persistToken(
+        authData.token
+      );
+
+      setUser(
+        authData.user
+      );
+
+      return response;
+    };
+
+  /**
+   * Logout authenticated user.
+   */
+  const logout = () => {
+    clearAuth();
+  };
+
+  /**
+   * Stable authentication state.
+   */
+  const isAuthenticated =
+    useMemo(() => {
+      return Boolean(
+        user && token
+      );
+    }, [user, token]);
+
+  /**
+   * Stable provider value.
+   */
+  const value = useMemo(
+    () => ({
+      user,
+
+      token,
+
+      loading,
+
+      login,
+
+      register,
+
+      logout,
+
+      isAuthenticated,
+    }),
+    [
+      user,
+      token,
+      loading,
+      isAuthenticated,
+    ]
+  );
+
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        token,
-        loading,
-        login,
-        register,
-        logout,
-        isAuthenticated: !!user,
-      }}
+      value={value}
     >
       {children}
     </AuthContext.Provider>
@@ -91,8 +268,10 @@ export const AuthProvider = ({ children }) => {
 };
 
 /**
- * Custom hook for auth context usage
+ * Stable auth context hook.
  */
 export const useAuth = () => {
-  return useContext(AuthContext);
+  return useContext(
+    AuthContext
+  );
 };

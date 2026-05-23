@@ -1,30 +1,144 @@
 import api from "./api.js";
 
 /**
- * Register a new user
+ * Stable auth request configuration.
  */
-export const registerUser = async (userData) => {
-  const response = await api.post("/auth/register", userData);
-  return response.data;
+const createAuthConfig = (
+  token,
+  signal
+) => ({
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+
+  /**
+   * Abort-safe requests.
+   */
+  signal,
+});
+
+/**
+ * Normalize authenticated user.
+ */
+const normalizeUser = (
+  user = {}
+) => {
+  return {
+    _id: user._id || "",
+
+    name: user.name || "",
+
+    email: user.email || "",
+
+    username:
+      user.username || "",
+
+    createdAt:
+      user.createdAt || null,
+  };
 };
 
 /**
- * Login existing user
+ * Normalize auth response.
+ *
+ * Backend contract:
+ * {
+ *   success,
+ *   message,
+ *   data
+ * }
  */
-export const loginUser = async (userData) => {
-  const response = await api.post("/auth/login", userData);
-  return response.data;
-};
+const normalizeAuthResponse =
+  (responseData = {}) => {
+    return {
+      success:
+        Boolean(
+          responseData.success
+        ),
+
+      message:
+        responseData.message ||
+        "",
+
+      data:
+        responseData.data || null,
+    };
+  };
 
 /**
- * Get current authenticated user using JWT token
+ * Register new user.
  */
-export const getCurrentUser = async (token) => {
-  const response = await api.get("/auth/me", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+export const registerUser =
+  async ({
+    userData,
+    signal,
+  }) => {
+    const response =
+      await api.post(
+        "/auth/register",
+        userData,
+        {
+          signal,
+        }
+      );
 
-  return response.data;
-};
+    return normalizeAuthResponse(
+      response.data
+    );
+  };
+
+/**
+ * Login existing user.
+ */
+export const loginUser =
+  async ({
+    userData,
+    signal,
+  }) => {
+    const response =
+      await api.post(
+        "/auth/login",
+        userData,
+        {
+          signal,
+        }
+      );
+
+    return normalizeAuthResponse(
+      response.data
+    );
+  };
+
+/**
+ * Restore authenticated user
+ * using JWT token.
+ */
+export const getCurrentUser =
+  async ({
+    token,
+    signal,
+  }) => {
+    const response =
+      await api.get(
+        "/auth/me",
+        createAuthConfig(
+          token,
+          signal
+        )
+      );
+
+    const normalized =
+      normalizeAuthResponse(
+        response.data
+      );
+
+    return {
+      ...normalized,
+
+      data:
+        normalizeUser(
+          normalized.data
+        ),
+    };
+  };
+

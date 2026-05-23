@@ -1,11 +1,62 @@
+import {
+  memo,
+  useMemo,
+} from "react";
+
+/**
+ * Stable usage progress calculation.
+ */
+const calculateUsagePercentage =
+  (used = 0, limit = 0) => {
+    if (!limit) {
+      return 0;
+    }
+
+    return Math.min(
+      Math.max(
+        (used / limit) * 100,
+        0
+      ),
+      100
+    );
+  };
+
+/**
+ * Stable usage warning helper.
+ */
+const getUsageWarning =
+  (remaining = 0) => {
+    if (remaining <= 0) {
+      return {
+        message:
+          "Daily limit reached",
+
+        color:
+          "text-red-600",
+      };
+    }
+
+    if (remaining <= 3) {
+      return {
+        message:
+          "Low usage remaining",
+
+        color:
+          "text-amber-600",
+      };
+    }
+
+    return null;
+  };
+
 /**
  * Production-grade AI usage display.
  *
  * Handles:
- * - usage progress
- * - plan info
- * - warnings
- * - limit states
+ * - usage telemetry
+ * - plan information
+ * - AI metadata
+ * - session metadata
  */
 const UsageDisplay = ({
   usageInfo,
@@ -19,31 +70,65 @@ const UsageDisplay = ({
   sessionTitle,
 }) => {
   /**
-   * No usage available.
+   * Hide empty metadata state.
    */
-  if (
-    !usageInfo &&
-    remainingUsage === null &&
-    !sessionTitle
-  ) {
-    return null;
-  }
+  const shouldRender =
+    useMemo(() => {
+      return (
+        usageInfo ||
+        remainingUsage !==
+          null ||
+        sessionTitle
+      );
+    }, [
+      usageInfo,
+      remainingUsage,
+      sessionTitle,
+    ]);
 
   /**
-   * Safe progress calculation.
+   * Stable usage percentage.
    */
   const usagePercentage =
-    usageInfo?.limit
-      ? Math.min(
-          Math.max(
-            (usageInfo.used /
-              usageInfo.limit) *
-              100,
-            0
-          ),
-          100
-        )
-      : 0;
+    useMemo(() => {
+      return calculateUsagePercentage(
+        usageInfo?.used,
+        usageInfo?.limit
+      );
+    }, [
+      usageInfo?.used,
+      usageInfo?.limit,
+    ]);
+
+  /**
+   * Stable usage warning state.
+   */
+  const usageWarning =
+    useMemo(() => {
+      return getUsageWarning(
+        usageInfo?.remaining
+      );
+    }, [
+      usageInfo?.remaining,
+    ]);
+
+  /**
+   * Stable metadata visibility.
+   */
+  const showMetadata =
+    useMemo(() => {
+      return (
+        modelName ||
+        latencyMs
+      );
+    }, [
+      modelName,
+      latencyMs,
+    ]);
+
+  if (!shouldRender) {
+    return null;
+  }
 
   return (
     <div className="space-y-4">
@@ -51,7 +136,7 @@ const UsageDisplay = ({
       {usageInfo && (
         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
           {/* Header */}
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-gray-700">
                 AI Usage
@@ -78,7 +163,7 @@ const UsageDisplay = ({
           </div>
 
           {/* Progress */}
-          <div className="mt-4 h-2 w-full rounded-full bg-gray-200">
+          <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-gray-200">
             <div
               className="h-2 rounded-full bg-blue-600 transition-all duration-300"
               style={{
@@ -88,7 +173,7 @@ const UsageDisplay = ({
           </div>
 
           {/* Footer */}
-          <div className="mt-3 flex items-center justify-between">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs text-gray-500">
               Remaining:{" "}
               {
@@ -96,20 +181,14 @@ const UsageDisplay = ({
               }
             </p>
 
-            {/* Warnings */}
-            {usageInfo.remaining >
-              0 &&
-              usageInfo.remaining <=
-                3 && (
-                <p className="text-xs font-medium text-amber-600">
-                  Low usage remaining
-                </p>
-              )}
-
-            {usageInfo.remaining <=
-              0 && (
-              <p className="text-xs font-medium text-red-600">
-                Daily limit reached
+            {/* Warning */}
+            {usageWarning && (
+              <p
+                className={`text-xs font-medium ${usageWarning.color}`}
+              >
+                {
+                  usageWarning.message
+                }
               </p>
             )}
           </div>
@@ -128,22 +207,22 @@ const UsageDisplay = ({
           </div>
         )}
 
-      {/* Active Session Info */}
+      {/* Session Metadata */}
       {sessionTitle && (
         <div className="rounded-2xl border border-gray-100 bg-white p-4">
           <p className="text-sm text-gray-500">
             Current session:
           </p>
 
-          <h3 className="mt-1 font-semibold text-gray-800">
+          <h3 className="mt-1 break-words font-semibold text-gray-800">
             {sessionTitle}
           </h3>
 
-          {(modelName ||
-            latencyMs) && (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+          {/* AI Metadata */}
+          {showMetadata && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
               {modelName && (
-                <span>
+                <span className="break-all">
                   Model:{" "}
                   <span className="font-medium text-gray-700">
                     {
@@ -168,4 +247,9 @@ const UsageDisplay = ({
   );
 };
 
-export default UsageDisplay;
+/**
+ * Prevent unnecessary rerenders.
+ */
+export default memo(
+  UsageDisplay
+);

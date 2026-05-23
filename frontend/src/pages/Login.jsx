@@ -1,118 +1,252 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+  useCallback,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  Link,
+  useNavigate,
+} from "react-router-dom";
+
 import { useAuth } from "../context/AuthContext.jsx";
 
 /**
- * Login page.
+ * Production-grade login page.
+ *
  * Handles:
  * - form state
- * - login API call through AuthContext
- * - error handling
- * - redirect after login
+ * - auth lifecycle
+ * - loading state
+ * - error rendering
+ * - redirect flow
  */
 const Login = () => {
-  const navigate = useNavigate();
-  const { login } = useAuth();
-
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const navigate =
+    useNavigate();
 
   /**
-   * Handle input changes
+   * Auth lifecycle.
    */
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const {
+    login,
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+    loading:
+      authLoading,
+  } = useAuth();
 
   /**
-   * Handle login form submission
+   * Login form state.
    */
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const [formData, setFormData] =
+    useState({
+      email: "",
 
-    setError("");
-    setLoading(true);
+      password: "",
+    });
 
-    try {
-      await login(formData);
-      navigate("/dashboard");
-    } catch (err) {
-      console.error("Login error:", err);
+  /**
+   * UI state.
+   */
+  const [error, setError] =
+    useState("");
 
-      setError(
-        err.response?.data?.message ||
-          err.message ||
-          "Login failed. Please try again."
+  const [loading, setLoading] =
+    useState(false);
+
+  /**
+   * Stable disabled state.
+   */
+  const isDisabled =
+    useMemo(() => {
+      return (
+        loading ||
+        authLoading
       );
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, [
+      loading,
+      authLoading,
+    ]);
+
+  /**
+   * Stable input updates.
+   */
+  const handleChange =
+    useCallback((event) => {
+      const {
+        name,
+        value,
+      } = event.target;
+
+      setFormData((prev) => ({
+        ...prev,
+
+        [name]: value,
+      }));
+    }, []);
+
+  /**
+   * Stable login lifecycle.
+   */
+  const handleSubmit =
+    useCallback(
+      async (event) => {
+        event.preventDefault();
+
+        /**
+         * Prevent duplicate submits.
+         */
+        if (isDisabled) {
+          return;
+        }
+
+        setError("");
+
+        setLoading(true);
+
+        try {
+          /**
+           * Stable auth payload.
+           */
+          await login({
+            email:
+              formData.email.trim(),
+
+            password:
+              formData.password,
+          });
+
+          /**
+           * Redirect after success.
+           */
+          navigate(
+            "/dashboard"
+          );
+        } catch (error) {
+          console.error(
+            "[LOGIN ERROR]",
+            error
+          );
+
+          /**
+           * Interceptor-normalized errors.
+           */
+          setError(
+            error.message
+          );
+        } finally {
+          setLoading(false);
+        }
+      },
+      [
+        formData,
+        isDisabled,
+        login,
+        navigate,
+      ]
+    );
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
-      <div className="w-full max-w-md rounded-lg bg-white p-8 shadow-lg">
-        <h1 className="mb-6 text-3xl font-bold text-gray-800">Login</h1>
+      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-800">
+            Login
+          </h1>
 
+          <p className="mt-2 text-sm text-gray-500">
+            Continue to your AI
+            analytics workspace.
+          </p>
+        </div>
+
+        {/* Error State */}
         {error && (
-          <div className="mb-4 rounded bg-red-100 px-4 py-2 text-sm text-red-700">
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Login Form */}
+        <form
+          onSubmit={
+            handleSubmit
+          }
+          className="space-y-4"
+        >
+          {/* Email */}
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
               Email
             </label>
+
             <input
               type="email"
               name="email"
-              value={formData.email}
-              onChange={handleChange}
+              value={
+                formData.email
+              }
+              onChange={
+                handleChange
+              }
               placeholder="Enter your email"
-              className="w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-blue-500"
+              autoComplete="email"
+              disabled={
+                isDisabled
+              }
               required
+              className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
             />
           </div>
 
+          {/* Password */}
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
               Password
             </label>
+
             <input
               type="password"
               name="password"
-              value={formData.password}
-              onChange={handleChange}
+              value={
+                formData.password
+              }
+              onChange={
+                handleChange
+              }
               placeholder="Enter your password"
-              className="w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-blue-500"
+              autoComplete="current-password"
+              disabled={
+                isDisabled
+              }
               required
+              className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
             />
           </div>
 
+          {/* Submit */}
           <button
             type="submit"
-            disabled={loading}
-            className="w-full rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+            disabled={
+              isDisabled
+            }
+            className="w-full rounded-xl bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {loading ? "Logging in..." : "Login"}
+            {loading
+              ? "Logging in..."
+              : "Login"}
           </button>
         </form>
 
-        <p className="mt-4 text-sm text-gray-600">
-          Do not have an account?{" "}
-          <Link to="/signup" className="font-medium text-blue-600 hover:underline">
+        {/* Footer */}
+        <p className="mt-5 text-sm text-gray-600">
+          Do not have an
+          account?{" "}
+          <Link
+            to="/signup"
+            className="font-medium text-blue-600 hover:underline"
+          >
             Sign up
           </Link>
         </p>
@@ -121,5 +255,4 @@ const Login = () => {
   );
 };
 
-export default Login;                      
-
+export default Login;

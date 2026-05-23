@@ -1,5 +1,7 @@
 import {
+  memo,
   useEffect,
+  useMemo,
   useRef,
 } from "react";
 
@@ -8,11 +10,11 @@ import ChatMessage from "./ChatMessage.jsx";
 /**
  * Production-grade chat messages container.
  *
- * Handles:
- * - auto-scroll
+ * Responsibilities:
+ * - stable auto-scroll
  * - empty states
- * - message rendering
- * - loading synchronization
+ * - streaming-safe rendering
+ * - responsive overflow handling
  */
 const ChatMessages = ({
   messages = [],
@@ -24,34 +26,93 @@ const ChatMessages = ({
   emptyDescription = "Ask about analytics, growth, engagement, strategy, or upload images for AI analysis.",
 }) => {
   /**
+   * Scroll container reference.
+   */
+  const containerRef =
+    useRef(null);
+
+  /**
    * Bottom scroll anchor.
    */
   const messagesEndRef =
     useRef(null);
 
   /**
-   * Auto-scroll on new messages.
+   * Track previous message count.
+   */
+  const previousMessageCountRef =
+    useRef(messages.length);
+
+  /**
+   * Empty chat state.
+   */
+  const showEmptyState =
+    useMemo(() => {
+      return (
+        messages.length === 0 &&
+        !chatLoading
+      );
+    }, [
+      messages.length,
+      chatLoading,
+    ]);
+
+  /**
+   * Smart auto-scroll behavior.
+   *
+   * Prevents excessive scrolling
+   * during rapid chunk updates.
    */
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView(
-      {
-        behavior: "smooth",
-      }
-    );
+    const container =
+      containerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    /**
+     * Detect if user is near bottom.
+     */
+    const isNearBottom =
+      container.scrollHeight -
+        container.scrollTop -
+        container.clientHeight <
+      120;
+
+    /**
+     * Only auto-scroll when:
+     * - new messages arrive
+     * - user already near bottom
+     */
+    const hasNewMessage =
+      messages.length >
+      previousMessageCountRef.current;
+
+    if (
+      hasNewMessage ||
+      isNearBottom
+    ) {
+      messagesEndRef.current?.scrollIntoView(
+        {
+          behavior: "smooth",
+          block: "end",
+        }
+      );
+    }
+
+    previousMessageCountRef.current =
+      messages.length;
   }, [
-    messages,
+    messages.length,
     chatLoading,
   ]);
 
-  /**
-   * Empty state.
-   */
-  const showEmptyState =
-    messages.length === 0 &&
-    !chatLoading;
-
   return (
-    <div className="h-[550px] overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50 p-4">
+    <div
+      ref={containerRef}
+      className="h-[550px] overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50 p-4"
+    >
       {showEmptyState ? (
         /**
          * Empty chat state.
@@ -71,7 +132,7 @@ const ChatMessages = ({
         </div>
       ) : (
         /**
-         * Messages list.
+         * Stable messages list.
          */
         <div className="space-y-5">
           {messages.map(
@@ -99,4 +160,9 @@ const ChatMessages = ({
   );
 };
 
-export default ChatMessages;
+/**
+ * Prevent unnecessary rerenders.
+ */
+export default memo(
+  ChatMessages
+);

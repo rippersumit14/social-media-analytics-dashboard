@@ -1,4 +1,8 @@
-import { useCallback, useState } from "react";
+import {
+  useCallback,
+  useRef,
+  useState,
+} from "react";
 
 import {
   getChatSessions,
@@ -8,13 +12,14 @@ import {
 } from "../services/sessionService.js";
 
 /**
- * Production-grade chat session hook.
+ * Production-grade chat session lifecycle hook.
  *
- * Handles:
- * - session lifecycle
- * - active session state
- * - message loading
- * - CRUD synchronization
+ * Responsibilities:
+ * - session synchronization
+ * - active session lifecycle
+ * - message synchronization
+ * - CRUD operations
+ * - stale request protection
  */
 const useChatSessions = ({
   token,
@@ -26,25 +31,27 @@ const useChatSessions = ({
     useState([]);
 
   /**
-   * Active session state.
+   * Active session lifecycle.
    */
-  const [activeSessionId, setActiveSessionId] =
-    useState(null);
+  const [
+    activeSessionId,
+    setActiveSessionId,
+  ] = useState(null);
 
   /**
-   * Current session title.
+   * Active session title.
    */
   const [sessionTitle, setSessionTitle] =
     useState("");
 
   /**
-   * Current session messages.
+   * Active session messages.
    */
   const [messages, setMessages] =
     useState([]);
 
   /**
-   * Loading states.
+   * Loading lifecycle.
    */
   const [sessionsLoading, setSessionsLoading] =
     useState(false);
@@ -53,13 +60,37 @@ const useChatSessions = ({
     useState(false);
 
   /**
-   * Global session error.
+   * Session-level errors.
    */
   const [sessionError, setSessionError] =
     useState("");
 
   /**
-   * Load all sessions.
+   * Active request protection.
+   *
+   * Prevent stale session overwrites.
+   */
+  const activeRequestRef =
+    useRef(null);
+
+  /**
+   * Stable session reset lifecycle.
+   */
+  const resetActiveSession =
+    useCallback(() => {
+      setActiveSessionId(
+        null
+      );
+
+      setSessionTitle("");
+
+      setMessages([]);
+
+      setSessionError("");
+    }, []);
+
+  /**
+   * Load all sessions safely.
    */
   const loadSessions =
     useCallback(
@@ -76,12 +107,17 @@ const useChatSessions = ({
         try {
           setSessionsLoading(true);
 
+          setSessionError("");
+
           const fetchedSessions =
             await getChatSessions({
               socialAccountId,
               token,
             });
 
+          /**
+           * Stable sidebar sync.
+           */
           setSessions(
             fetchedSessions
           );
@@ -102,7 +138,9 @@ const useChatSessions = ({
     );
 
   /**
-   * Load selected session messages.
+   * Load selected session safely.
+   *
+   * Prevents stale request overwrites.
    */
   const selectSession =
     useCallback(
@@ -116,9 +154,25 @@ const useChatSessions = ({
           return;
         }
 
-        try {
-          setMessagesLoading(true);
+        /**
+         * Track current request.
+         */
+        const requestId =
+          crypto.randomUUID();
 
+        activeRequestRef.current =
+          requestId;
+
+        try {
+          setMessagesLoading(
+            true
+          );
+
+          setSessionError("");
+
+          /**
+           * Sync active session immediately.
+           */
           setActiveSessionId(
             sessionId
           );
@@ -129,12 +183,25 @@ const useChatSessions = ({
               token,
             });
 
+          /**
+           * Ignore stale responses.
+           */
+          if (
+            activeRequestRef.current !==
+            requestId
+          ) {
+            return;
+          }
+
+          /**
+           * Stable message synchronization.
+           */
           setMessages(
             sessionMessages
           );
 
           /**
-           * Sync title.
+           * Synchronize title safely.
            */
           const selectedSession =
             sessions.find(
@@ -147,162 +214,188 @@ const useChatSessions = ({
 
           setSessionTitle(
             selectedSession?.title ||
-              ""
+              "New Chat"
           );
-
-          setSessionError("");
         } catch (error) {
           console.error(
             "Load session messages error:",
             error
           );
 
+          /**
+           * Ignore stale failures.
+           */
+          if (
+            activeRequestRef.current !==
+            requestId
+          ) {
+            return;
+          }
+
           setSessionError(
             "Failed to load chat messages."
           );
         } finally {
-          setMessagesLoading(false);
+          /**
+           * Prevent stale loading updates.
+           */
+          if (
+            activeRequestRef.current ===
+            requestId
+          ) {
+            setMessagesLoading(
+              false
+            );
+          }
         }
       },
       [sessions, token]
     );
 
   /**
-   * Start fresh chat.
-   */
-  const resetActiveSession =
-    () => {
-      setActiveSessionId(
-        null
-      );
-
-      setSessionTitle("");
-
-      setMessages([]);
-    };
-
-  /**
-   * Rename session.
+   * Rename session safely.
    */
   const handleRenameSession =
-    async (
-      sessionId,
-      title
-    ) => {
-      if (
-        !sessionId ||
-        !title
-      ) {
-        return;
-      }
+    useCallback(
+      async (
+        sessionId,
+        title
+      ) => {
+        if (
+          !sessionId ||
+          !title?.trim()
+        ) {
+          return;
+        }
 
-      try {
-        const updatedSession =
-          await renameSession({
+        try {
+          setSessionError("");
+
+          const updatedSession =
+            await renameSession({
+              sessionId,
+              title:
+                title.trim(),
+              token,
+            });
+
+          /**
+           * Stable sidebar synchronization.
+           */
+          setSessions((prev) =>
+            prev.map(
+              (
+                session
+              ) =>
+                session.sessionId ===
+                sessionId
+                  ? updatedSession
+                  : session
+            )
+          );
+
+          /**
+           * Sync active title safely.
+           */
+          if (
+            activeSessionId ===
+            sessionId
+          ) {
+            setSessionTitle(
+              updatedSession.title
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Rename session error:",
+            error
+          );
+
+          setSessionError(
+            "Failed to rename session."
+          );
+        }
+      },
+      [
+        activeSessionId,
+        token,
+      ]
+    );
+
+  /**
+   * Delete session safely.
+   */
+  const handleDeleteSession =
+    useCallback(
+      async (
+        sessionId
+      ) => {
+        if (!sessionId) {
+          return;
+        }
+
+        try {
+          setSessionError("");
+
+          await deleteSession({
             sessionId,
-            title,
             token,
           });
 
-        /**
-         * Sync sidebar.
-         */
-        setSessions((prev) =>
-          prev.map(
-            (
-              session
-            ) =>
-              session.sessionId ===
-              sessionId
-                ? updatedSession
-                : session
-          )
-        );
+          /**
+           * Remove locally first.
+           */
+          setSessions((prev) =>
+            prev.filter(
+              (
+                session
+              ) =>
+                session.sessionId !==
+                sessionId
+            )
+          );
 
-        /**
-         * Sync active session title.
-         */
-        if (
-          activeSessionId ===
-          sessionId
-        ) {
-          setSessionTitle(
-            updatedSession.title
+          /**
+           * Reset active lifecycle safely.
+           */
+          if (
+            activeSessionId ===
+            sessionId
+          ) {
+            resetActiveSession();
+          }
+        } catch (error) {
+          console.error(
+            "Delete session error:",
+            error
+          );
+
+          setSessionError(
+            "Failed to delete session."
           );
         }
-      } catch (error) {
-        console.error(
-          "Rename session error:",
-          error
-        );
-
-        setSessionError(
-          "Failed to rename session."
-        );
-      }
-    };
-
-  /**
-   * Delete session.
-   */
-  const handleDeleteSession =
-    async (
-      sessionId
-    ) => {
-      if (!sessionId) {
-        return;
-      }
-
-      try {
-        await deleteSession({
-          sessionId,
-          token,
-        });
-
-        /**
-         * Remove locally.
-         */
-        setSessions((prev) =>
-          prev.filter(
-            (
-              session
-            ) =>
-              session.sessionId !==
-              sessionId
-          )
-        );
-
-        /**
-         * Reset active session if deleted.
-         */
-        if (
-          activeSessionId ===
-          sessionId
-        ) {
-          resetActiveSession();
-        }
-      } catch (error) {
-        console.error(
-          "Delete session error:",
-          error
-        );
-
-        setSessionError(
-          "Failed to delete session."
-        );
-      }
-    };
+      },
+      [
+        activeSessionId,
+        resetActiveSession,
+        token,
+      ]
+    );
 
   return {
     /**
      * State.
      */
     sessions,
+
     activeSessionId,
+
     sessionTitle,
+
     messages,
 
     sessionsLoading,
+
     messagesLoading,
 
     sessionError,
@@ -311,17 +404,22 @@ const useChatSessions = ({
      * State setters.
      */
     setMessages,
+
     setSessions,
+
     setActiveSessionId,
+
     setSessionTitle,
 
     /**
      * Actions.
      */
     loadSessions,
+
     selectSession,
 
     handleRenameSession,
+
     handleDeleteSession,
 
     resetActiveSession,

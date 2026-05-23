@@ -8,11 +8,11 @@
  * - uploads
  * - chat input
  *
- * Keeps AIChat page extremely clean.
+ * Layout responsibilities only.
  */
 const ChatLayout = ({
   /**
-   * Sidebar.
+   * Sidebar section.
    */
   sidebar,
 
@@ -32,44 +32,45 @@ const ChatLayout = ({
   uploadPreview,
 
   /**
-   * Chat input.
+   * Chat input section.
    */
   input,
 }) => {
   return (
     <div className="mt-6 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
-      <div className="flex h-[calc(100vh-180px)] min-h-[720px] flex-col lg:flex-row">
+      {/* Main Layout */}
+      <div className="flex min-h-[650px] flex-col lg:h-[calc(100dvh-180px)] lg:flex-row">
         {/* Sidebar */}
-        <div className="border-b border-gray-100 lg:border-b-0 lg:border-r">
+        <aside className="flex-shrink-0 border-b border-gray-100 lg:border-b-0 lg:border-r">
           {sidebar}
-        </div>
+        </aside>
 
         {/* Main Content */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Top Metadata */}
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* Usage / Metadata */}
           {usagePanel && (
-            <div className="border-b border-gray-100 bg-white p-5">
+            <section className="flex-shrink-0 border-b border-gray-100 bg-white p-5">
               {usagePanel}
-            </div>
+            </section>
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-hidden p-5">
+          <section className="min-h-0 flex-1 overflow-hidden p-5">
             {messages}
-          </div>
+          </section>
 
           {/* Upload Preview */}
           {uploadPreview && (
-            <div className="border-t border-gray-100 px-5 pt-4">
+            <section className="max-h-[240px] overflow-y-auto border-t border-gray-100 px-5 pt-4">
               {uploadPreview}
-            </div>
+            </section>
           )}
 
           {/* Input */}
-          <div className="border-t border-gray-100 bg-white p-5">
+          <section className="flex-shrink-0 border-t border-gray-100 bg-white p-5">
             {input}
-          </div>
-        </div>
+          </section>
+        </main>
       </div>
     </div>
   );

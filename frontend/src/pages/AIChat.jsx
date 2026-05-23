@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -22,7 +28,7 @@ import UsageDisplay from "../components/chat/UsageDisplay.jsx";
  * Responsibilities:
  * - account selection
  * - voice lifecycle
- * - orchestration only
+ * - orchestration composition
  *
  * Business logic lives in hooks/services.
  */
@@ -30,7 +36,7 @@ const AIChat = () => {
   const { token } = useAuth();
 
   /**
-   * Social accounts.
+   * Social account lifecycle.
    */
   const [socialAccounts, setSocialAccounts] =
     useState([]);
@@ -39,7 +45,7 @@ const AIChat = () => {
     useState(null);
 
   /**
-   * Global page state.
+   * Global page lifecycle.
    */
   const [loading, setLoading] =
     useState(true);
@@ -48,7 +54,7 @@ const AIChat = () => {
     useState("");
 
   /**
-   * Voice input state.
+   * Voice lifecycle.
    */
   const [isListening, setIsListening] =
     useState(false);
@@ -65,7 +71,7 @@ const AIChat = () => {
     selectedImages,
     uploadError,
 
-    handleImageChange,
+    addImages,
 
     removeImage,
 
@@ -108,7 +114,7 @@ const AIChat = () => {
   });
 
   /**
-   * AI lifecycle.
+   * AI orchestration lifecycle.
    */
   const {
     input,
@@ -145,11 +151,33 @@ const AIChat = () => {
   });
 
   /**
-   * Usage limit helper.
+   * Stable usage limit helper.
    */
   const isUsageLimitReached =
-    usageInfo &&
-    usageInfo.remaining <= 0;
+    useMemo(() => {
+      return (
+        usageInfo &&
+        usageInfo.remaining <= 0
+      );
+    }, [usageInfo]);
+
+  /**
+   * Unified frontend errors.
+   */
+  const combinedError =
+    useMemo(() => {
+      return (
+        pageError ||
+        uploadError ||
+        sessionError ||
+        chatError
+      );
+    }, [
+      pageError,
+      uploadError,
+      sessionError,
+      chatError,
+    ]);
 
   /**
    * Initialize speech recognition.
@@ -209,6 +237,13 @@ const AIChat = () => {
 
     recognitionRef.current =
       recognition;
+
+    /**
+     * Cleanup recognition safely.
+     */
+    return () => {
+      recognition.stop();
+    };
   }, [setInput]);
 
   /**
@@ -238,6 +273,9 @@ const AIChat = () => {
             accounts
           );
 
+          /**
+           * Default first account.
+           */
           if (accounts.length > 0) {
             setSelectedAccount(
               accounts[0]
@@ -261,7 +299,8 @@ const AIChat = () => {
   }, [token]);
 
   /**
-   * Load sessions on account change.
+   * Synchronize sessions
+   * when account changes.
    */
   useEffect(() => {
     if (
@@ -279,43 +318,50 @@ const AIChat = () => {
   ]);
 
   /**
-   * Account switching.
+   * Stable account switching.
    */
   const handleAccountChange =
-    (event) => {
-      const accountId =
-        event.target.value;
+    useCallback(
+      (event) => {
+        const accountId =
+          event.target.value;
 
-      const account =
-        socialAccounts.find(
-          (item) =>
-            item._id ===
-            accountId
+        const account =
+          socialAccounts.find(
+            (item) =>
+              item._id ===
+              accountId
+          );
+
+        if (!account) {
+          return;
+        }
+
+        setSelectedAccount(
+          account
         );
 
-      if (!account) {
-        return;
-      }
+        /**
+         * Reset previous lifecycle.
+         */
+        resetActiveSession();
 
-      setSelectedAccount(
-        account
-      );
+        clearImages();
 
-      /**
-       * Reset chat lifecycle.
-       */
-      resetActiveSession();
-
-      clearImages();
-
-      setPageError("");
-    };
+        setPageError("");
+      },
+      [
+        socialAccounts,
+        resetActiveSession,
+        clearImages,
+      ]
+    );
 
   /**
-   * Voice trigger.
+   * Stable voice trigger.
    */
   const handleVoiceClick =
-    () => {
+    useCallback(() => {
       if (
         chatLoading ||
         isUsageLimitReached
@@ -350,16 +396,50 @@ const AIChat = () => {
           "Failed to start voice input."
         );
       }
-    };
+    }, [
+      chatLoading,
+      isListening,
+      isUsageLimitReached,
+      speechSupported,
+    ]);
 
   /**
-   * Unified error display.
+   * Stable image selection handler.
    */
-  const combinedError =
-    pageError ||
-    uploadError ||
-    sessionError ||
-    chatError;
+  const handleImageChange =
+    useCallback(
+      (event) => {
+        addImages(
+          event.target.files
+        );
+
+        /**
+         * Allow re-uploading
+         * same image again.
+         */
+        event.target.value = "";
+      },
+      [addImages]
+    );
+
+  /**
+   * Stable AI send lifecycle.
+   */
+  const handleSendMessage =
+    useCallback(() => {
+      sendMessage({
+        message: input,
+
+        selectedImages,
+
+        clearImages,
+      });
+    }, [
+      input,
+      selectedImages,
+      clearImages,
+      sendMessage,
+    ]);
 
   return (
     <div>
@@ -377,14 +457,14 @@ const AIChat = () => {
         </p>
       </div>
 
-      {/* Errors */}
+      {/* Unified Errors */}
       {combinedError && (
         <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {combinedError}
         </div>
       )}
 
-      {/* No Accounts */}
+      {/* Empty Account State */}
       {!loading &&
         socialAccounts.length ===
           0 && (
@@ -541,15 +621,8 @@ const AIChat = () => {
                 setInput={
                   setInput
                 }
-                onSend={() =>
-                  sendMessage({
-                    message:
-                      input,
-
-                    selectedImages,
-
-                    clearImages,
-                  })
+                onSend={
+                  handleSendMessage
                 }
                 onImageChange={
                   handleImageChange
@@ -576,7 +649,7 @@ const AIChat = () => {
             }
           />
 
-          {/* Speech Support */}
+          {/* Browser Voice Fallback */}
           {!speechSupported && (
             <p className="mt-3 text-xs text-amber-600">
               Voice input is not
