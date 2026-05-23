@@ -5,12 +5,16 @@ import logger
   from "../utils/logger.js";
 
 import {
+
   generateAIResponse,
+
+  generateStreamingAIResponse,
+
 } from "./ai/aiOrchestrator.js";
 
 import {
-  generateStreamingAIResponse,
-} from "./ai/aiOrchestrator.js";
+  optimizeConversationHistory,
+} from "../utils/memoryOptimizer.js";
 
 /**
  * ---------------------------------------------------
@@ -19,7 +23,7 @@ import {
  */
 
 /**
- * Max AI response size
+ * Maximum AI response length
  */
 const MAX_RESPONSE_LENGTH =
   15000;
@@ -28,6 +32,9 @@ const MAX_RESPONSE_LENGTH =
  * ---------------------------------------------------
  * Sanitize AI Response
  * ---------------------------------------------------
+ *
+ * Cleans unwanted characters
+ * and limits response size.
  */
 
 const sanitizeAIResponse =
@@ -58,12 +65,12 @@ const sanitizeAIResponse =
       )
 
       /**
-       * Trim
+       * Trim response
        */
       .trim()
 
       /**
-       * Limit size
+       * Limit response size
        */
       .slice(
         0,
@@ -87,6 +94,10 @@ const buildPrompt =
     latestUserMessage,
   }) => {
 
+    /**
+     * Convert conversation history
+     * into structured text
+     */
     const history =
       historyMessages
         ?.map(
@@ -96,6 +107,9 @@ const buildPrompt =
         )
         .join("\n");
 
+    /**
+     * Final AI prompt
+     */
     return `
 You are an elite AI social media strategist and analytics expert.
 
@@ -133,7 +147,7 @@ IMPORTANT INSTRUCTIONS
 
 /**
  * ---------------------------------------------------
- * Generate Analytics AI Response
+ * Generate Standard AI Response
  * ---------------------------------------------------
  */
 
@@ -153,14 +167,30 @@ export const generateAnalyticsResponse =
     try {
 
       /**
-       * Build optimized prompt
+       * ---------------------------------------------------
+       * Optimize conversation memory
+       * ---------------------------------------------------
        */
+
+      const optimizedHistory =
+        optimizeConversationHistory(
+
+          historyMessages
+        );
+
+      /**
+       * ---------------------------------------------------
+       * Build AI prompt
+       * ---------------------------------------------------
+       */
+
       const prompt =
         buildPrompt({
 
           analyticsContext,
 
-          historyMessages,
+          historyMessages:
+            optimizedHistory,
 
           latestUserMessage,
         });
@@ -170,9 +200,12 @@ export const generateAnalyticsResponse =
       );
 
       /**
+       * ---------------------------------------------------
        * Generate AI response
        * through orchestrator
+       * ---------------------------------------------------
        */
+
       const aiResponse =
         await generateAIResponse({
 
@@ -180,8 +213,11 @@ export const generateAnalyticsResponse =
         });
 
       /**
-       * Sanitize reply
+       * ---------------------------------------------------
+       * Sanitize AI reply
+       * ---------------------------------------------------
        */
+
       const cleanedReply =
         sanitizeAIResponse(
 
@@ -189,8 +225,11 @@ export const generateAnalyticsResponse =
         );
 
       /**
+       * ---------------------------------------------------
        * Calculate latency
+       * ---------------------------------------------------
        */
+
       const latencyMs =
         Date.now() -
         startedAt;
@@ -210,8 +249,11 @@ export const generateAnalyticsResponse =
       );
 
       /**
+       * ---------------------------------------------------
        * Unified AI response
+       * ---------------------------------------------------
        */
+
       return {
 
         reply:
@@ -249,8 +291,11 @@ export const generateAnalyticsResponse =
       );
 
       /**
-       * Provider exhausted
+       * ---------------------------------------------------
+       * AI quota exceeded
+       * ---------------------------------------------------
        */
+
       if (
         error.message?.includes(
           "quota"
@@ -264,8 +309,11 @@ export const generateAnalyticsResponse =
       }
 
       /**
-       * Timeout
+       * ---------------------------------------------------
+       * Timeout error
+       * ---------------------------------------------------
        */
+
       if (
         error.message?.includes(
           "timeout"
@@ -279,8 +327,11 @@ export const generateAnalyticsResponse =
       }
 
       /**
-       * Generic failure
+       * ---------------------------------------------------
+       * Generic AI failure
+       * ---------------------------------------------------
        */
+
       throw new AppError(
         "Failed to generate AI response",
         500
@@ -288,8 +339,7 @@ export const generateAnalyticsResponse =
     }
   };
 
-
-  /**
+/**
  * ---------------------------------------------------
  * Generate Streaming AI Response
  * ---------------------------------------------------
@@ -306,21 +356,40 @@ export const generateStreamingAnalyticsResponse =
   }) => {
 
     /**
-     * Build prompt
+     * ---------------------------------------------------
+     * Optimize memory for streaming
+     * ---------------------------------------------------
      */
+
+    const optimizedHistory =
+      optimizeConversationHistory(
+
+        historyMessages
+      );
+
+    /**
+     * ---------------------------------------------------
+     * Build AI prompt
+     * ---------------------------------------------------
+     */
+
     const prompt =
       buildPrompt({
 
         analyticsContext,
 
-        historyMessages,
+        historyMessages:
+          optimizedHistory,
 
         latestUserMessage,
       });
 
     /**
-     * Start streaming
+     * ---------------------------------------------------
+     * Start streaming AI generation
+     * ---------------------------------------------------
      */
+
     return await generateStreamingAIResponse({
 
       prompt,

@@ -1,11 +1,24 @@
-import SocialAccount from "../models/SocialAccount.js";
-import AnalyticsSnapshot from "../models/AnalyticsSnapshot.js";
-import User from "../models/User.js";
-import ChatSession from "../models/ChatSession.js";
-import ChatMessage from "../models/ChatMessage.js";
+import SocialAccount
+  from "../models/SocialAccount.js";
+
+import AnalyticsSnapshot
+  from "../models/AnalyticsSnapshot.js";
+
+import User
+  from "../models/User.js";
+
+import ChatSession
+  from "../models/ChatSession.js";
+
+import ChatMessage
+  from "../models/ChatMessage.js";
 
 import {
+
   generateAnalyticsResponse,
+
+  generateStreamingAnalyticsResponse,
+
 } from "../services/aiService.js";
 
 import {
@@ -13,6 +26,7 @@ import {
 } from "../services/cloudinaryStorageService.js";
 
 import {
+
   prepareAIUsageForRequest,
 
   buildUsageInfo,
@@ -20,8 +34,6 @@ import {
   buildUserMessageText,
 
   getOrCreateChatSession,
-
-  buildHistoryMessages,
 
   buildAnalyticsContext,
 
@@ -46,9 +58,7 @@ import {
 } from "../utils/validateObjectId.js";
 
 /**
- * ---------------------------------------------------
- * Upload Images In Parallel
- * ---------------------------------------------------
+ * Upload images in parallel
  */
 
 const handleOptionalImageUploads =
@@ -74,29 +84,40 @@ const handleOptionalImageUploads =
   };
 
 /**
- * ---------------------------------------------------
- * Standard AI Chat Route
- * ---------------------------------------------------
- *
- * Delegates to streaming controller.
- *
- * IMPORTANT:
- * Do NOT wrap with asyncHandler
- * because downstream controller
- * already uses asyncHandler.
+ * Load recent conversation history
  */
 
-/**
- * ---------------------------------------------------
- * Stream AI Chat Response
- * ---------------------------------------------------
- */
+const loadRecentHistory =
+  async (
+    sessionId
+  ) => {
 
+    const historyMessages =
+      await ChatMessage.find({
+
+        session:
+          sessionId,
+      })
+
+        .sort({
+          createdAt: -1,
+        })
+
+        .limit(20)
+
+        .lean();
+
+    /**
+     * AI expects:
+     * oldest → newest
+     */
+    historyMessages.reverse();
+
+    return historyMessages;
+  };
 
 /**
- * ---------------------------------------------------
- * Main Streaming AI Route
- * ---------------------------------------------------
+ * Main AI Chat Route
  */
 
 export const chatWithAIStream =
@@ -118,8 +139,9 @@ export const chatWithAIStream =
     } = req.body || {};
 
     /**
-     * Validate social account id
+     * Validate ids
      */
+
     if (
       !isValidObjectId(
         socialAccountId
@@ -132,9 +154,6 @@ export const chatWithAIStream =
       );
     }
 
-    /**
-     * Validate session id
-     */
     if (
       sessionId &&
       !isValidObjectId(
@@ -154,6 +173,7 @@ export const chatWithAIStream =
     /**
      * Uploaded files
      */
+
     const uploadedFiles =
       req.files || [];
 
@@ -163,6 +183,7 @@ export const chatWithAIStream =
     /**
      * Build user message
      */
+
     const userMessageText =
       buildUserMessageText(
 
@@ -171,9 +192,6 @@ export const chatWithAIStream =
         hasImages
       );
 
-    /**
-     * Empty request protection
-     */
     if (
       !userMessageText &&
       !hasImages
@@ -186,8 +204,9 @@ export const chatWithAIStream =
     }
 
     /**
-     * Fetch user + social account
+     * Fetch user + account
      */
+
     const [
       user,
       socialAccount,
@@ -208,9 +227,6 @@ export const chatWithAIStream =
         }).lean(),
       ]);
 
-    /**
-     * User validation
-     */
     if (!user) {
 
       throw new AppError(
@@ -219,9 +235,6 @@ export const chatWithAIStream =
       );
     }
 
-    /**
-     * Social account validation
-     */
     if (!socialAccount) {
 
       throw new AppError(
@@ -231,15 +244,13 @@ export const chatWithAIStream =
     }
 
     /**
-     * Prepare AI usage
+     * AI usage validation
      */
+
     await prepareAIUsageForRequest(
       user
     );
 
-    /**
-     * Usage limit protection
-     */
     if (
       user.aiUsageCount >=
       user.aiUsageLimit
@@ -254,6 +265,7 @@ export const chatWithAIStream =
     /**
      * Create/get session
      */
+
     const activeSession =
       await getOrCreateChatSession({
 
@@ -269,31 +281,16 @@ export const chatWithAIStream =
     /**
      * Upload images
      */
+
     const uploadedImages =
       await handleOptionalImageUploads(
         uploadedFiles
       );
 
     /**
-     * First image for Gemini multimodal
-     */
-    const firstImage =
-      uploadedFiles[0] || null;
-
-    const imageBase64 =
-      firstImage
-        ? firstImage.buffer.toString(
-            "base64"
-          )
-        : null;
-
-    const imageMimeType =
-      firstImage?.mimetype ||
-      null;
-
-    /**
      * Save user message
      */
+
     const userMessage =
       await ChatMessage.create({
 
@@ -317,15 +314,16 @@ export const chatWithAIStream =
       });
 
     /**
-     * Fetch history + analytics
+     * Fetch optimized history
      */
+
     const [
       historyMessages,
       snapshots,
     ] =
       await Promise.all([
 
-        buildHistoryMessages(
+        loadRecentHistory(
           activeSession._id
         ),
 
@@ -334,6 +332,7 @@ export const chatWithAIStream =
           socialAccount:
             socialAccountId,
         })
+
           .sort({
             capturedAt: -1,
           })
@@ -346,6 +345,7 @@ export const chatWithAIStream =
     /**
      * Build analytics context
      */
+
     const analyticsContext =
       buildAnalyticsContext(
 
@@ -355,9 +355,10 @@ export const chatWithAIStream =
       );
 
     logger.ai(
-      "Generating AI chat response",
+      "Generating AI response",
 
       {
+
         socialAccountId,
 
         sessionId:
@@ -368,6 +369,7 @@ export const chatWithAIStream =
     /**
      * Generate AI response
      */
+
     const aiResult =
       await generateAnalyticsResponse({
 
@@ -377,15 +379,12 @@ export const chatWithAIStream =
 
         latestUserMessage:
           userMessageText,
-
-        imageBase64,
-
-        imageMimeType,
       });
 
     /**
-     * Finalize response
+     * Finalize AI response
      */
+
     const {
       aiReply,
     } =
@@ -436,8 +435,8 @@ export const chatWithAIStream =
           modelUsed:
             aiResult.modelUsed,
 
-          modelName:
-            aiResult.modelName,
+          provider:
+            aiResult.provider,
 
           latencyMs:
             aiResult.latencyMs,
@@ -452,9 +451,7 @@ export const chatWithAIStream =
   });
 
 /**
- * ---------------------------------------------------
- * Get Chat Sessions
- * ---------------------------------------------------
+ * Get chat sessions
  */
 
 export const getChatSessions =
@@ -498,9 +495,7 @@ export const getChatSessions =
   });
 
 /**
- * ---------------------------------------------------
- * Get Session Messages
- * ---------------------------------------------------
+ * Get session messages
  */
 
 export const getSessionMessages =
