@@ -1,51 +1,102 @@
+// routes/authRoutes.js
+
 import express from "express";
-import {
-  registerUser,
-  loginUser,
-  getCurrentUser,
-} from "../controllers/authContoller.js";
-import protect from "../middleware/authMiddleware.js";
 
 /**
- * Create a new Express router instance.
- * This router will handle all authentication-related routes.
+ * Controllers
+ */
+import {
+    registerUser,
+    loginUser,
+    getCurrentUser,
+} from "../controllers/authContoller.js";
+
+/**
+ * Middlewares
+ */
+import protect
+    from "../middlewares/authMiddleware.js";
+
+import validateRequest
+    from "../middlewares/validateRequest.js";
+
+/**
+ * Validation Schemas
+ */
+import {
+    registerSchema,
+    loginSchema,
+} from "../validators/authValidators.js";
+
+/**
+ * Create Express router instance
  */
 const router = express.Router();
 
 /**
+ * ---------------------------------------------------
  * @route   POST /api/auth/register
- * @desc    Register a new user
+ * @desc    Register new user
  * @access  Public
+ * ---------------------------------------------------
  *
- * This route is public because a new user does not have a token yet.
- */
-router.post("/register", registerUser);
-
-/**
- * @route   POST /api/auth/login
- * @desc    Login an existing user
- * @access  Public
- *
- * This route is public because the user must log in first
- * to receive a JWT token.
- */
-router.post("/login", loginUser);
-
-/**
- * @route   GET /api/auth/me
- * @desc    Get current logged-in user
- * @access  Private
- *
- * This route is protected by the `protect` middleware.
  * Flow:
- * 1. Frontend sends JWT token in Authorization header
- * 2. protect middleware verifies token
- * 3. protect middleware attaches user to req.user
- * 4. getCurrentUser controller returns req.user
+ * 1. validateRequest validates incoming body
+ * 2. controller receives validated data
+ * 3. authService handles business logic
  */
-router.get("/me", protect, getCurrentUser);
+
+router.post(
+    "/register",
+
+    validateRequest(registerSchema),
+
+    registerUser
+);
 
 /**
- * Export router so it can be used inside app.js
+ * ---------------------------------------------------
+ * @route   POST /api/auth/login
+ * @desc    Login existing user
+ * @access  Public
+ * ---------------------------------------------------
+ *
+ * Flow:
+ * 1. validateRequest validates request body
+ * 2. controller delegates login logic
+ * 3. authService authenticates user
+ */
+
+router.post(
+    "/login",
+
+    validateRequest(loginSchema),
+
+    loginUser
+);
+
+/**
+ * ---------------------------------------------------
+ * @route   GET /api/auth/me
+ * @desc    Get current authenticated user
+ * @access  Private
+ * ---------------------------------------------------
+ *
+ * Flow:
+ * 1. protect middleware verifies JWT
+ * 2. authenticated user attached to req.user
+ * 3. controller returns safe user response
+ */
+
+router.get(
+    "/me",
+
+    protect,
+
+    getCurrentUser
+);
+
+/**
+ * Export auth router
  */
 export default router;

@@ -1,152 +1,113 @@
-import User from "../models/User.js";
-import generateToken from "../utils/generateToken.js";
+// controllers/authController.js
+
+import asyncHandler
+    from "../middlewares/asyncHandler.js";
+
+import ApiResponse
+    from "../utils/ApiResponse.js";
+
+import {
+    registerNewUser,
+    loginExistingUser,
+    getAuthenticatedUser,
+} from "../services/authService.js";
 
 /**
- * Build safe user response.
- *
- * We never return password from controller responses.
- */
-const buildUserResponse = (user) => {
-  return {
-    id: user._id,
-    name: user.name,
-    email: user.email,
-    plan: user.plan,
-    aiUsageCount: user.aiUsageCount,
-    aiUsageLimit: user.aiUsageLimit,
-    aiUsageResetDate: user.aiUsageResetDate,
-  };
-};
-
-/**
- * @desc    Register a new user
+ * ---------------------------------------------------
+ * @desc    Register new user
  * @route   POST /api/auth/register
  * @access  Public
+ * ---------------------------------------------------
  */
-export const registerUser = async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
 
-    /**
-     * Basic validation.
-     * Later we can move this to validation middleware.
-     */
-    if (!name || !email || !password) {
-      return res.status(400).json({
-        message: "Please provide name, email, and password",
-      });
+export const registerUser = asyncHandler(
+
+    async (req, res) => {
+
+        /**
+         * Delegate registration logic
+         * to auth service layer
+         */
+        const result =
+            await registerNewUser(req.body);
+
+        /**
+         * Standardized success response
+         */
+        return res.status(201).json(
+
+            new ApiResponse(
+                true,
+                "User registered successfully",
+                result
+            )
+        );
     }
-
-    const normalizedEmail = email.trim().toLowerCase();
-
-    const userExists = await User.findOne({ email: normalizedEmail });
-
-    if (userExists) {
-      return res.status(400).json({
-        message: "User already exists",
-      });
-    }
-
-    const user = await User.create({
-      name: name.trim(),
-      email: normalizedEmail,
-      password,
-    });
-
-    return res.status(201).json({
-      message: "User registered successfully",
-      user: buildUserResponse(user),
-      token: generateToken(user._id.toString()),
-    });
-  } catch (error) {
-    console.error("[REGISTER_USER_ERROR]", {
-      message: error.message,
-      timestamp: new Date().toISOString(),
-    });
-
-    return res.status(500).json({
-      message: "Server error while registering user",
-    });
-  }
-};
+);
 
 /**
+ * ---------------------------------------------------
  * @desc    Login existing user
  * @route   POST /api/auth/login
  * @access  Public
+ * ---------------------------------------------------
  */
-export const loginUser = async (req, res) => {
-  try {
-    const { email, password } = req.body;
 
-    /**
-     * Basic validation.
-     */
-    if (!email || !password) {
-      return res.status(400).json({
-        message: "Please provide email and password",
-      });
+export const loginUser = asyncHandler(
+
+    async (req, res) => {
+
+        /**
+         * Delegate login logic
+         * to auth service layer
+         */
+        const result =
+            await loginExistingUser(req.body);
+
+        /**
+         * Standardized success response
+         */
+        return res.status(200).json(
+
+            new ApiResponse(
+                true,
+                "Login successful",
+                result
+            )
+        );
     }
-
-    const normalizedEmail = email.trim().toLowerCase();
-
-    /**
-     * Password has select: false in User model.
-     * So we explicitly include it only for login comparison.
-     */
-    const user = await User.findOne({ email: normalizedEmail }).select(
-      "+password"
-    );
-
-    if (!user) {
-      return res.status(401).json({
-        message: "Invalid email or password",
-      });
-    }
-
-    const isPasswordCorrect = await user.matchPassword(password);
-
-    if (!isPasswordCorrect) {
-      return res.status(401).json({
-        message: "Invalid email or password",
-      });
-    }
-
-    return res.status(200).json({
-      message: "Login successful",
-      user: buildUserResponse(user),
-      token: generateToken(user._id.toString()),
-    });
-  } catch (error) {
-    console.error("[LOGIN_USER_ERROR]", {
-      message: error.message,
-      timestamp: new Date().toISOString(),
-    });
-
-    return res.status(500).json({
-      message: "Server error while logging in",
-    });
-  }
-};
+);
 
 /**
- * @desc    Get current authenticated user
+ * ---------------------------------------------------
+ * @desc    Get authenticated user
  * @route   GET /api/auth/me
  * @access  Private
+ * ---------------------------------------------------
  */
-export const getCurrentUser = async (req, res) => {
-  try {
-    return res.status(200).json({
-      user: buildUserResponse(req.user),
-    });
-  } catch (error) {
-    console.error("[GET_CURRENT_USER_ERROR]", {
-      message: error.message,
-      timestamp: new Date().toISOString(),
-    });
 
-    return res.status(500).json({
-      message: "Server error while fetching current user",
-    });
-  }
-};
+export const getCurrentUser = asyncHandler(
+
+    async (req, res) => {
+
+        /**
+         * Get authenticated user
+         */
+        const user =
+            await getAuthenticatedUser(
+                req.user
+            );
+
+        /**
+         * Standardized success response
+         */
+        return res.status(200).json(
+
+            new ApiResponse(
+                true,
+                "Current user fetched successfully",
+                user
+            )
+        );
+    }
+);

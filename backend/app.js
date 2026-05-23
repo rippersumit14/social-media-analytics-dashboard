@@ -1,36 +1,134 @@
 import express from "express";
-import cors from "cors";
-import morgan from "morgan";
 
-// Global error middleware
+/**
+ * ---------------------------------------------------
+ * Security Configuration
+ * ---------------------------------------------------
+ */
+
+import {
+  helmetConfig,
+  corsConfig,
+  JSON_PAYLOAD_LIMIT,
+  URL_ENCODED_LIMIT,
+} from "./config/security.js";
+
+/**
+ * ---------------------------------------------------
+ * Request Logger Middleware
+ * ---------------------------------------------------
+ */
+
+import requestLogger from "./middlewares/requestLogger.js";
+
+/**
+ * ---------------------------------------------------
+ * Rate Limiters
+ * ---------------------------------------------------
+ */
+
+import { globalRateLimiter } from "./middlewares/rateLimiter.js";
+
+/**
+ * ---------------------------------------------------
+ * Global Error Middleware
+ * ---------------------------------------------------
+ */
+
 import errorMiddleware from "./middlewares/errorMiddleware.js";
 
-// Routes
+/**
+ * ---------------------------------------------------
+ * Routes
+ * ---------------------------------------------------
+ */
+
 import authRoutes from "./routes/authRoutes.js";
 import socialAccountRoutes from "./routes/socialAccountRoutes.js";
 import analyticsSnapshotRoutes from "./routes/analyticsSnapshotRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
 import instagramRoutes from "./routes/instagramRoutes.js";
 
+/**
+ * ---------------------------------------------------
+ * Logger
+ * ---------------------------------------------------
+ */
+
+import logger from "./utils/logger.js";
+
 const app = express();
 
 /**
  * ---------------------------------------------------
- * Global Middlewares
+ * Express Security Hardening
  * ---------------------------------------------------
  */
 
-// Enable CORS
-app.use(cors());
+/**
+ * Hide Express technology
+ */
+app.disable("x-powered-by");
 
-// Parse incoming JSON payloads
-app.use(express.json());
+/**
+ * ---------------------------------------------------
+ * Security Middlewares
+ * ---------------------------------------------------
+ */
 
-// Parse URL encoded form data
-app.use(express.urlencoded({ extended: true }));
+/**
+ * Helmet security headers
+ */
+app.use(helmetConfig);
 
-// HTTP request logger
-app.use(morgan("dev"));
+/**
+ * Secure CORS configuration
+ */
+app.use(corsConfig);
+
+/**
+ * Global API rate limiter
+ */
+app.use(globalRateLimiter);
+
+/**
+ * ---------------------------------------------------
+ * Request Parsing
+ * ---------------------------------------------------
+ */
+
+/**
+ * Parse JSON payloads
+ */
+app.use(
+  express.json({
+    limit: JSON_PAYLOAD_LIMIT,
+  })
+);
+
+/**
+ * Parse URL encoded payloads
+ */
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: URL_ENCODED_LIMIT,
+  })
+);
+
+/**
+ * ---------------------------------------------------
+ * Logging Middlewares
+ * ---------------------------------------------------
+ */
+
+/**
+ * Structured request logger
+ *
+ * Note:
+ * Morgan has been removed to avoid duplicate request logs.
+ */
+app.use(requestLogger);
 
 /**
  * ---------------------------------------------------
@@ -53,15 +151,17 @@ app.get("/", (req, res) => {
  * Used for:
  * - deployment monitoring
  * - uptime checks
- * - health verification
+ * - load balancers
+ * - production health verification
  */
 
 app.get("/api/health", (req, res) => {
   return res.status(200).json({
     success: true,
     status: "OK",
+    environment: process.env.NODE_ENV,
     uptime: process.uptime(),
-    timestamp: new Date(),
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -71,32 +171,52 @@ app.get("/api/health", (req, res) => {
  * ---------------------------------------------------
  */
 
-// Authentication routes
+/**
+ * Authentication routes
+ */
 app.use("/api/auth", authRoutes);
 
-// Social account routes
+/**
+ * Social account routes
+ */
 app.use("/api/social-accounts", socialAccountRoutes);
 
-// Analytics snapshot routes
+/**
+ * Analytics snapshot routes
+ */
 app.use("/api/analytics-snapshots", analyticsSnapshotRoutes);
 
-// AI routes
+/**
+ * AI routes
+ */
 app.use("/api/ai", aiRoutes);
 
 /**
  * Instagram OAuth + Graph API routes
  *
- * Current endpoints:
- * GET /api/instagram/oauth/url
- * GET /api/instagram/oauth/callback
- *
  * Future scalability:
  * - token refresh
  * - analytics sync
- * - insights fetching
  * - account linking
+ * - insights fetching
  */
+
 app.use("/api/instagram", instagramRoutes);
+
+/**
+ * ---------------------------------------------------
+ * 404 Route Handler
+ * ---------------------------------------------------
+ *
+ * IMPORTANT:
+ * Do NOT use "*" in newer Express versions. A bare app.use catches all unmatched routes safely.
+ */
+app.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    message: "Route not found",
+  });
+});
 
 /**
  * ---------------------------------------------------
@@ -104,15 +224,22 @@ app.use("/api/instagram", instagramRoutes);
  * ---------------------------------------------------
  *
  * IMPORTANT:
- * Must always be registered LAST.
+ * Always register LAST
  *
  * Handles:
- * - AppError custom errors
- * - asyncHandler forwarded errors
- * - Multer upload errors
- * - unexpected server errors
+ * - AppError
+ * - asyncHandler errors
+ * - Multer errors
+ * - unexpected server failures
+ */
+app.use(errorMiddleware);
+
+/**
+ * ---------------------------------------------------
+ * Startup Log
+ * ---------------------------------------------------
  */
 
-app.use(errorMiddleware);
+logger.info("Express application initialized");
 
 export default app;

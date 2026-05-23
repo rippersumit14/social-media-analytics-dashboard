@@ -1,35 +1,48 @@
 import express from "express";
 
-import protect from "../middleware/authMiddleware.js";
+import protect from "../middlewares/authMiddleware.js";
 
-import aiRateLimiter from "../middleware/aiRateLimiter.js";
-
-import { uploadImages } from "../middleware/uploadMiddleware.js";
+import aiRateLimiter from "../middlewares/aiRateLimiter.js";
 
 import {
+  uploadImages,
+} from "../middlewares/uploadMiddleware.js";
+
+import {
+
   chatWithAI,
+
   chatWithAIStream,
+
   getChatSessions,
+
   getSessionMessages,
-  renameChatSession,
-  deleteChatSession,
+
 } from "../controllers/chatController.js";
 
 import {
+
   getAIInsights,
+
 } from "../controllers/aiController.js";
 
-const router = express.Router();
+const router =
+  express.Router();
 
 /**
- * Generate analytics AI insights.
+ * ---------------------------------------------------
+ * AI Analytics Insights
+ * ---------------------------------------------------
  *
- * Example:
+ * Generates:
  * - growth analysis
  * - engagement insights
- * - recommendations
+ * - content recommendations
+ * - audience analysis
  */
+
 router.post(
+
   "/insights/:socialAccountId",
 
   protect,
@@ -40,12 +53,15 @@ router.post(
 );
 
 /**
- * Normal AI chat endpoint.
+ * ---------------------------------------------------
+ * Standard AI Chat Route
+ * ---------------------------------------------------
  *
  * Supports:
- * - text-only
- * - image-only
- * - text + multiple images
+ * - text chat
+ * - image uploads
+ * - multimodal AI
+ * - OCR analysis
  *
  * multipart/form-data
  *
@@ -54,7 +70,9 @@ router.post(
  * - sessionId (optional)
  * - images[]
  */
+
 router.post(
+
   "/chat/:socialAccountId",
 
   protect,
@@ -62,13 +80,15 @@ router.post(
   aiRateLimiter,
 
   /**
-   * Parse multiple image uploads.
+   * Multiple image uploads
    *
    * Max:
    * 5 images
    */
   uploadImages.array(
+
     "images",
+
     5
   ),
 
@@ -76,16 +96,19 @@ router.post(
 );
 
 /**
- * Streaming AI endpoint.
+ * ---------------------------------------------------
+ * SSE Streaming AI Chat Route
+ * ---------------------------------------------------
  *
- * IMPORTANT:
- * Temporarily disabled during
- * stabilization phase.
- *
- * Route preserved for
- * future SSE rebuild.
+ * Features:
+ * - realtime chunk streaming
+ * - AI typing effect
+ * - SSE synchronization
+ * - multimodal AI streaming
  */
+
 router.post(
+
   "/chat/:socialAccountId/stream",
 
   protect,
@@ -93,7 +116,9 @@ router.post(
   aiRateLimiter,
 
   uploadImages.array(
+
     "images",
+
     5
   ),
 
@@ -101,10 +126,19 @@ router.post(
 );
 
 /**
- * Get all chat sessions
- * for selected social account.
+ * ---------------------------------------------------
+ * Get All Chat Sessions
+ * ---------------------------------------------------
+ *
+ * Returns:
+ * - session list
+ * - titles
+ * - previews
+ * - updated timestamps
  */
+
 router.get(
+
   "/chat/sessions/:socialAccountId",
 
   protect,
@@ -113,10 +147,19 @@ router.get(
 );
 
 /**
- * Get all messages
- * for selected chat session.
+ * ---------------------------------------------------
+ * Get Session Messages
+ * ---------------------------------------------------
+ *
+ * Returns:
+ * - chat history
+ * - AI responses
+ * - uploaded images
+ * - timestamps
  */
+
 router.get(
+
   "/chat/session/:sessionId/messages",
 
   protect,
@@ -125,29 +168,19 @@ router.get(
 );
 
 /**
- * Rename existing chat session.
- */
-router.patch(
-  "/chat/session/:sessionId",
-
-  protect,
-
-  renameChatSession
-);
-
-/**
- * Delete chat session.
+ * ---------------------------------------------------
+ * Future Routes
+ * ---------------------------------------------------
  *
- * Also cleans:
- * - chat messages
- * - cloud images
+ * Planned:
+ * - rename chat session
+ * - delete chat session
+ * - pin sessions
+ * - AI summaries
+ * - export chats
+ *
+ * Temporarily disabled during
+ * stabilization phase.
  */
-router.delete(
-  "/chat/session/:sessionId",
-
-  protect,
-
-  deleteChatSession
-);
 
 export default router;

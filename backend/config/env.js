@@ -1,9 +1,20 @@
+// config/env.js
+
 import dotenv from "dotenv";
 
+import logger from "../utils/logger.js";
+
 /**
- * Load environment variables before any app/config modules are imported.
- *
- * Keeping this import first prevents config modules from reading undefined
- * values during startup.
+ * ---------------------------------------------------
+ * Load Environment Variables
+ * ---------------------------------------------------
  */
+
 dotenv.config();
+
+/**
+ * Environment loaded log
+ */
+logger.info(
+  "Environment variables loaded"
+);

@@ -2,25 +2,40 @@
  * ---------------------------------------------------
  * Load Environment Variables FIRST
  * ---------------------------------------------------
- *
- * Prevents configuration issues for:
- * - Cloudinary
- * - MongoDB
- * - AI providers
- * - Redis (future)
- * - OAuth providers
  */
 
 import "./config/env.js";
 
+/**
+ * Express App
+ */
 import app from "./app.js";
 
+/**
+ * Database
+ */
 import connectDB from "./config/db.js";
+
+/**
+ * Environment Validation
+ */
+import validateEnv from "./config/validateEnv.js";
+
+/**
+ * Logger
+ */
+import logger from "./utils/logger.js";
 
 /**
  * Server Port
  */
-const PORT = process.env.PORT || 5000;
+const PORT =
+  process.env.PORT || 5000;
+
+/**
+ * Server Instance
+ */
+let server;
 
 /**
  * ---------------------------------------------------
@@ -28,83 +43,196 @@ const PORT = process.env.PORT || 5000;
  * ---------------------------------------------------
  */
 
-const startServer = async () => {
+const startServer =
+  async () => {
 
-  try {
+    try {
 
-    /**
-     * Connect MongoDB database
-     */
-    await connectDB();
+      const startedAt =
+        Date.now();
 
-    /**
-     * Start Express HTTP server
-     */
-    const server = app.listen(PORT, () => {
+      /**
+       * Validate env variables
+       */
+      validateEnv();
 
-      console.log(
-        `[SERVER_READY] Backend running on http://localhost:${PORT}`
+      /**
+       * Connect MongoDB
+       */
+      await connectDB();
+
+      /**
+       * Start Express server
+       */
+      server =
+        app.listen(
+          PORT,
+          () => {
+
+            logger.info(
+              "Backend server started successfully",
+
+              {
+
+                port: PORT,
+
+                environment:
+                  process.env.NODE_ENV,
+
+                startupTimeMs:
+                  Date.now() -
+                  startedAt,
+
+                nodeVersion:
+                  process.version,
+              }
+            );
+          }
+        );
+
+    } catch (error) {
+
+      logger.error(
+        "Server startup failed",
+
+        {
+          message:
+            error.message,
+
+          stack:
+            error.stack,
+        }
       );
-    });
 
-    /**
-     * ---------------------------------------------------
-     * Graceful Shutdown Handler
-     * ---------------------------------------------------
-     *
-     * Allows deployment platforms and local development
-     * environments to properly close the server.
-     *
-     * Prevents:
-     * - hanging connections
-     * - corrupted requests
-     * - abrupt process termination
-     */
+      process.exit(1);
+    }
+  };
 
-    const shutdown = (signal) => {
+/**
+ * ---------------------------------------------------
+ * Graceful Shutdown
+ * ---------------------------------------------------
+ */
 
-      console.log(
-        `[SERVER_SHUTDOWN] Received ${signal}`
-      );
+const gracefulShutdown =
+  async (
+    signal
+  ) => {
+
+    logger.warn(
+      "Graceful shutdown initiated",
+
+      {
+        signal,
+      }
+    );
+
+    try {
 
       /**
        * Stop accepting new requests
        */
-      server.close(() => {
+      if (server) {
 
-        console.log(
-          "[SERVER_SHUTDOWN] HTTP server closed"
+        server.close(
+          () => {
+
+            logger.info(
+              "HTTP server closed successfully"
+            );
+
+            process.exit(0);
+          }
         );
+      }
 
-        process.exit(0);
-      });
-    };
+    } catch (error) {
 
-    /**
-     * Handle termination signals
-     */
-    process.on("SIGINT", () => shutdown("SIGINT"));
+      logger.error(
+        "Graceful shutdown failed",
 
-    process.on("SIGTERM", () => shutdown("SIGTERM"));
+        {
+          message:
+            error.message,
+        }
+      );
 
-  } catch (error) {
+      process.exit(1);
+    }
+  };
 
-    /**
-     * Fatal startup error
-     * Example:
-     * - Mongo connection failure
-     * - Invalid environment variables
-     */
+/**
+ * ---------------------------------------------------
+ * Process Event Handlers
+ * ---------------------------------------------------
+ */
 
-    console.error("[SERVER_START_ERROR]", {
-      message: error.message,
-    });
+/**
+ * Handle unhandled promise rejections
+ */
+process.on(
+  "unhandledRejection",
+
+  (reason) => {
+
+    logger.error(
+      "Unhandled Promise Rejection",
+
+      {
+        reason:
+          reason?.message ||
+          reason,
+      }
+    );
+  }
+);
+
+/**
+ * Handle uncaught exceptions
+ */
+process.on(
+  "uncaughtException",
+
+  (error) => {
+
+    logger.error(
+      "Uncaught Exception",
+
+      {
+        message:
+          error.message,
+
+        stack:
+          error.stack,
+      }
+    );
 
     process.exit(1);
   }
-};
+);
 
 /**
- * Bootstrap backend server
+ * Shutdown signals
+ */
+process.on(
+  "SIGINT",
+
+  () =>
+    gracefulShutdown(
+      "SIGINT"
+    )
+);
+
+process.on(
+  "SIGTERM",
+
+  () =>
+    gracefulShutdown(
+      "SIGTERM"
+    )
+);
+
+/**
+ * Start server
  */
 startServer();
