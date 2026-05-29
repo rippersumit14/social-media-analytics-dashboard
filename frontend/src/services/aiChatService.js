@@ -55,8 +55,18 @@ const normalizeAIResponse = (
 
 /**
  * -------------------------------------------------------
- * Create multipart payload safely.
+ * Build multipart payload safely.
  * -------------------------------------------------------
+ *
+ * IMPORTANT:
+ * Backend expects:
+ * images
+ *
+ * Browser automatically sets:
+ * multipart boundaries.
+ *
+ * NEVER manually set:
+ * Content-Type multipart/form-data
  */
 const buildChatFormData = ({
   message,
@@ -66,13 +76,16 @@ const buildChatFormData = ({
   const formData =
     new FormData();
 
+  /**
+   * User prompt.
+   */
   formData.append(
     "message",
     message || ""
   );
 
   /**
-   * Existing session support.
+   * Existing session.
    */
   if (sessionId) {
     formData.append(
@@ -83,6 +96,9 @@ const buildChatFormData = ({
 
   /**
    * Multiple image uploads.
+   *
+   * Backend expects:
+   * images
    */
   images.forEach((image) => {
     if (image?.file) {
@@ -157,7 +173,7 @@ export const getChatSessions =
 
 /**
  * -------------------------------------------------------
- * Get one session messages.
+ * Get session messages.
  * -------------------------------------------------------
  */
 export const getSessionMessages =
@@ -186,8 +202,12 @@ export const getSessionMessages =
 
 /**
  * -------------------------------------------------------
- * Rename session.
+ * Rename chat session.
  * -------------------------------------------------------
+ *
+ * NOTE:
+ * Backend route may temporarily
+ * not exist during stabilization.
  */
 export const renameChatSession =
   async ({
@@ -219,8 +239,12 @@ export const renameChatSession =
 
 /**
  * -------------------------------------------------------
- * Delete session.
+ * Delete chat session.
  * -------------------------------------------------------
+ *
+ * NOTE:
+ * Backend route may temporarily
+ * not exist during stabilization.
  */
 export const deleteChatSession =
   async ({
@@ -265,6 +289,9 @@ export const sendAIMessage =
       );
     }
 
+    /**
+     * Build upload payload.
+     */
     const formData =
       buildChatFormData({
         message,
@@ -272,17 +299,19 @@ export const sendAIMessage =
         sessionId,
       });
 
+    /**
+     * IMPORTANT:
+     * Do NOT manually set
+     * multipart/form-data headers.
+     *
+     * Browser handles boundaries.
+     */
     const response =
       await api.post(
         `/ai/chat/${socialAccountId}`,
         formData,
         {
           signal,
-
-          headers: {
-            "Content-Type":
-              "multipart/form-data",
-          },
         }
       );
 
@@ -293,17 +322,18 @@ export const sendAIMessage =
 
 /**
  * -------------------------------------------------------
- * Production-grade SSE streaming lifecycle.
+ * Production-grade SSE streaming.
  * -------------------------------------------------------
  *
  * Handles:
- * - token streaming
- * - chunk parsing
- * - abort lifecycle
+ * - live token streaming
+ * - chunk accumulation
  * - malformed chunks
- * - session creation
- * - auth validation
- * - backend disconnects
+ * - disconnect recovery
+ * - abort lifecycle
+ * - stream completion
+ * - upload coexistence
+ * - retry-safe parsing
  */
 export const streamAIMessage =
   async ({
@@ -325,7 +355,7 @@ export const streamAIMessage =
     }
 
     /**
-     * Auth validation.
+     * Validate auth token.
      */
     const token =
       localStorage.getItem(
@@ -339,7 +369,7 @@ export const streamAIMessage =
     }
 
     /**
-     * Build multipart request.
+     * Build multipart payload.
      */
     const formData =
       buildChatFormData({
@@ -349,7 +379,7 @@ export const streamAIMessage =
       });
 
     /**
-     * Start stream.
+     * Start SSE request.
      */
     const response =
       await fetch(
@@ -365,6 +395,11 @@ export const streamAIMessage =
               `Bearer ${token}`,
           },
 
+          /**
+           * IMPORTANT:
+           * Browser automatically handles
+           * multipart boundaries.
+           */
           body: formData,
 
           signal,
@@ -395,7 +430,7 @@ export const streamAIMessage =
     }
 
     /**
-     * Stream validation.
+     * Validate SSE body.
      */
     if (!response.body) {
       throw new Error(
@@ -417,7 +452,7 @@ export const streamAIMessage =
     try {
       while (true) {
         /**
-         * Abort protection.
+         * Abort lifecycle.
          */
         if (
           signal?.aborted
@@ -435,7 +470,7 @@ export const streamAIMessage =
           await reader.read();
 
         /**
-         * Stream completed.
+         * Stream finished.
          */
         if (done) {
           break;
@@ -452,7 +487,7 @@ export const streamAIMessage =
         );
 
         /**
-         * Split SSE events.
+         * Split SSE events safely.
          */
         const events =
           buffer.split(
@@ -472,6 +507,9 @@ export const streamAIMessage =
           const trimmedEvent =
             event.trim();
 
+          /**
+           * Ignore invalid SSE chunks.
+           */
           if (
             !trimmedEvent.startsWith(
               "data:"
@@ -490,17 +528,23 @@ export const streamAIMessage =
                 ""
               );
 
+            /**
+             * Ignore empty chunks.
+             */
             if (!rawJson) {
               continue;
             }
 
+            /**
+             * Parse SSE payload.
+             */
             const payload =
               JSON.parse(
                 rawJson
               );
 
             /**
-             * Event routing.
+             * Event lifecycle.
              */
             switch (
               payload.type
@@ -512,12 +556,26 @@ export const streamAIMessage =
                 break;
 
               case "token":
+                /**
+                 * IMPORTANT:
+                 * Tokens should ONLY
+                 * update frontend UI state.
+                 *
+                 * Do NOT persist
+                 * partial tokens.
+                 */
                 onToken?.(
                   payload
                 );
                 break;
 
               case "done":
+                /**
+                 * IMPORTANT:
+                 * ONLY final completed
+                 * response should become
+                 * persisted assistant message.
+                 */
                 onDone?.(
                   payload
                 );

@@ -18,9 +18,10 @@ import {
  * - keyboard shortcuts
  * - drag/drop uploads
  * - voice lifecycle
- * - streaming cancel lifecycle
- * - upload orchestration
+ * - streaming cancellation
+ * - upload-safe sending
  * - duplicate send prevention
+ * - retry-safe interactions
  */
 const ChatInput = ({
   /**
@@ -90,7 +91,7 @@ const ChatInput = ({
 
   /**
    * -------------------------------------------------------
-   * Prevent rapid duplicate sends.
+   * Duplicate-send protection.
    * -------------------------------------------------------
    */
   const sendLockRef =
@@ -135,7 +136,7 @@ const ChatInput = ({
 
   /**
    * -------------------------------------------------------
-   * Release send lock.
+   * Release send lock safely.
    * -------------------------------------------------------
    */
   useEffect(() => {
@@ -147,7 +148,7 @@ const ChatInput = ({
 
   /**
    * -------------------------------------------------------
-   * Stable textarea autosizing.
+   * Stable autosize lifecycle.
    * -------------------------------------------------------
    */
   useEffect(() => {
@@ -191,6 +192,10 @@ const ChatInput = ({
    * -------------------------------------------------------
    * Stable send lifecycle.
    * -------------------------------------------------------
+   *
+   * IMPORTANT:
+   * Prevent rapid Enter spam
+   * during streaming.
    */
   const handleSend =
     useCallback(() => {
@@ -202,7 +207,7 @@ const ChatInput = ({
       }
 
       /**
-       * Prevent rapid Enter spam.
+       * Prevent duplicate sends.
        */
       sendLockRef.current =
         true;
@@ -240,6 +245,18 @@ const ChatInput = ({
   const handleKeyDown =
     useCallback(
       (event) => {
+        /**
+         * Ignore composition events.
+         *
+         * Prevent IME issues.
+         */
+        if (
+          event.nativeEvent
+            ?.isComposing
+        ) {
+          return;
+        }
+
         if (
           event.key ===
             "Enter" &&
@@ -339,6 +356,9 @@ const ChatInput = ({
           return;
         }
 
+        /**
+         * Normalize upload event.
+         */
         onImageChange?.({
           target: {
             files,
@@ -373,8 +393,7 @@ const ChatInput = ({
       {/* ------------------------------------------------ */}
       {isUsageLimitReached && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Daily AI usage limit
-          reached.
+          Daily AI usage limit reached.
         </div>
       )}
 
@@ -410,7 +429,9 @@ const ChatInput = ({
             className="max-h-[240px] min-h-[60px] w-full resize-none overflow-y-auto rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition-colors focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
           />
 
+          {/* ------------------------------------------------ */}
           {/* Drag State */}
+          {/* ------------------------------------------------ */}
           {isDragging && (
             <div className="mt-2 rounded-xl border border-dashed border-blue-400 bg-blue-50 px-4 py-3 text-center text-sm text-blue-600">
               Drop images here
@@ -438,7 +459,9 @@ const ChatInput = ({
             className="hidden"
           />
 
+          {/* ------------------------------------------------ */}
           {/* Upload */}
+          {/* ------------------------------------------------ */}
           <button
             data-testid="upload-button"
             type="button"
@@ -454,7 +477,9 @@ const ChatInput = ({
             Images
           </button>
 
+          {/* ------------------------------------------------ */}
           {/* Voice */}
+          {/* ------------------------------------------------ */}
           <button
             data-testid="voice-button"
             type="button"
@@ -476,7 +501,9 @@ const ChatInput = ({
               : "Voice"}
           </button>
 
+          {/* ------------------------------------------------ */}
           {/* Stop Streaming */}
+          {/* ------------------------------------------------ */}
           {chatLoading ? (
             <button
               data-testid="stop-stream-button"
@@ -515,8 +542,7 @@ const ChatInput = ({
       <div className="mt-4 flex flex-col gap-2 text-xs text-gray-500 md:flex-row md:items-center md:justify-between">
         <p>
           Press Enter to send.
-          Shift + Enter for
-          newline.
+          Shift + Enter for newline.
         </p>
 
         {chatLoading && (
@@ -524,8 +550,7 @@ const ChatInput = ({
             aria-live="polite"
             className="text-blue-600"
           >
-            AI is generating a
-            response...
+            AI is generating a response...
           </p>
         )}
 

@@ -5,7 +5,9 @@ import {
 } from "react";
 
 /**
+ * -------------------------------------------------------
  * Format file size safely.
+ * -------------------------------------------------------
  */
 const formatFileSize = (
   bytes = 0
@@ -30,7 +32,9 @@ const formatFileSize = (
 };
 
 /**
+ * -------------------------------------------------------
  * Upload lifecycle badge.
+ * -------------------------------------------------------
  */
 const UploadStatusBadge =
   memo(({ status }) => {
@@ -91,13 +95,16 @@ UploadStatusBadge.displayName =
   "UploadStatusBadge";
 
 /**
+ * -------------------------------------------------------
  * Stable upload preview card.
+ * -------------------------------------------------------
  *
  * Handles:
- * - image preview
- * - upload lifecycle visualization
- * - OCR-ready states
- * - remove lifecycle
+ * - OCR previews
+ * - multimodal uploads
+ * - upload lifecycle rendering
+ * - upload processing states
+ * - retry-safe rendering
  */
 const UploadPreviewCard =
   memo(
@@ -109,20 +116,38 @@ const UploadPreviewCard =
       onRemoveImage,
     }) => {
       /**
+       * Prevent malformed rendering.
+       */
+      if (
+        !image ||
+        typeof image !==
+          "object"
+      ) {
+        return null;
+      }
+
+      /**
        * Stable remove lifecycle.
        */
       const handleRemove =
         useCallback(() => {
+          if (
+            disabled
+          ) {
+            return;
+          }
+
           onRemoveImage?.(
             image.id
           );
         }, [
+          disabled,
           image.id,
           onRemoveImage,
         ]);
 
       /**
-       * Upload processing state.
+       * Stable upload state.
        */
       const isProcessing =
         image.status ===
@@ -130,40 +155,60 @@ const UploadPreviewCard =
         image.status ===
           "processing";
 
+      /**
+       * Safe preview.
+       */
+      const previewUrl =
+        image.preview ||
+        image.imageUrl ||
+        "";
+
       return (
         <div
           data-testid="upload-preview-card"
           className="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-200"
         >
-          {/* Image Preview */}
+          {/* ------------------------------------------------ */}
+          {/* Preview */}
+          {/* ------------------------------------------------ */}
           <div className="relative h-36 overflow-hidden bg-gray-100">
-            <img
-              src={
-                image.preview
-              }
-              alt="Upload preview"
-              loading="lazy"
-              className={`h-full w-full object-cover transition duration-300 ${
-                isProcessing
-                  ? "scale-[1.02] opacity-80"
-                  : "group-hover:scale-[1.02]"
-              }`}
+            {previewUrl ? (
+              <img
+                src={
+                  previewUrl
+                }
+                alt="Upload preview"
+                loading="lazy"
+                className={`h-full w-full object-cover transition duration-300 ${
+                  isProcessing
+                    ? "scale-[1.02] opacity-80"
+                    : "group-hover:scale-[1.02]"
+                }`}
 
-              /**
-               * Prevent broken preview layouts.
-               */
-              onError={(
-                event
-              ) => {
-                event.target.style.display =
-                  "none";
-              }}
-            />
+                /**
+                 * Prevent broken preview layouts.
+                 */
+                onError={(
+                  event
+                ) => {
+                  event.target.style.display =
+                    "none";
+                }}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center text-xs text-gray-400">
+                Preview unavailable
+              </div>
+            )}
 
+            {/* ------------------------------------------------ */}
             {/* Hover Overlay */}
+            {/* ------------------------------------------------ */}
             <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/10" />
 
+            {/* ------------------------------------------------ */}
             {/* Processing Overlay */}
+            {/* ------------------------------------------------ */}
             {isProcessing && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/30 backdrop-blur-[1px]">
                 <div className="rounded-xl bg-white/90 px-3 py-2 text-xs font-medium text-gray-700 shadow-sm">
@@ -177,7 +222,9 @@ const UploadPreviewCard =
               </div>
             )}
 
+            {/* ------------------------------------------------ */}
             {/* Remove Button */}
+            {/* ------------------------------------------------ */}
             <button
               data-testid="remove-upload-button"
               type="button"
@@ -194,14 +241,15 @@ const UploadPreviewCard =
             </button>
           </div>
 
-          {/* File Metadata */}
+          {/* ------------------------------------------------ */}
+          {/* Metadata */}
+          {/* ------------------------------------------------ */}
           <div className="space-y-2 border-t border-gray-100 p-3">
             {/* Filename */}
             <p className="truncate text-xs font-medium text-gray-700">
-              {
-                image.file
-                  ?.name
-              }
+              {image.file
+                ?.name ||
+                "Uploaded image"}
             </p>
 
             {/* Footer */}
@@ -210,11 +258,11 @@ const UploadPreviewCard =
               <p className="text-[11px] text-gray-400">
                 {formatFileSize(
                   image.file
-                    ?.size
+                    ?.size || 0
                 )}
               </p>
 
-              {/* Upload Status */}
+              {/* Status */}
               <UploadStatusBadge
                 status={
                   image.status
@@ -231,14 +279,17 @@ UploadPreviewCard.displayName =
   "UploadPreviewCard";
 
 /**
+ * -------------------------------------------------------
  * Production-grade upload preview grid.
+ * -------------------------------------------------------
  *
  * Handles:
- * - upload visualization
- * - OCR-ready lifecycle UI
- * - responsive preview rendering
- * - remove lifecycle
- * - upload processing states
+ * - OCR upload visualization
+ * - upload lifecycle rendering
+ * - multimodal upload previews
+ * - upload synchronization
+ * - retry-safe rendering
+ * - processing-state rendering
  */
 const UploadPreviewGrid = ({
   selectedImages = [],
@@ -250,20 +301,43 @@ const UploadPreviewGrid = ({
   disabled = false,
 }) => {
   /**
+   * -------------------------------------------------------
    * Hide empty state.
+   * -------------------------------------------------------
    */
   if (
-    !selectedImages.length
+    !Array.isArray(
+      selectedImages
+    ) ||
+    selectedImages.length ===
+      0
   ) {
     return null;
   }
 
   /**
+   * -------------------------------------------------------
+   * Stable image list.
+   * -------------------------------------------------------
+   */
+  const validImages =
+    useMemo(() => {
+      return selectedImages.filter(
+        (image) =>
+          image &&
+          typeof image ===
+            "object"
+      );
+    }, [selectedImages]);
+
+  /**
+   * -------------------------------------------------------
    * Upload telemetry.
+   * -------------------------------------------------------
    */
   const totalSize =
     useMemo(() => {
-      return selectedImages.reduce(
+      return validImages.reduce(
         (
           total,
           image
@@ -273,28 +347,54 @@ const UploadPreviewGrid = ({
             ?.size || 0),
         0
       );
-    }, [selectedImages]);
+    }, [validImages]);
 
   /**
-   * Active processing detection.
+   * -------------------------------------------------------
+   * Processing detection.
+   * -------------------------------------------------------
    */
   const processingCount =
     useMemo(() => {
-      return selectedImages.filter(
+      return validImages.filter(
         (image) =>
           image.status ===
             "uploading" ||
           image.status ===
             "processing"
       ).length;
-    }, [selectedImages]);
+    }, [validImages]);
+
+  /**
+   * -------------------------------------------------------
+   * Stable clear lifecycle.
+   * -------------------------------------------------------
+   */
+  const handleClearAll =
+    useCallback(() => {
+      if (
+        disabled ||
+        processingCount >
+          0
+      ) {
+        return;
+      }
+
+      onClearImages?.();
+    }, [
+      disabled,
+      processingCount,
+      onClearImages,
+    ]);
 
   return (
     <div
       data-testid="upload-preview-grid"
       className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4"
     >
+      {/* ------------------------------------------------ */}
       {/* Header */}
+      {/* ------------------------------------------------ */}
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-gray-800">
@@ -304,10 +404,10 @@ const UploadPreviewGrid = ({
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
             <span>
               {
-                selectedImages.length
+                validImages.length
               }{" "}
               image
-              {selectedImages.length >
+              {validImages.length >
               1
                 ? "s"
                 : ""}
@@ -341,12 +441,14 @@ const UploadPreviewGrid = ({
           </div>
         </div>
 
+        {/* ------------------------------------------------ */}
         {/* Clear All */}
+        {/* ------------------------------------------------ */}
         <button
           data-testid="clear-all-uploads-button"
           type="button"
           onClick={
-            onClearImages
+            handleClearAll
           }
           disabled={
             disabled ||
@@ -359,12 +461,17 @@ const UploadPreviewGrid = ({
         </button>
       </div>
 
+      {/* ------------------------------------------------ */}
       {/* Upload Grid */}
+      {/* ------------------------------------------------ */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-        {selectedImages.map(
+        {validImages.map(
           (image) => (
             <UploadPreviewCard
-              key={image.id}
+              key={
+                image.id ||
+                image.preview
+              }
               image={image}
               disabled={
                 disabled
@@ -380,9 +487,6 @@ const UploadPreviewGrid = ({
   );
 };
 
-/**
- * Prevent unnecessary rerenders.
- */
 export default memo(
   UploadPreviewGrid
 );

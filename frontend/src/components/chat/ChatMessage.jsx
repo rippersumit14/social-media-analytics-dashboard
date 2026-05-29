@@ -5,7 +5,7 @@ import {
 
 /**
  * -------------------------------------------------------
- * Streaming typing cursor.
+ * Streaming cursor renderer.
  * -------------------------------------------------------
  */
 const StreamingCursor =
@@ -51,6 +51,12 @@ LoadingIndicator.displayName =
  * -------------------------------------------------------
  * Stable multiline renderer.
  * -------------------------------------------------------
+ *
+ * Handles:
+ * - streamed responses
+ * - large responses
+ * - multiline rendering
+ * - progressive token rendering
  */
 const MessageContent = memo(
   ({
@@ -64,13 +70,13 @@ const MessageContent = memo(
     }
 
     /**
-     * Prevent rendering crashes.
+     * Prevent malformed rendering.
      */
     const safeContent =
       String(content);
 
     /**
-     * Prevent huge render explosions.
+     * Prevent huge rendering explosions.
      */
     const lines =
       safeContent
@@ -118,8 +124,14 @@ MessageContent.displayName =
 
 /**
  * -------------------------------------------------------
- * Stable message images renderer.
+ * Stable image renderer.
  * -------------------------------------------------------
+ *
+ * Handles:
+ * - OCR uploads
+ * - multimodal previews
+ * - backend image URLs
+ * - upload previews
  */
 const MessageImages = memo(
   ({
@@ -136,9 +148,25 @@ const MessageImages = memo(
       return null;
     }
 
+    /**
+     * Filter invalid images safely.
+     */
+    const validImages =
+      images.filter(
+        (image) =>
+          image?.imageUrl
+      );
+
+    if (
+      validImages.length ===
+      0
+    ) {
+      return null;
+    }
+
     return (
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3">
-        {images.map(
+        {validImages.map(
           (
             image,
             index
@@ -153,7 +181,7 @@ const MessageImages = memo(
                 }
                 alt={`upload-${index}`}
                 loading="lazy"
-                className="max-h-72 w-full object-cover"
+                className="max-h-72 w-full object-cover transition duration-200 hover:scale-[1.01]"
 
                 /**
                  * Prevent broken image layouts.
@@ -212,19 +240,20 @@ const formatTimestamp = (
  * Handles:
  * - user messages
  * - assistant messages
- * - streaming lifecycle
- * - image rendering
+ * - SSE streaming
+ * - OCR image rendering
+ * - multimodal rendering
+ * - metadata rendering
  * - loading states
  * - error states
- * - metadata rendering
- * - large content rendering
+ * - large responses
  */
 const ChatMessage = ({
   message,
 }) => {
   /**
    * -------------------------------------------------------
-   * Safety guard.
+   * Prevent malformed rendering.
    * -------------------------------------------------------
    */
   if (
@@ -268,7 +297,7 @@ const ChatMessage = ({
 
   /**
    * -------------------------------------------------------
-   * Stable images lifecycle.
+   * Safe images lifecycle.
    * -------------------------------------------------------
    */
   const images =
@@ -280,7 +309,7 @@ const ChatMessage = ({
 
   /**
    * -------------------------------------------------------
-   * Safe metadata.
+   * Safe content lifecycle.
    * -------------------------------------------------------
    */
   const safeContent =
@@ -291,7 +320,7 @@ const ChatMessage = ({
 
   /**
    * -------------------------------------------------------
-   * Bubble styles.
+   * Stable bubble styles.
    * -------------------------------------------------------
    */
   const bubbleStyles =
@@ -312,7 +341,7 @@ const ChatMessage = ({
 
   /**
    * -------------------------------------------------------
-   * Metadata visibility.
+   * Metadata lifecycle.
    * -------------------------------------------------------
    */
   const showMetadata =
@@ -369,9 +398,11 @@ const ChatMessage = ({
         {/* Bubble */}
         {/* ------------------------------------------------ */}
         <div
-          className={`rounded-2xl px-4 py-3 shadow-sm transition-colors duration-200 ${bubbleStyles}`}
+          className={`rounded-2xl px-4 py-3 shadow-sm transition-all duration-200 ${bubbleStyles}`}
         >
+          {/* ------------------------------------------------ */}
           {/* Images */}
+          {/* ------------------------------------------------ */}
           <MessageImages
             images={images}
             messageId={
@@ -380,12 +411,16 @@ const ChatMessage = ({
             }
           />
 
+          {/* ------------------------------------------------ */}
           {/* Loading */}
+          {/* ------------------------------------------------ */}
           {isLoading ? (
             <LoadingIndicator />
           ) : (
             <>
+              {/* ------------------------------------------------ */}
               {/* Content */}
+              {/* ------------------------------------------------ */}
               <MessageContent
                 content={
                   safeContent
@@ -395,7 +430,9 @@ const ChatMessage = ({
                 }
               />
 
+              {/* ------------------------------------------------ */}
               {/* Metadata */}
+              {/* ------------------------------------------------ */}
               {showMetadata && (
                 <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2 text-[11px] text-gray-400">
                   {message.model && (

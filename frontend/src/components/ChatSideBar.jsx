@@ -34,7 +34,7 @@ const formatSessionTime = (
 
 /**
  * -------------------------------------------------------
- * Stable session card renderer.
+ * Stable session renderer.
  * -------------------------------------------------------
  */
 const SessionCard = memo(
@@ -71,14 +71,23 @@ const SessionCard = memo(
 
     /**
      * -------------------------------------------------------
+     * Prevent invalid rendering.
+     * -------------------------------------------------------
+     */
+    if (!sessionId) {
+      return null;
+    }
+
+    /**
+     * -------------------------------------------------------
      * Session selection lifecycle.
      * -------------------------------------------------------
      */
     const handleSelect =
       useCallback(() => {
         if (
-          !sessionId ||
-          disabled
+          disabled ||
+          isEditing
         ) {
           return;
         }
@@ -87,8 +96,9 @@ const SessionCard = memo(
           sessionId
         );
       }, [
-        sessionId,
         disabled,
+        isEditing,
+        sessionId,
         onSelect,
       ]);
 
@@ -104,11 +114,18 @@ const SessionCard = memo(
         ) => {
           event.stopPropagation();
 
+          if (
+            disabled
+          ) {
+            return;
+          }
+
           onStartEdit?.(
             session
           );
         },
         [
+          disabled,
           session,
           onStartEdit,
         ]
@@ -127,7 +144,7 @@ const SessionCard = memo(
           event.stopPropagation();
 
           if (
-            !sessionId
+            disabled
           ) {
             return;
           }
@@ -148,6 +165,7 @@ const SessionCard = memo(
           );
         },
         [
+          disabled,
           sessionId,
           onDelete,
         ]
@@ -212,7 +230,7 @@ const SessionCard = memo(
               event.stopPropagation()
             }
             autoFocus
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-blue-500"
 
             onBlur={
               handleSubmit
@@ -266,7 +284,7 @@ const SessionCard = memo(
             </p>
 
             {/* ------------------------------------------------ */}
-            {/* Metadata */}
+            {/* Footer */}
             {/* ------------------------------------------------ */}
             <div className="mt-3 flex items-center justify-between">
               <span className="text-[11px] text-gray-400">
@@ -276,14 +294,19 @@ const SessionCard = memo(
                 messages
               </span>
 
+              {/* ------------------------------------------------ */}
               {/* Actions */}
+              {/* ------------------------------------------------ */}
               <div className="flex items-center gap-3 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
                 <button
                   type="button"
                   onClick={
                     handleRenameClick
                   }
-                  className="text-[11px] text-gray-600 transition hover:text-blue-600"
+                  disabled={
+                    disabled
+                  }
+                  className="text-[11px] text-gray-600 transition hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Rename
                 </button>
@@ -293,7 +316,10 @@ const SessionCard = memo(
                   onClick={
                     handleDeleteClick
                   }
-                  className="text-[11px] text-red-500 transition hover:text-red-600"
+                  disabled={
+                    disabled
+                  }
+                  className="text-[11px] text-red-500 transition hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Delete
                 </button>
@@ -316,10 +342,12 @@ SessionCard.displayName =
  *
  * Handles:
  * - session rendering
- * - active session synchronization
- * - rename/delete lifecycle
- * - session switching
- * - loading states
+ * - session synchronization
+ * - optimistic CRUD UI
+ * - rename lifecycle
+ * - delete lifecycle
+ * - loading-safe interactions
+ * - backend-driven rendering
  */
 const ChatSidebar = ({
   sessions = [],
@@ -367,6 +395,26 @@ const ChatSidebar = ({
       isLoading,
       sessions.length,
     ]);
+
+  /**
+   * -------------------------------------------------------
+   * Stable sorted sessions.
+   * -------------------------------------------------------
+   */
+  const sortedSessions =
+    useMemo(() => {
+      return [
+        ...sessions,
+      ].sort(
+        (a, b) =>
+          new Date(
+            b.updatedAt
+          ) -
+          new Date(
+            a.updatedAt
+          )
+      );
+    }, [sessions]);
 
   /**
    * -------------------------------------------------------
@@ -418,16 +466,23 @@ const ChatSidebar = ({
       async (
         sessionId
       ) => {
-        const cleanTitle = 
+        const cleanTitle =
           editTitle.trim();
 
-        if(!sessionId){
+        if (
+          !sessionId
+        ) {
           return;
         }
 
-        //Prevent empty titles 
-        if(!cleanTitle){
+        /**
+         * Prevent empty titles.
+         */
+        if (
+          !cleanTitle
+        ) {
           handleCancelEdit();
+
           return;
         }
 
@@ -507,7 +562,7 @@ const ChatSidebar = ({
 
         {/* Sessions */}
         {!isLoading &&
-          sessions.map(
+          sortedSessions.map(
             (
               session
             ) => (

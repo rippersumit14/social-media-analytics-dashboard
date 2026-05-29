@@ -13,12 +13,13 @@ import ChatMessage from "./ChatMessage.jsx";
  * -------------------------------------------------------
  *
  * Handles:
- * - SSE streaming rendering
- * - stable auto-scroll
+ * - SSE token rendering
+ * - stream-safe auto-scroll
  * - near-bottom protection
  * - rendering optimization
  * - large history stabilization
- * - stream synchronization
+ * - stale render prevention
+ * - retry-safe streaming UX
  */
 const ChatMessages = ({
   messages = [],
@@ -106,14 +107,14 @@ const ChatMessages = ({
 
   /**
    * -------------------------------------------------------
-   * Streaming detection.
+   * Active streaming detection.
    * -------------------------------------------------------
    */
   const isStreaming =
     useMemo(() => {
       return messages.some(
         (message) =>
-          message.isStreaming
+          message?.isStreaming
       );
     }, [messages]);
 
@@ -121,23 +122,62 @@ const ChatMessages = ({
    * -------------------------------------------------------
    * Stable rendered messages.
    * -------------------------------------------------------
+   *
+   * IMPORTANT:
+   * Prevent malformed/stale
+   * message rendering.
    */
   const renderedMessages =
     useMemo(() => {
+      const seenIds =
+        new Set();
+
       return messages.filter(
         (message) => {
-          return (
-            message &&
-            typeof message ===
+          /**
+           * Ignore malformed entries.
+           */
+          if (
+            !message ||
+            typeof message !==
               "object"
-          );
+          ) {
+            return false;
+          }
+
+          /**
+           * Stable message ID.
+           */
+          const messageId =
+            message._id ||
+            message.id;
+
+          /**
+           * Prevent duplicate render.
+           */
+          if (
+            messageId &&
+            seenIds.has(
+              messageId
+            )
+          ) {
+            return false;
+          }
+
+          if (messageId) {
+            seenIds.add(
+              messageId
+            );
+          }
+
+          return true;
         }
       );
     }, [messages]);
 
   /**
    * -------------------------------------------------------
-   * Auto-scroll lifecycle.
+   * Stream-safe auto-scroll lifecycle.
    * -------------------------------------------------------
    */
   useEffect(() => {
@@ -150,12 +190,15 @@ const ChatMessages = ({
 
     /**
      * Detect near-bottom safely.
+     *
+     * Prevent aggressive scrolling
+     * when reading older messages.
      */
     const isNearBottom =
       container.scrollHeight -
         container.scrollTop -
         container.clientHeight <
-      160;
+      180;
 
     /**
      * Detect new message append.
@@ -240,6 +283,11 @@ const ChatMessages = ({
           </div>
         </div>
       ) : (
+        /**
+         * ---------------------------------------------------
+         * Stable message rendering.
+         * ---------------------------------------------------
+         */
         <div className="space-y-5">
           {renderedMessages.map(
             (
@@ -259,7 +307,9 @@ const ChatMessages = ({
             )
           )}
 
+          {/* ------------------------------------------------ */}
           {/* Scroll Anchor */}
+          {/* ------------------------------------------------ */}
           <div
             ref={
               messagesEndRef

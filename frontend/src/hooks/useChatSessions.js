@@ -1,20 +1,21 @@
 import {
   useCallback,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import {
+  deleteChatSession,
   getChatSessions,
   getSessionMessages,
   renameChatSession,
-  deleteChatSession,
 } from "../services/aiChatService.js";
 
 /**
- * ---------------------------------------------------
+ * -------------------------------------------------------
  * Normalize session safely.
- * ---------------------------------------------------
+ * -------------------------------------------------------
  */
 const normalizeSession = (
   session = {}
@@ -40,15 +41,16 @@ const normalizeSession = (
       "",
 
     messageCount:
-      session.messageCount ||
-      0,
+      Number(
+        session.messageCount
+      ) || 0,
   };
 };
 
 /**
- * ---------------------------------------------------
- * Normalize chat message safely.
- * ---------------------------------------------------
+ * -------------------------------------------------------
+ * Normalize message safely.
+ * -------------------------------------------------------
  */
 const normalizeMessage = (
   message = {}
@@ -67,33 +69,47 @@ const normalizeMessage = (
       "",
 
     images:
-      message.images ||
-      [],
+      Array.isArray(
+        message.images
+      )
+        ? message.images
+        : [],
 
     createdAt:
       message.createdAt ||
       new Date().toISOString(),
 
     isStreaming:
-      message.isStreaming ||
-      false,
+      Boolean(
+        message.isStreaming
+      ),
 
     isError:
-      message.isError ||
-      false,
+      Boolean(
+        message.isError
+      ),
   };
 };
 
 /**
- * ---------------------------------------------------
- * Production-grade session hook.
- * ---------------------------------------------------
+ * -------------------------------------------------------
+ * Production-grade chat sessions hook.
+ * -------------------------------------------------------
+ *
+ * Handles:
+ * - session loading
+ * - sidebar synchronization
+ * - active session lifecycle
+ * - optimistic CRUD
+ * - backend alignment
+ * - stale request protection
+ * - retry-safe synchronization
  */
 const useChatSessions = () => {
   /**
-   * ---------------------------------------------------
-   * State
-   * ---------------------------------------------------
+   * -------------------------------------------------------
+   * Core state.
+   * -------------------------------------------------------
    */
   const [sessions, setSessions] =
     useState([]);
@@ -109,18 +125,33 @@ const useChatSessions = () => {
   const [sessionTitle, setSessionTitle] =
     useState("");
 
+  /**
+   * -------------------------------------------------------
+   * UI lifecycle.
+   * -------------------------------------------------------
+   */
   const [
     sessionsLoading,
     setSessionsLoading,
   ] = useState(false);
 
-  const [sessionError, setSessionError] =
-    useState("");
+  const [
+    sessionError,
+    setSessionError,
+  ] = useState("");
 
   /**
-   * ---------------------------------------------------
+   * -------------------------------------------------------
+   * Prevent stale requests.
+   * -------------------------------------------------------
+   */
+  const latestLoadRef =
+    useRef(null);
+
+  /**
+   * -------------------------------------------------------
    * Active session object.
-   * ---------------------------------------------------
+   * -------------------------------------------------------
    */
   const activeSession =
     useMemo(() => {
@@ -135,9 +166,9 @@ const useChatSessions = () => {
     ]);
 
   /**
-   * ---------------------------------------------------
-   * Load all sessions.
-   * ---------------------------------------------------
+   * -------------------------------------------------------
+   * Load all sessions safely.
+   * -------------------------------------------------------
    */
   const loadSessions =
     useCallback(
@@ -147,8 +178,14 @@ const useChatSessions = () => {
         if (
           !socialAccountId
         ) {
-          return;
+          return [];
         }
+
+        const requestId =
+          crypto.randomUUID();
+
+        latestLoadRef.current =
+          requestId;
 
         try {
           setSessionsLoading(
@@ -164,50 +201,69 @@ const useChatSessions = () => {
               }
             );
 
+          /**
+           * Ignore stale responses.
+           */
+          if (
+            latestLoadRef.current !==
+            requestId
+          ) {
+            return [];
+          }
+
           const normalizedSessions =
             (
               response.sessions ||
               []
-            ).map(
-              normalizeSession
-            );
-
-          /**
-           * Sort latest updated first.
-           */
-          normalizedSessions.sort(
-            (a, b) =>
-              new Date(
-                b.updatedAt
-              ) -
-              new Date(
-                a.updatedAt
+            )
+              .map(
+                normalizeSession
               )
-          );
+              .sort(
+                (a, b) =>
+                  new Date(
+                    b.updatedAt
+                  ) -
+                  new Date(
+                    a.updatedAt
+                  )
+              );
 
           setSessions(
             normalizedSessions
           );
 
           /**
-           * Auto-select latest session.
+           * Recover active session safely.
            */
           if (
-            normalizedSessions.length >
-              0 &&
-            !activeSessionId
+            activeSessionId
           ) {
-            const latestSession =
-              normalizedSessions[0];
+            const stillExists =
+              normalizedSessions.some(
+                (
+                  session
+                ) =>
+                  session._id ===
+                  activeSessionId
+              );
 
-            setActiveSessionId(
-              latestSession._id
-            );
+            if (
+              !stillExists
+            ) {
+              setActiveSessionId(
+                null
+              );
 
-            setSessionTitle(
-              latestSession.title
-            );
+              setSessionTitle(
+                ""
+              );
+
+              setMessages([]);
+            }
           }
+
+          return normalizedSessions;
         } catch (error) {
           console.error(
             "[LOAD SESSIONS ERROR]",
@@ -218,19 +274,29 @@ const useChatSessions = () => {
             error.message ||
               "Failed to load sessions."
           );
+
+          return [];
         } finally {
-          setSessionsLoading(
-            false
-          );
+          /**
+           * Prevent stale cleanup.
+           */
+          if (
+            latestLoadRef.current ===
+            requestId
+          ) {
+            setSessionsLoading(
+              false
+            );
+          }
         }
       },
       [activeSessionId]
     );
 
   /**
-   * ---------------------------------------------------
-   * Load one session messages.
-   * ---------------------------------------------------
+   * -------------------------------------------------------
+   * Select session safely.
+   * -------------------------------------------------------
    */
   const selectSession =
     useCallback(
@@ -272,7 +338,7 @@ const useChatSessions = () => {
           );
 
           /**
-           * Sync title.
+           * Synchronize title.
            */
           const matchedSession =
             sessions.find(
@@ -295,7 +361,7 @@ const useChatSessions = () => {
 
           setSessionError(
             error.message ||
-              "Failed to load session."
+              "Failed to load chat."
           );
         } finally {
           setSessionsLoading(
@@ -307,9 +373,9 @@ const useChatSessions = () => {
     );
 
   /**
-   * ---------------------------------------------------
-   * Rename session.
-   * ---------------------------------------------------
+   * -------------------------------------------------------
+   * Rename session safely.
+   * -------------------------------------------------------
    */
   const handleRenameSession =
     useCallback(
@@ -324,11 +390,51 @@ const useChatSessions = () => {
           return;
         }
 
+        const cleanTitle =
+          newTitle.trim();
+
+        /**
+         * Store previous state
+         * for rollback.
+         */
+        const previousSessions =
+          [...sessions];
+
+        /**
+         * Optimistic update.
+         */
+        setSessions(
+          (previous) =>
+            previous.map(
+              (
+                session
+              ) =>
+                session._id ===
+                sessionId
+                  ? {
+                      ...session,
+
+                      title:
+                        cleanTitle,
+                    }
+                  : session
+            )
+        );
+
+        /**
+         * Sync active title.
+         */
+        if (
+          activeSessionId ===
+          sessionId
+        ) {
+          setSessionTitle(
+            cleanTitle
+          );
+        }
+
         try {
           setSessionError("");
-
-          const cleanTitle =
-            newTitle.trim();
 
           await renameChatSession(
             {
@@ -338,43 +444,17 @@ const useChatSessions = () => {
                 cleanTitle,
             }
           );
-
-          /**
-           * Optimistic update.
-           */
-          setSessions(
-            (prev) =>
-              prev.map(
-                (
-                  session
-                ) =>
-                  session._id ===
-                  sessionId
-                    ? {
-                        ...session,
-
-                        title:
-                          cleanTitle,
-                      }
-                    : session
-              )
-          );
-
-          /**
-           * Sync active title.
-           */
-          if (
-            activeSessionId ===
-            sessionId
-          ) {
-            setSessionTitle(
-              cleanTitle
-            );
-          }
         } catch (error) {
           console.error(
             "[RENAME SESSION ERROR]",
             error
+          );
+
+          /**
+           * Rollback optimistic update.
+           */
+          setSessions(
+            previousSessions
           );
 
           setSessionError(
@@ -383,13 +463,16 @@ const useChatSessions = () => {
           );
         }
       },
-      [activeSessionId]
+      [
+        sessions,
+        activeSessionId,
+      ]
     );
 
   /**
-   * ---------------------------------------------------
-   * Delete session.
-   * ---------------------------------------------------
+   * -------------------------------------------------------
+   * Delete session safely.
+   * -------------------------------------------------------
    */
   const handleDeleteSession =
     useCallback(
@@ -400,6 +483,27 @@ const useChatSessions = () => {
           return;
         }
 
+        /**
+         * Store previous state
+         * for rollback.
+         */
+        const previousSessions =
+          [...sessions];
+
+        /**
+         * Optimistic removal.
+         */
+        const updatedSessions =
+          sessions.filter(
+            (session) =>
+              session._id !==
+              sessionId
+          );
+
+        setSessions(
+          updatedSessions
+        );
+
         try {
           setSessionError("");
 
@@ -407,20 +511,6 @@ const useChatSessions = () => {
             {
               sessionId,
             }
-          );
-
-          /**
-           * Remove locally.
-           */
-          const updatedSessions =
-            sessions.filter(
-              (session) =>
-                session._id !==
-                sessionId
-            );
-
-          setSessions(
-            updatedSessions
           );
 
           /**
@@ -461,6 +551,13 @@ const useChatSessions = () => {
             error
           );
 
+          /**
+           * Rollback optimistic update.
+           */
+          setSessions(
+            previousSessions
+          );
+
           setSessionError(
             error.message ||
               "Failed to delete session."
@@ -474,9 +571,13 @@ const useChatSessions = () => {
     );
 
   /**
-   * ---------------------------------------------------
+   * -------------------------------------------------------
    * Create temporary new session.
-   * ---------------------------------------------------
+   * -------------------------------------------------------
+   *
+   * IMPORTANT:
+   * Backend creates actual session
+   * after first AI message.
    */
   const createNewSession =
     useCallback(() => {
@@ -494,9 +595,9 @@ const useChatSessions = () => {
     }, []);
 
   /**
-   * ---------------------------------------------------
-   * Reset everything.
-   * ---------------------------------------------------
+   * -------------------------------------------------------
+   * Reset everything safely.
+   * -------------------------------------------------------
    */
   const resetSessions =
     useCallback(() => {
@@ -515,7 +616,9 @@ const useChatSessions = () => {
 
   return {
     /**
-     * State
+     * -------------------------------------------------------
+     * State.
+     * -------------------------------------------------------
      */
     sessions,
 
@@ -532,7 +635,9 @@ const useChatSessions = () => {
     sessionError,
 
     /**
-     * Setters
+     * -------------------------------------------------------
+     * Setters.
+     * -------------------------------------------------------
      */
     setMessages,
 
@@ -543,7 +648,9 @@ const useChatSessions = () => {
     setSessionTitle,
 
     /**
-     * Actions
+     * -------------------------------------------------------
+     * Actions.
+     * -------------------------------------------------------
      */
     loadSessions,
 

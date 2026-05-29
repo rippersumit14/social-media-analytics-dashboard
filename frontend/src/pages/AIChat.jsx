@@ -11,14 +11,14 @@ import {
 } from "../services/socialAnalyticsService.js";
 
 import useAIChat from "../hooks/useAIChat.js";
-import useImageUploads from "../hooks/useImageUploads.js";
 import useChatSessions from "../hooks/useChatSessions.js";
+import useImageUploads from "../hooks/useImageUploads.js";
 
 import ChatSidebar from "../components/ChatSideBar.jsx";
 
+import ChatInput from "../components/chat/ChatInput.jsx";
 import ChatLayout from "../components/chat/ChatLayout.jsx";
 import ChatMessages from "../components/chat/ChatMessages.jsx";
-import ChatInput from "../components/chat/ChatInput.jsx";
 import UploadPreviewGrid from "../components/chat/UploadPreviewGrid.jsx";
 import UsageDisplay from "../components/chat/UsageDisplay.jsx";
 
@@ -52,6 +52,15 @@ const normalizeAccount = (
  * -------------------------------------------------------
  * Production-grade AI workspace.
  * -------------------------------------------------------
+ *
+ * Handles:
+ * - session orchestration
+ * - AI streaming coordination
+ * - upload lifecycle
+ * - account synchronization
+ * - sidebar synchronization
+ * - stream-safe lifecycle
+ * - retry-safe orchestration
  */
 const AIChat = () => {
   /**
@@ -152,7 +161,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * AI orchestration lifecycle.
+   * AI lifecycle.
    * -------------------------------------------------------
    */
   const {
@@ -191,7 +200,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Usage limit protection.
+   * Usage protection.
    * -------------------------------------------------------
    */
   const isUsageLimitReached =
@@ -224,21 +233,21 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Interaction lock.
+   * Prevent invalid interactions.
    * -------------------------------------------------------
    */
   const isInteractionDisabled =
     useMemo(() => {
       return (
         loading ||
-        chatLoading ||
         sessionsLoading ||
+        chatLoading ||
         isUploading
       );
     }, [
       loading,
-      chatLoading,
       sessionsLoading,
+      chatLoading,
       isUploading,
     ]);
 
@@ -315,7 +324,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Load social accounts.
+   * Load accounts safely.
    * -------------------------------------------------------
    */
   useEffect(() => {
@@ -323,6 +332,8 @@ const AIChat = () => {
       async () => {
         try {
           setLoading(true);
+
+          setPageError("");
 
           const response =
             await getSocialAccounts();
@@ -365,7 +376,7 @@ const AIChat = () => {
         }
       };
 
-    initializeAccounts();
+      initializeAccounts();
   }, []);
 
   /**
@@ -391,7 +402,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Cleanup active streams.
+   * Cleanup streams safely.
    * -------------------------------------------------------
    */
   useEffect(() => {
@@ -407,7 +418,9 @@ const AIChat = () => {
    */
   const handleAccountChange =
     useCallback(
-      (event) => {
+      async (
+        event
+      ) => {
         const nextAccountId =
           event.target.value;
 
@@ -425,19 +438,25 @@ const AIChat = () => {
         }
 
         /**
-         * Cancel active stream.
+         * Cancel active streams.
          */
         cancelStream();
 
         /**
-         * Reset workspace.
+         * Cleanup uploads.
          */
         clearImages();
 
+        /**
+         * Reset workspace.
+         */
         resetSessions();
 
         setMessages([]);
 
+        /**
+         * Switch account.
+         */
         setSelectedAccount(
           matchedAccount
         );
@@ -474,14 +493,16 @@ const AIChat = () => {
         !recognitionRef.current
       ) {
         setPageError(
-          "Voice input not supported."
+          "Voice input is not supported."
         );
 
         return;
       }
 
       try {
-        if (isListening) {
+        if (
+          isListening
+        ) {
           recognitionRef.current.stop();
         } else {
           recognitionRef.current.start();
@@ -525,7 +546,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Send AI message lifecycle.
+   * Send AI message safely.
    * -------------------------------------------------------
    */
   const handleSendMessage =
@@ -560,7 +581,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Session switching lifecycle.
+   * Session selection lifecycle.
    * -------------------------------------------------------
    */
   const handleSelectSession =
@@ -611,9 +632,8 @@ const AIChat = () => {
         </h1>
 
         <p className="mt-2 text-gray-600">
-          AI-powered social media
-          analytics and multimodal
-          insights.
+          AI-powered social media analytics,
+          OCR analysis, and multimodal insights.
         </p>
       </div>
 
@@ -641,9 +661,8 @@ const AIChat = () => {
           </h2>
 
           <p className="mt-2 text-gray-500">
-            Connect a social
-            account first to use
-            AI analytics.
+            Connect a social account first
+            to use AI analytics.
           </p>
         </div>
       ) : (
@@ -659,8 +678,7 @@ const AIChat = () => {
                 </h2>
 
                 <p className="mt-1 text-sm text-gray-500">
-                  Account-specific
-                  AI conversations.
+                  Account-specific AI conversations.
                 </p>
               </div>
 
@@ -712,7 +730,7 @@ const AIChat = () => {
           </div>
 
           {/* ------------------------------------------------ */}
-          {/* Main Chat Layout */}
+          {/* Main Layout */}
           {/* ------------------------------------------------ */}
           <ChatLayout
             sidebar={
@@ -823,13 +841,12 @@ const AIChat = () => {
           />
 
           {/* ------------------------------------------------ */}
-          {/* Voice unsupported */}
+          {/* Voice Support */}
           {/* ------------------------------------------------ */}
           {!speechSupported && (
             <p className="text-xs text-amber-600">
-              Voice input is not
-              supported in this
-              browser.
+              Voice input is not supported
+              in this browser.
             </p>
           )}
         </>

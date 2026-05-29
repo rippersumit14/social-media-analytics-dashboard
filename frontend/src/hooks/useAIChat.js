@@ -15,16 +15,15 @@ import {
  * -------------------------------------------------------
  *
  * Handles:
- * - real SSE streaming
+ * - SSE token streaming
  * - optimistic rendering
- * - token streaming updates
  * - upload orchestration
  * - session synchronization
- * - streaming lifecycle
+ * - stream-safe rendering
  * - abort lifecycle
  * - stale request protection
- * - usage synchronization
  * - backend _id alignment
+ * - retry-safe streaming
  */
 const useAIChat = ({
   activeSessionId,
@@ -99,7 +98,19 @@ const useAIChat = ({
 
   /**
    * -------------------------------------------------------
-   * Prevent unbounded memory growth.
+   * Accumulated stream response.
+   * -------------------------------------------------------
+   *
+   * IMPORTANT:
+   * Partial SSE chunks should NEVER
+   * become persisted assistant messages.
+   */
+  const accumulatedResponseRef =
+    useRef("");
+
+  /**
+   * -------------------------------------------------------
+   * Limit message history safely.
    * -------------------------------------------------------
    */
   const limitMessages =
@@ -135,8 +146,8 @@ const useAIChat = ({
       ) => {
         setMessages((prev) =>
           prev.map((message) =>
-            (message.id ||
-              message._id) ===
+            (message._id ||
+              message.id) ===
             assistantMessageId
               ? updater(
                   message
@@ -157,7 +168,7 @@ const useAIChat = ({
     useCallback(
       (payload = {}) => {
         /**
-         * Session lifecycle.
+         * Session synchronization.
          */
         if (
           payload.sessionId
@@ -229,7 +240,7 @@ const useAIChat = ({
 
   /**
    * -------------------------------------------------------
-   * Cancel active AI stream safely.
+   * Cancel active stream safely.
    * -------------------------------------------------------
    */
   const cancelStream =
@@ -241,6 +252,9 @@ const useAIChat = ({
 
       activeRequestRef.current =
         null;
+
+      accumulatedResponseRef.current =
+        "";
 
       setChatLoading(false);
 
@@ -296,7 +310,7 @@ const useAIChat = ({
         cancelStream();
 
         /**
-         * Fresh abort controller.
+         * Fresh controller.
          */
         const controller =
           new AbortController();
@@ -312,6 +326,12 @@ const useAIChat = ({
 
         activeRequestRef.current =
           requestId;
+
+        /**
+         * Reset accumulated stream.
+         */
+        accumulatedResponseRef.current =
+          "";
 
         /**
          * Reset lifecycle.
@@ -330,9 +350,6 @@ const useAIChat = ({
         const optimisticUserMessage =
           {
             _id:
-              crypto.randomUUID(),
-
-            id:
               crypto.randomUUID(),
 
             role: "user",
@@ -366,9 +383,6 @@ const useAIChat = ({
             _id:
               assistantMessageId,
 
-            id:
-              assistantMessageId,
-
             role:
               "assistant",
 
@@ -395,7 +409,7 @@ const useAIChat = ({
 
         try {
           /**
-           * Stream AI response.
+           * Start AI stream.
            */
           await streamAIMessage({
             socialAccountId,
@@ -413,7 +427,7 @@ const useAIChat = ({
               controller.signal,
 
             /**
-             * SSE connection established.
+             * SSE connected.
              */
             onConnected:
               (
@@ -425,7 +439,13 @@ const useAIChat = ({
               },
 
             /**
-             * Live token streaming.
+             * Live token rendering.
+             *
+             * IMPORTANT:
+             * Tokens ONLY update UI state.
+             *
+             * They should NEVER become
+             * persisted DB assistant messages.
              */
             onToken:
               (
@@ -441,6 +461,19 @@ const useAIChat = ({
                   return;
                 }
 
+                const token =
+                  payload.content ||
+                  "";
+
+                /**
+                 * Accumulate locally.
+                 */
+                accumulatedResponseRef.current +=
+                  token;
+
+                /**
+                 * Update UI only.
+                 */
                 replaceAssistantMessage(
                   assistantMessageId,
                   (
@@ -449,11 +482,7 @@ const useAIChat = ({
                     ...currentMessage,
 
                     content:
-                      currentMessage.content +
-                      (
-                        payload.content ||
-                        ""
-                      ),
+                      accumulatedResponseRef.current,
 
                     isLoading:
                       false,
@@ -465,7 +494,11 @@ const useAIChat = ({
               },
 
             /**
-             * Streaming completed.
+             * Stream completed.
+             *
+             * IMPORTANT:
+             * ONLY NOW should final assistant
+             * message be considered persisted.
              */
             onDone:
               async (
@@ -481,6 +514,13 @@ const useAIChat = ({
                   return;
                 }
 
+                const finalResponse =
+                  payload.fullResponse ||
+                  accumulatedResponseRef.current;
+
+                /**
+                 * Finalize assistant message.
+                 */
                 replaceAssistantMessage(
                   assistantMessageId,
                   (
@@ -489,8 +529,7 @@ const useAIChat = ({
                     ...currentMessage,
 
                     content:
-                      payload.fullResponse ||
-                      currentMessage.content,
+                      finalResponse,
 
                     isLoading:
                       false,
@@ -501,22 +540,16 @@ const useAIChat = ({
                 );
 
                 /**
-                 * Synchronize metadata.
+                 * Synchronize backend metadata.
                  */
                 syncMetadata(
                   payload
                 );
 
                 /**
-                 * Refresh sessions.
-                 */
-                await loadSessions(
-                  socialAccountId
-                );
-
-                /**
-                 * Auto-select
-                 * backend-created session.
+                 * IMPORTANT:
+                 * Backend-created session
+                 * must become active.
                  */
                 if (
                   payload.sessionId
@@ -527,13 +560,20 @@ const useAIChat = ({
                 }
 
                 /**
+                 * Refresh sidebar sessions.
+                 */
+                await loadSessions(
+                  socialAccountId
+                );
+
+                /**
                  * Cleanup uploads.
                  */
                 clearImages?.();
               },
 
             /**
-             * Stream error.
+             * Stream failure.
              */
             onError:
               (
@@ -605,7 +645,7 @@ const useAIChat = ({
           );
         } finally {
           /**
-           * Cleanup current request.
+           * Cleanup request lifecycle.
            */
           if (
             activeRequestRef.current ===
@@ -616,6 +656,9 @@ const useAIChat = ({
 
             abortControllerRef.current =
               null;
+
+            accumulatedResponseRef.current =
+              "";
           }
 
           setChatLoading(

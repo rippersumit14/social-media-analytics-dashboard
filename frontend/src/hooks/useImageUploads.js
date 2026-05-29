@@ -33,13 +33,12 @@ const SUPPORTED_IMAGE_TYPES = [
  *
  * Handles:
  * - upload validation
- * - preview generation
- * - drag/drop lifecycle
+ * - OCR-safe previews
  * - duplicate prevention
+ * - multipart-ready normalization
  * - memory cleanup
- * - OCR-ready metadata
- * - upload state normalization
- * - upload processing states
+ * - upload lifecycle states
+ * - retry-safe upload handling
  */
 const useImageUploads =
   () => {
@@ -70,7 +69,7 @@ const useImageUploads =
 
     /**
      * ---------------------------------------------------
-     * Prevent double revoke.
+     * Prevent duplicate revokes.
      * ---------------------------------------------------
      */
     const revokedUrlsRef =
@@ -78,7 +77,7 @@ const useImageUploads =
 
     /**
      * ---------------------------------------------------
-     * Image count.
+     * Stable image count.
      * ---------------------------------------------------
      */
     const imageCount =
@@ -138,7 +137,7 @@ const useImageUploads =
               file.type
             )
           ) {
-            return "Unsupported image format.";
+            return `Unsupported image format: ${file.name}`;
           }
 
           /**
@@ -158,7 +157,89 @@ const useImageUploads =
 
     /**
      * ---------------------------------------------------
-     * Handle uploads safely.
+     * Normalize upload safely.
+     * ---------------------------------------------------
+     */
+    const createUploadObject =
+      useCallback(
+        (file) => {
+          const preview =
+            URL.createObjectURL(
+              file
+            );
+
+          return {
+            /**
+             * Stable IDs.
+             */
+            _id:
+              crypto.randomUUID(),
+
+            id:
+              crypto.randomUUID(),
+
+            /**
+             * Original file.
+             */
+            file,
+
+            /**
+             * OCR-safe preview.
+             */
+            preview,
+
+            /**
+             * Metadata.
+             */
+            name:
+              file.name,
+
+            size:
+              file.size,
+
+            type:
+              file.type,
+
+            lastModified:
+              file.lastModified,
+
+            /**
+             * Upload lifecycle.
+             */
+            status:
+              "pending",
+
+            uploaded:
+              false,
+
+            uploadedAt:
+              null,
+
+            /**
+             * Backend image URL.
+             */
+            imageUrl:
+              null,
+
+            /**
+             * OCR metadata.
+             */
+            extractedText:
+              null,
+
+            /**
+             * Timestamps.
+             */
+            createdAt:
+              new Date().toISOString(),
+          };
+        },
+        []
+      );
+
+    /**
+     * ---------------------------------------------------
+     * Add uploads safely.
      * ---------------------------------------------------
      */
     const addImages =
@@ -204,15 +285,15 @@ const useImageUploads =
                 }
 
                 /**
-                 * Existing file map.
+                 * Duplicate protection.
                  */
-                const existingFiles =
+                const existingKeys =
                   new Set(
                     previousImages.map(
                       (
                         image
                       ) =>
-                        `${image.file.name}-${image.file.size}-${image.file.lastModified}`
+                        `${image.file?.name}-${image.file?.size}-${image.file?.lastModified}`
                     )
                   );
 
@@ -221,7 +302,7 @@ const useImageUploads =
 
                 for (const file of files) {
                   /**
-                   * Validate file.
+                   * Validate safely.
                    */
                   const validationError =
                     validateFile(
@@ -239,73 +320,30 @@ const useImageUploads =
                   }
 
                   /**
-                   * Duplicate prevention.
+                   * Stable duplicate key.
                    */
                   const duplicateKey =
                     `${file.name}-${file.size}-${file.lastModified}`;
 
                   if (
-                    existingFiles.has(
+                    existingKeys.has(
                       duplicateKey
                     )
                   ) {
                     continue;
                   }
 
-                  existingFiles.add(
+                  existingKeys.add(
                     duplicateKey
                   );
 
                   /**
-                   * Generate preview safely.
-                   */
-                  const preview =
-                    URL.createObjectURL(
-                      file
-                    );
-
-                  /**
-                   * Stable upload structure.
+                   * Create normalized upload.
                    */
                   nextImages.push(
-                    {
-                      _id:
-                        crypto.randomUUID(),
-
-                      id:
-                        crypto.randomUUID(),
-
-                      file,
-
-                      preview,
-
-                      name:
-                        file.name,
-
-                      size:
-                        file.size,
-
-                      type:
-                        file.type,
-
-                      lastModified:
-                        file.lastModified,
-
-                      /**
-                       * Upload lifecycle.
-                       */
-                      status:
-                        "pending",
-
-                      uploaded:
-                        false,
-
-                      uploadedAt:
-                        Date.now(),
-
-                      createdAt:
-                        new Date().toISOString(),
-                    }
+                    createUploadObject(
+                      file
+                    )
                   );
                 }
 
@@ -333,17 +371,24 @@ const useImageUploads =
             );
           }
         },
-        [validateFile]
+        [
+          validateFile,
+          createUploadObject,
+        ]
       );
 
     /**
      * ---------------------------------------------------
-     * Remove one image safely.
+     * Remove upload safely.
      * ---------------------------------------------------
      */
     const removeImage =
       useCallback(
         (imageId) => {
+          if (!imageId) {
+            return;
+          }
+
           setSelectedImages(
             (previousImages) => {
               const imageToRemove =
@@ -358,7 +403,7 @@ const useImageUploads =
                 );
 
               /**
-               * Cleanup preview.
+               * Cleanup preview safely.
                */
               revokePreview(
                 imageToRemove?.preview
@@ -377,6 +422,44 @@ const useImageUploads =
           );
         },
         [revokePreview]
+      );
+
+    /**
+     * ---------------------------------------------------
+     * Update upload status safely.
+     * ---------------------------------------------------
+     */
+    const updateImageStatus =
+      useCallback(
+        (
+          imageId,
+          updates = {}
+        ) => {
+          if (!imageId) {
+            return;
+          }
+
+          setSelectedImages(
+            (
+              previousImages
+            ) =>
+              previousImages.map(
+                (
+                  image
+                ) =>
+                  image.id ===
+                    imageId ||
+                  image._id ===
+                    imageId
+                    ? {
+                        ...image,
+                        ...updates,
+                      }
+                    : image
+              )
+          );
+        },
+        []
       );
 
     /**
@@ -451,6 +534,8 @@ const useImageUploads =
       removeImage,
 
       clearImages,
+
+      updateImageStatus,
 
       /**
        * Utilities.
