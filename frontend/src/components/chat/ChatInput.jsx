@@ -4,23 +4,27 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 
 /**
- * Production-grade AI chat input.
+ * -------------------------------------------------------
+ * Production-grade multimodal AI input.
+ * -------------------------------------------------------
  *
  * Handles:
  * - text input
- * - autosizing textarea
- * - uploads
+ * - autosize textarea
  * - keyboard shortcuts
+ * - drag/drop uploads
  * - voice lifecycle
- * - streaming lifecycle
- * - stream cancellation
+ * - streaming cancel lifecycle
+ * - upload orchestration
+ * - duplicate send prevention
  */
 const ChatInput = ({
   /**
-   * Input state.
+   * Input lifecycle.
    */
   input,
   setInput,
@@ -42,7 +46,7 @@ const ChatInput = ({
   onVoiceClick,
 
   /**
-   * UI states.
+   * UI lifecycle.
    */
   disabled = false,
 
@@ -51,7 +55,7 @@ const ChatInput = ({
   isListening = false,
 
   /**
-   * Usage limits.
+   * Usage lifecycle.
    */
   isUsageLimitReached = false,
 
@@ -61,19 +65,41 @@ const ChatInput = ({
   selectedImages = [],
 }) => {
   /**
+   * -------------------------------------------------------
    * Hidden upload input.
+   * -------------------------------------------------------
    */
   const fileInputRef =
     useRef(null);
 
   /**
-   * Autosize textarea ref.
+   * -------------------------------------------------------
+   * Autosize textarea.
+   * -------------------------------------------------------
    */
   const textareaRef =
     useRef(null);
 
   /**
+   * -------------------------------------------------------
+   * Drag lifecycle.
+   * -------------------------------------------------------
+   */
+  const [isDragging, setIsDragging] =
+    useState(false);
+
+  /**
+   * -------------------------------------------------------
+   * Prevent rapid duplicate sends.
+   * -------------------------------------------------------
+   */
+  const sendLockRef =
+    useRef(false);
+
+  /**
+   * -------------------------------------------------------
    * Stable disabled state.
+   * -------------------------------------------------------
    */
   const isInputDisabled =
     useMemo(() => {
@@ -87,7 +113,9 @@ const ChatInput = ({
     ]);
 
   /**
-   * Stable send availability.
+   * -------------------------------------------------------
+   * Stable send state.
+   * -------------------------------------------------------
    */
   const isSendDisabled =
     useMemo(() => {
@@ -106,7 +134,21 @@ const ChatInput = ({
     ]);
 
   /**
+   * -------------------------------------------------------
+   * Release send lock.
+   * -------------------------------------------------------
+   */
+  useEffect(() => {
+    if (!chatLoading) {
+      sendLockRef.current =
+        false;
+    }
+  }, [chatLoading]);
+
+  /**
+   * -------------------------------------------------------
    * Stable textarea autosizing.
+   * -------------------------------------------------------
    */
   useEffect(() => {
     const textarea =
@@ -121,12 +163,14 @@ const ChatInput = ({
 
     textarea.style.height = `${Math.min(
       textarea.scrollHeight,
-      220
+      240
     )}px`;
   }, [input]);
 
   /**
-   * Stable upload trigger.
+   * -------------------------------------------------------
+   * Upload trigger lifecycle.
+   * -------------------------------------------------------
    */
   const handleUploadClick =
     useCallback(() => {
@@ -144,15 +188,24 @@ const ChatInput = ({
     ]);
 
   /**
+   * -------------------------------------------------------
    * Stable send lifecycle.
+   * -------------------------------------------------------
    */
   const handleSend =
     useCallback(() => {
       if (
-        isSendDisabled
+        isSendDisabled ||
+        sendLockRef.current
       ) {
         return;
       }
+
+      /**
+       * Prevent rapid Enter spam.
+       */
+      sendLockRef.current =
+        true;
 
       onSend?.();
     }, [
@@ -161,15 +214,22 @@ const ChatInput = ({
     ]);
 
   /**
-   * Stable stream cancellation.
+   * -------------------------------------------------------
+   * Stream cancellation lifecycle.
+   * -------------------------------------------------------
    */
   const handleCancel =
     useCallback(() => {
+      sendLockRef.current =
+        false;
+
       onCancel?.();
     }, [onCancel]);
 
   /**
-   * Keyboard shortcuts.
+   * -------------------------------------------------------
+   * Keyboard lifecycle.
+   * -------------------------------------------------------
    *
    * Enter:
    * send message
@@ -194,7 +254,9 @@ const ChatInput = ({
     );
 
   /**
-   * Stable image lifecycle.
+   * -------------------------------------------------------
+   * Upload lifecycle.
+   * -------------------------------------------------------
    */
   const handleFileChange =
     useCallback(
@@ -211,48 +273,155 @@ const ChatInput = ({
       [onImageChange]
     );
 
+  /**
+   * -------------------------------------------------------
+   * Drag lifecycle.
+   * -------------------------------------------------------
+   */
+  const handleDragOver =
+    useCallback(
+      (event) => {
+        event.preventDefault();
+
+        if (
+          isInputDisabled
+        ) {
+          return;
+        }
+
+        setIsDragging(
+          true
+        );
+      },
+      [isInputDisabled]
+    );
+
+  const handleDragLeave =
+    useCallback(
+      (event) => {
+        event.preventDefault();
+
+        setIsDragging(
+          false
+        );
+      },
+      []
+    );
+
+  /**
+   * -------------------------------------------------------
+   * Drop upload lifecycle.
+   * -------------------------------------------------------
+   */
+  const handleDrop =
+    useCallback(
+      (event) => {
+        event.preventDefault();
+
+        setIsDragging(
+          false
+        );
+
+        if (
+          isInputDisabled
+        ) {
+          return;
+        }
+
+        const files =
+          event.dataTransfer
+            ?.files;
+
+        if (
+          !files ||
+          files.length === 0
+        ) {
+          return;
+        }
+
+        onImageChange?.({
+          target: {
+            files,
+            value: "",
+          },
+        });
+      },
+      [
+        isInputDisabled,
+        onImageChange,
+      ]
+    );
+
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4">
+    <div
+      data-testid="chat-input-wrapper"
+      onDragOver={
+        handleDragOver
+      }
+      onDragLeave={
+        handleDragLeave
+      }
+      onDrop={handleDrop}
+      className={`rounded-2xl border bg-white p-4 transition-all duration-200 ${
+        isDragging
+          ? "border-blue-500 bg-blue-50"
+          : "border-gray-200"
+      }`}
+    >
+      {/* ------------------------------------------------ */}
       {/* Usage Limit */}
+      {/* ------------------------------------------------ */}
       {isUsageLimitReached && (
         <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           Daily AI usage limit
-          reached. Please upgrade
-          your plan or wait for
-          reset.
+          reached.
         </div>
       )}
 
-      {/* Main Input Layout */}
-      <div className="flex flex-col gap-3 md:flex-row">
+      {/* ------------------------------------------------ */}
+      {/* Main Layout */}
+      {/* ------------------------------------------------ */}
+      <div className="flex flex-col gap-4 md:flex-row">
+        {/* ------------------------------------------------ */}
         {/* Textarea */}
-        <textarea
-          ref={textareaRef}
-          aria-label="AI chat input"
-          data-testid="chat-input"
-          rows={2}
-          value={input}
-          onChange={(event) =>
-            setInput(
-              event.target.value
-            )
-          }
-          onKeyDown={
-            handleKeyDown
-          }
-          disabled={
-            isInputDisabled
-          }
-          placeholder={
-            isUsageLimitReached
-              ? "Daily limit reached"
-              : "Ask AI about analytics, growth, content strategy, or upload images..."
-          }
-          className="max-h-[220px] min-h-[56px] flex-1 resize-none overflow-y-auto rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition-colors focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
-        />
+        {/* ------------------------------------------------ */}
+        <div className="flex-1">
+          <textarea
+            ref={textareaRef}
+            data-testid="chat-input"
+            rows={2}
+            value={input}
+            onChange={(event) =>
+              setInput(
+                event.target.value
+              )
+            }
+            onKeyDown={
+              handleKeyDown
+            }
+            disabled={
+              isInputDisabled
+            }
+            placeholder={
+              isUsageLimitReached
+                ? "Daily usage limit reached"
+                : "Ask AI about analytics, growth, OCR insights, or upload images..."
+            }
+            className="max-h-[240px] min-h-[60px] w-full resize-none overflow-y-auto rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition-colors focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
+          />
 
+          {/* Drag State */}
+          {isDragging && (
+            <div className="mt-2 rounded-xl border border-dashed border-blue-400 bg-blue-50 px-4 py-3 text-center text-sm text-blue-600">
+              Drop images here
+            </div>
+          )}
+        </div>
+
+        {/* ------------------------------------------------ */}
         {/* Actions */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* ------------------------------------------------ */}
+        <div className="flex flex-wrap items-start gap-2">
           {/* Hidden Upload Input */}
           <input
             ref={fileInputRef}
@@ -269,7 +438,7 @@ const ChatInput = ({
             className="hidden"
           />
 
-          {/* Upload Button */}
+          {/* Upload */}
           <button
             data-testid="upload-button"
             type="button"
@@ -280,12 +449,12 @@ const ChatInput = ({
               isInputDisabled ||
               chatLoading
             }
-            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Images
           </button>
 
-          {/* Voice Button */}
+          {/* Voice */}
           <button
             data-testid="voice-button"
             type="button"
@@ -296,7 +465,7 @@ const ChatInput = ({
               isInputDisabled ||
               chatLoading
             }
-            className={`rounded-xl border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`rounded-xl border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
               isListening
                 ? "border-red-300 bg-red-50 text-red-600"
                 : "border-gray-200 text-gray-700 hover:bg-gray-50"
@@ -307,7 +476,7 @@ const ChatInput = ({
               : "Voice"}
           </button>
 
-          {/* Stream Cancel Button */}
+          {/* Stop Streaming */}
           {chatLoading ? (
             <button
               data-testid="stop-stream-button"
@@ -315,13 +484,13 @@ const ChatInput = ({
               onClick={
                 handleCancel
               }
-              className="rounded-xl border border-red-200 bg-red-50 px-5 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100"
+              className="rounded-xl border border-red-200 bg-red-50 px-5 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100"
             >
               Stop
             </button>
           ) : (
             /**
-             * Send Button
+             * Send
              */
             <button
               data-testid="send-button"
@@ -332,7 +501,7 @@ const ChatInput = ({
               disabled={
                 isSendDisabled
               }
-              className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+              className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
               Send
             </button>
@@ -340,8 +509,10 @@ const ChatInput = ({
         </div>
       </div>
 
+      {/* ------------------------------------------------ */}
       {/* Footer */}
-      <div className="mt-3 flex flex-col gap-1 text-xs text-gray-500 md:flex-row md:items-center md:justify-between">
+      {/* ------------------------------------------------ */}
+      <div className="mt-4 flex flex-col gap-2 text-xs text-gray-500 md:flex-row md:items-center md:justify-between">
         <p>
           Press Enter to send.
           Shift + Enter for
@@ -350,8 +521,8 @@ const ChatInput = ({
 
         {chatLoading && (
           <p
-            className="text-blue-500"
             aria-live="polite"
+            className="text-blue-600"
           >
             AI is generating a
             response...
@@ -377,9 +548,6 @@ const ChatInput = ({
   );
 };
 
-/**
- * Prevent unnecessary rerenders.
- */
 export default memo(
   ChatInput
 );

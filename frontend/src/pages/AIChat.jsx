@@ -50,18 +50,8 @@ const normalizeAccount = (
 
 /**
  * -------------------------------------------------------
- * Production-grade AI workspace page.
+ * Production-grade AI workspace.
  * -------------------------------------------------------
- *
- * Handles:
- * - SSE AI streaming
- * - multimodal uploads
- * - AI session orchestration
- * - session sidebar
- * - account switching
- * - voice input
- * - upload previews
- * - usage rendering
  */
 const AIChat = () => {
   /**
@@ -81,7 +71,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Global page lifecycle.
+   * Page lifecycle.
    * -------------------------------------------------------
    */
   const [loading, setLoading] =
@@ -125,7 +115,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Chat sessions lifecycle.
+   * Session lifecycle.
    * -------------------------------------------------------
    */
   const {
@@ -155,7 +145,9 @@ const AIChat = () => {
 
     handleDeleteSession,
 
-    resetActiveSession,
+    createNewSession,
+
+    resetSessions,
   } = useChatSessions();
 
   /**
@@ -199,7 +191,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Usage protection.
+   * Usage limit protection.
    * -------------------------------------------------------
    */
   const isUsageLimitReached =
@@ -278,8 +270,6 @@ const AIChat = () => {
 
     recognition.onstart = () => {
       setIsListening(true);
-
-      setPageError("");
     };
 
     recognition.onend = () => {
@@ -334,16 +324,12 @@ const AIChat = () => {
         try {
           setLoading(true);
 
-          setPageError("");
-
           const response =
             await getSocialAccounts();
 
           const normalizedAccounts =
             (
               response.accounts ||
-              response.data
-                ?.accounts ||
               []
             ).map(
               normalizeAccount
@@ -354,7 +340,7 @@ const AIChat = () => {
           );
 
           /**
-           * Select first account.
+           * Auto-select first account.
            */
           if (
             normalizedAccounts.length >
@@ -439,24 +425,19 @@ const AIChat = () => {
         }
 
         /**
-         * Cancel active AI stream.
+         * Cancel active stream.
          */
         cancelStream();
 
         /**
-         * Reset previous workspace.
+         * Reset workspace.
          */
-        setMessages([]);
-
-        resetActiveSession();
-
         clearImages();
 
-        setPageError("");
+        resetSessions();
 
-        /**
-         * Activate account.
-         */
+        setMessages([]);
+
         setSelectedAccount(
           matchedAccount
         );
@@ -468,7 +449,7 @@ const AIChat = () => {
 
         clearImages,
 
-        resetActiveSession,
+        resetSessions,
 
         setMessages,
       ]
@@ -476,7 +457,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Voice interaction lifecycle.
+   * Voice lifecycle.
    * -------------------------------------------------------
    */
   const handleVoiceClick =
@@ -524,7 +505,7 @@ const AIChat = () => {
 
   /**
    * -------------------------------------------------------
-   * Image upload lifecycle.
+   * Upload lifecycle.
    * -------------------------------------------------------
    */
   const handleImageChange =
@@ -584,22 +565,37 @@ const AIChat = () => {
    */
   const handleSelectSession =
     useCallback(
-      (sessionId) => {
-        if (
-          !selectedAccount?._id
-        ) {
+      async (
+        sessionId
+      ) => {
+        if (!sessionId) {
           return;
         }
 
-        selectSession(
+        await selectSession(
           sessionId
         );
       },
-      [
-        selectedAccount,
-        selectSession,
-      ]
+      [selectSession]
     );
+
+  /**
+   * -------------------------------------------------------
+   * New chat lifecycle.
+   * -------------------------------------------------------
+   */
+  const handleNewChat =
+    useCallback(() => {
+      cancelStream();
+
+      clearImages();
+
+      createNewSession();
+    }, [
+      cancelStream,
+      clearImages,
+      createNewSession,
+    ]);
 
   return (
     <div
@@ -615,11 +611,9 @@ const AIChat = () => {
         </h1>
 
         <p className="mt-2 text-gray-600">
-          Ask AI about analytics,
-          engagement, growth,
-          content strategy,
-          OCR insights, and
-          multimodal analysis.
+          AI-powered social media
+          analytics and multimodal
+          insights.
         </p>
       </div>
 
@@ -633,222 +627,212 @@ const AIChat = () => {
       )}
 
       {/* ------------------------------------------------ */}
-      {/* No Accounts */}
-      {/* ------------------------------------------------ */}
-      {!loading &&
-        socialAccounts.length ===
-          0 && (
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800">
-              No Connected Accounts
-            </h2>
-
-            <p className="mt-2 text-gray-500">
-              Connect a social
-              account first to use
-              AI analytics.
-            </p>
-          </div>
-        )}
-
-      {/* ------------------------------------------------ */}
       {/* Loading */}
       {/* ------------------------------------------------ */}
       {loading ? (
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-600">
-            Loading AI workspace...
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          Loading AI workspace...
+        </div>
+      ) : socialAccounts.length ===
+        0 ? (
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-800">
+            No Connected Accounts
+          </h2>
+
+          <p className="mt-2 text-gray-500">
+            Connect a social
+            account first to use
+            AI analytics.
           </p>
         </div>
       ) : (
-        selectedAccount && (
-          <>
-            {/* ------------------------------------------------ */}
-            {/* Account Selector */}
-            {/* ------------------------------------------------ */}
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-800">
-                    Active Account
-                  </h2>
+        <>
+          {/* ------------------------------------------------ */}
+          {/* Account Selector */}
+          {/* ------------------------------------------------ */}
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-800">
+                  Active Account
+                </h2>
 
-                  <p className="mt-1 text-sm text-gray-500">
-                    Switch accounts
-                    for account-specific
-                    AI conversations.
-                  </p>
-                </div>
+                <p className="mt-1 text-sm text-gray-500">
+                  Account-specific
+                  AI conversations.
+                </p>
+              </div>
 
-                <div className="w-full md:w-80">
-                  <label className="mb-1 block text-sm text-gray-600">
-                    Select Account
-                  </label>
+              <div className="w-full md:w-80">
+                <label className="mb-1 block text-sm text-gray-600">
+                  Select Account
+                </label>
 
-                  <select
-                    value={
-                      selectedAccount._id
-                    }
-                    onChange={
-                      handleAccountChange
-                    }
-                    disabled={
-                      isInteractionDisabled
-                    }
-                    className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2"
-                  >
-                    {socialAccounts.map(
-                      (
-                        account
-                      ) => (
-                        <option
-                          key={
-                            account._id
-                          }
-                          value={
-                            account._id
-                          }
-                        >
-                          @
-                          {
-                            account.username
-                          }{" "}
-                          (
-                          {
-                            account.platform
-                          }
-                          )
-                        </option>
-                      )
-                    )}
-                  </select>
-                </div>
+                <select
+                  value={
+                    selectedAccount?._id ||
+                    ""
+                  }
+                  onChange={
+                    handleAccountChange
+                  }
+                  disabled={
+                    isInteractionDisabled
+                  }
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2"
+                >
+                  {socialAccounts.map(
+                    (
+                      account
+                    ) => (
+                      <option
+                        key={
+                          account._id
+                        }
+                        value={
+                          account._id
+                        }
+                      >
+                        @
+                        {
+                          account.username
+                        }{" "}
+                        (
+                        {
+                          account.platform
+                        }
+                        )
+                      </option>
+                    )
+                  )}
+                </select>
               </div>
             </div>
+          </div>
 
-            {/* ------------------------------------------------ */}
-            {/* Main AI Layout */}
-            {/* ------------------------------------------------ */}
-            <ChatLayout
-              sidebar={
-                <ChatSidebar
-                  sessions={
-                    sessions
-                  }
-                  activeSessionId={
-                    activeSessionId
-                  }
-                  onSelectSession={
-                    handleSelectSession
-                  }
-                  onNewChat={
-                    resetActiveSession
-                  }
-                  onRenameSession={
-                    handleRenameSession
-                  }
-                  onDeleteSession={
-                    handleDeleteSession
-                  }
-                  isLoading={
-                    sessionsLoading
-                  }
-                />
-              }
-              usagePanel={
-                <UsageDisplay
-                  usageInfo={
-                    usageInfo
-                  }
-                  remainingUsage={
-                    remainingUsage
-                  }
-                  modelName={
-                    modelName
-                  }
-                  latencyMs={
-                    latencyMs
-                  }
-                  sessionTitle={
-                    sessionTitle
-                  }
-                />
-              }
-              messages={
-                <ChatMessages
-                  messages={
-                    messages
-                  }
-                  chatLoading={
-                    chatLoading
-                  }
-                />
-              }
-              uploadPreview={
-                <UploadPreviewGrid
-                  selectedImages={
-                    selectedImages
-                  }
-                  onRemoveImage={
-                    removeImage
-                  }
-                  onClearImages={
-                    clearImages
-                  }
-                  disabled={
-                    isInteractionDisabled
-                  }
-                />
-              }
-              input={
-                <ChatInput
-                  input={input}
-                  setInput={
-                    setInput
-                  }
-                  onSend={
-                    handleSendMessage
-                  }
-                  onCancel={
-                    cancelStream
-                  }
-                  onImageChange={
-                    handleImageChange
-                  }
-                  onVoiceClick={
-                    handleVoiceClick
-                  }
-                  disabled={
-                    isInteractionDisabled
-                  }
-                  chatLoading={
-                    chatLoading
-                  }
-                  isListening={
-                    isListening
-                  }
-                  isUsageLimitReached={
-                    isUsageLimitReached
-                  }
-                  selectedImages={
-                    selectedImages
-                  }
-                />
-              }
-            />
+          {/* ------------------------------------------------ */}
+          {/* Main Chat Layout */}
+          {/* ------------------------------------------------ */}
+          <ChatLayout
+            sidebar={
+              <ChatSidebar
+                sessions={
+                  sessions
+                }
+                activeSessionId={
+                  activeSessionId
+                }
+                onSelectSession={
+                  handleSelectSession
+                }
+                onNewChat={
+                  handleNewChat
+                }
+                onRenameSession={
+                  handleRenameSession
+                }
+                onDeleteSession={
+                  handleDeleteSession
+                }
+                isLoading={
+                  sessionsLoading
+                }
+              />
+            }
+            usagePanel={
+              <UsageDisplay
+                usageInfo={
+                  usageInfo
+                }
+                remainingUsage={
+                  remainingUsage
+                }
+                modelName={
+                  modelName
+                }
+                latencyMs={
+                  latencyMs
+                }
+                sessionTitle={
+                  sessionTitle
+                }
+              />
+            }
+            messages={
+              <ChatMessages
+                messages={
+                  messages
+                }
+                chatLoading={
+                  chatLoading
+                }
+              />
+            }
+            uploadPreview={
+              <UploadPreviewGrid
+                selectedImages={
+                  selectedImages
+                }
+                onRemoveImage={
+                  removeImage
+                }
+                onClearImages={
+                  clearImages
+                }
+                disabled={
+                  isInteractionDisabled
+                }
+              />
+            }
+            input={
+              <ChatInput
+                input={input}
+                setInput={
+                  setInput
+                }
+                onSend={
+                  handleSendMessage
+                }
+                onCancel={
+                  cancelStream
+                }
+                onImageChange={
+                  handleImageChange
+                }
+                onVoiceClick={
+                  handleVoiceClick
+                }
+                disabled={
+                  isInteractionDisabled
+                }
+                chatLoading={
+                  chatLoading
+                }
+                isListening={
+                  isListening
+                }
+                isUsageLimitReached={
+                  isUsageLimitReached
+                }
+                selectedImages={
+                  selectedImages
+                }
+              />
+            }
+          />
 
-            {/* ------------------------------------------------ */}
-            {/* Voice Unsupported */}
-            {/* ------------------------------------------------ */}
-            {!speechSupported && (
-              <p className="text-xs text-amber-600">
-                Voice input is not
-                supported in this
-                browser.
-              </p>
-            )}
-          </>
-        )
+          {/* ------------------------------------------------ */}
+          {/* Voice unsupported */}
+          {/* ------------------------------------------------ */}
+          {!speechSupported && (
+            <p className="text-xs text-amber-600">
+              Voice input is not
+              supported in this
+              browser.
+            </p>
+          )}
+        </>
       )}
     </div>
   );

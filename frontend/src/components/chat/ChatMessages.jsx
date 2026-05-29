@@ -8,15 +8,17 @@ import {
 import ChatMessage from "./ChatMessage.jsx";
 
 /**
+ * -------------------------------------------------------
  * Production-grade chat messages container.
+ * -------------------------------------------------------
  *
- * Responsibilities:
+ * Handles:
+ * - SSE streaming rendering
  * - stable auto-scroll
+ * - near-bottom protection
+ * - rendering optimization
+ * - large history stabilization
  * - stream synchronization
- * - chunk-safe rendering
- * - empty states
- * - responsive overflow handling
- * - streaming UX stabilization
  */
 const ChatMessages = ({
   messages = [],
@@ -27,45 +29,74 @@ const ChatMessages = ({
     "Start a conversation",
 
   emptyDescription =
-    "Ask about analytics, growth, engagement, strategy, or upload images for AI analysis.",
+    "Ask AI about analytics, engagement, growth, OCR insights, or upload images for multimodal analysis.",
 }) => {
   /**
-   * Scroll container reference.
+   * -------------------------------------------------------
+   * Scroll container.
+   * -------------------------------------------------------
    */
   const containerRef =
     useRef(null);
 
   /**
+   * -------------------------------------------------------
    * Bottom scroll anchor.
+   * -------------------------------------------------------
    */
   const messagesEndRef =
     useRef(null);
 
   /**
-   * Track previous message count.
+   * -------------------------------------------------------
+   * Previous message tracking.
+   * -------------------------------------------------------
    */
   const previousMessageCountRef =
     useRef(messages.length);
 
   /**
+   * -------------------------------------------------------
    * Animation frame synchronization.
+   * -------------------------------------------------------
    */
-  const scrollFrameRef =
+  const animationFrameRef =
     useRef(null);
 
   /**
-   * Prevent stale animation frames.
+   * -------------------------------------------------------
+   * Mounted protection.
+   * -------------------------------------------------------
    */
   const mountedRef =
     useRef(true);
 
   /**
-   * Empty chat state.
+   * -------------------------------------------------------
+   * Cleanup lifecycle.
+   * -------------------------------------------------------
+   */
+  useEffect(() => {
+    return () => {
+      mountedRef.current =
+        false;
+
+      cancelAnimationFrame(
+        animationFrameRef.current
+      );
+    };
+  }, []);
+
+  /**
+   * -------------------------------------------------------
+   * Empty state lifecycle.
+   * -------------------------------------------------------
    */
   const showEmptyState =
     useMemo(() => {
       return (
-        messages.length === 0 &&
+        messages.length ===
+          0 &&
         !chatLoading
       );
     }, [
@@ -74,7 +105,9 @@ const ChatMessages = ({
     ]);
 
   /**
-   * Detect active streaming state.
+   * -------------------------------------------------------
+   * Streaming detection.
+   * -------------------------------------------------------
    */
   const isStreaming =
     useMemo(() => {
@@ -85,27 +118,27 @@ const ChatMessages = ({
     }, [messages]);
 
   /**
-   * Cleanup lifecycle.
+   * -------------------------------------------------------
+   * Stable rendered messages.
+   * -------------------------------------------------------
    */
-  useEffect(() => {
-    return () => {
-      mountedRef.current =
-        false;
-
-      cancelAnimationFrame(
-        scrollFrameRef.current
+  const renderedMessages =
+    useMemo(() => {
+      return messages.filter(
+        (message) => {
+          return (
+            message &&
+            typeof message ===
+              "object"
+          );
+        }
       );
-    };
-  }, []);
+    }, [messages]);
 
   /**
-   * Stream-aware auto-scroll lifecycle.
-   *
-   * Handles:
-   * - new messages
-   * - SSE chunk rendering
-   * - streaming synchronization
-   * - near-bottom protection
+   * -------------------------------------------------------
+   * Auto-scroll lifecycle.
+   * -------------------------------------------------------
    */
   useEffect(() => {
     const container =
@@ -116,45 +149,37 @@ const ChatMessages = ({
     }
 
     /**
-     * Detect if user remains near bottom.
-     *
-     * Prevents aggressive scrolling
-     * when user reads older messages.
+     * Detect near-bottom safely.
      */
     const isNearBottom =
       container.scrollHeight -
         container.scrollTop -
         container.clientHeight <
-      140;
+      160;
 
     /**
-     * Detect newly added messages.
+     * Detect new message append.
      */
     const hasNewMessage =
-      messages.length >
+      renderedMessages.length >
       previousMessageCountRef.current;
 
     /**
-     * Auto-scroll conditions.
+     * Scroll conditions.
      */
-    const shouldAutoScroll =
+    const shouldScroll =
       hasNewMessage ||
       (isStreaming &&
         isNearBottom);
 
     if (
-      shouldAutoScroll
+      shouldScroll
     ) {
-      /**
-       * Prevent excessive scroll
-       * thrashing during rapid
-       * stream chunk updates.
-       */
       cancelAnimationFrame(
-        scrollFrameRef.current
+        animationFrameRef.current
       );
 
-      scrollFrameRef.current =
+      animationFrameRef.current =
         requestAnimationFrame(
           () => {
             if (
@@ -178,9 +203,15 @@ const ChatMessages = ({
     }
 
     previousMessageCountRef.current =
-      messages.length;
+      renderedMessages.length;
+
+    return () => {
+      cancelAnimationFrame(
+        animationFrameRef.current
+      );
+    };
   }, [
-    messages.length,
+    renderedMessages,
     isStreaming,
     chatLoading,
   ]);
@@ -189,19 +220,19 @@ const ChatMessages = ({
     <div
       ref={containerRef}
       data-testid="chat-messages-container"
-      className="h-[550px] overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50 p-4"
+      className="h-[600px] overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-4"
     >
+      {/* ------------------------------------------------ */}
+      {/* Empty State */}
+      {/* ------------------------------------------------ */}
       {showEmptyState ? (
-        /**
-         * Empty chat state.
-         */
         <div className="flex h-full items-center justify-center">
-          <div className="max-w-lg text-center">
-            <h3 className="text-lg font-semibold text-gray-700">
+          <div className="max-w-xl text-center">
+            <h2 className="text-xl font-semibold text-gray-800">
               {emptyTitle}
-            </h3>
+            </h2>
 
-            <p className="mt-2 text-sm leading-6 text-gray-500">
+            <p className="mt-3 text-sm leading-7 text-gray-500">
               {
                 emptyDescription
               }
@@ -209,15 +240,17 @@ const ChatMessages = ({
           </div>
         </div>
       ) : (
-        /**
-         * Stable messages list.
-         */
         <div className="space-y-5">
-          {messages.map(
-            (message) => (
+          {renderedMessages.map(
+            (
+              message,
+              index
+            ) => (
               <ChatMessage
                 key={
-                  message.id
+                  message._id ||
+                  message.id ||
+                  `${message.role}-${index}`
                 }
                 message={
                   message
@@ -238,9 +271,6 @@ const ChatMessages = ({
   );
 };
 
-/**
- * Prevent unnecessary rerenders.
- */
 export default memo(
   ChatMessages
 );

@@ -17,58 +17,83 @@ const normalizeAIResponse = (
       responseData.message ||
       "",
 
-    /**
-     * AI insights payload.
-     */
     insights:
       responseData.insights ||
       responseData.data
         ?.insights ||
       null,
 
-    /**
-     * Chat sessions payload.
-     */
     sessions:
       responseData.sessions ||
       responseData.data
         ?.sessions ||
       [],
 
-    /**
-     * Chat messages payload.
-     */
     messages:
       responseData.messages ||
       responseData.data
         ?.messages ||
       [],
 
-    /**
-     * Session payload.
-     */
     session:
       responseData.session ||
       responseData.data
         ?.session ||
       null,
 
-    /**
-     * Remaining usage info.
-     */
     usage:
       responseData.usage ||
       responseData.data
         ?.usage ||
       null,
 
-    /**
-     * Raw backend payload.
-     */
     data:
       responseData.data ||
       responseData,
   };
+};
+
+/**
+ * -------------------------------------------------------
+ * Create multipart payload safely.
+ * -------------------------------------------------------
+ */
+const buildChatFormData = ({
+  message,
+  images = [],
+  sessionId,
+}) => {
+  const formData =
+    new FormData();
+
+  formData.append(
+    "message",
+    message || ""
+  );
+
+  /**
+   * Existing session support.
+   */
+  if (sessionId) {
+    formData.append(
+      "sessionId",
+      sessionId
+    );
+  }
+
+  /**
+   * Multiple image uploads.
+   */
+  images.forEach((image) => {
+    if (image?.file) {
+      formData.append(
+        "images",
+        image.file
+      );
+    }
+  });
+
+  return formData;
 };
 
 /**
@@ -132,7 +157,7 @@ export const getChatSessions =
 
 /**
  * -------------------------------------------------------
- * Get session messages.
+ * Get one session messages.
  * -------------------------------------------------------
  */
 export const getSessionMessages =
@@ -161,7 +186,7 @@ export const getSessionMessages =
 
 /**
  * -------------------------------------------------------
- * Rename chat session.
+ * Rename session.
  * -------------------------------------------------------
  */
 export const renameChatSession =
@@ -194,7 +219,7 @@ export const renameChatSession =
 
 /**
  * -------------------------------------------------------
- * Delete chat session.
+ * Delete session.
  * -------------------------------------------------------
  */
 export const deleteChatSession =
@@ -223,55 +248,7 @@ export const deleteChatSession =
 
 /**
  * -------------------------------------------------------
- * Create multipart AI request payload.
- * -------------------------------------------------------
- */
-const buildChatFormData = ({
-  message,
-  images = [],
-  sessionId,
-}) => {
-  const formData =
-    new FormData();
-
-  /**
-   * User message.
-   */
-  formData.append(
-    "message",
-    message || ""
-  );
-
-  /**
-   * Existing session support.
-   */
-  if (sessionId) {
-    formData.append(
-      "sessionId",
-      sessionId
-    );
-  }
-
-  /**
-   * Multiple image uploads.
-   */
-  images.forEach((image) => {
-    if (image?.file) {
-      formData.append(
-        "images",
-        image.file
-      );
-    }
-  });
-
-  return formData;
-};
-
-/**
- * -------------------------------------------------------
- * Standard AI message request.
- *
- * Non-streaming fallback.
+ * Standard non-streaming AI request.
  * -------------------------------------------------------
  */
 export const sendAIMessage =
@@ -316,16 +293,17 @@ export const sendAIMessage =
 
 /**
  * -------------------------------------------------------
- * Real SSE AI streaming request.
+ * Production-grade SSE streaming lifecycle.
  * -------------------------------------------------------
  *
  * Handles:
  * - token streaming
- * - chunk rendering
- * - done events
- * - error events
+ * - chunk parsing
+ * - abort lifecycle
+ * - malformed chunks
  * - session creation
- * - multimodal uploads
+ * - auth validation
+ * - backend disconnects
  */
 export const streamAIMessage =
   async ({
@@ -335,9 +313,6 @@ export const streamAIMessage =
     sessionId,
     signal,
 
-    /**
-     * SSE callbacks.
-     */
     onConnected,
     onToken,
     onDone,
@@ -349,6 +324,23 @@ export const streamAIMessage =
       );
     }
 
+    /**
+     * Auth validation.
+     */
+    const token =
+      localStorage.getItem(
+        "token"
+      );
+
+    if (!token) {
+      throw new Error(
+        "Authentication token missing."
+      );
+    }
+
+    /**
+     * Build multipart request.
+     */
     const formData =
       buildChatFormData({
         message,
@@ -356,11 +348,9 @@ export const streamAIMessage =
         sessionId,
       });
 
-    const token =
-      localStorage.getItem(
-        "token"
-      );
-
+    /**
+     * Start stream.
+     */
     const response =
       await fetch(
         `${
@@ -381,12 +371,41 @@ export const streamAIMessage =
         }
       );
 
+    /**
+     * Backend failure.
+     */
     if (!response.ok) {
+      let errorMessage =
+        "Failed to initialize AI stream.";
+
+      try {
+        const errorPayload =
+          await response.json();
+
+        errorMessage =
+          errorPayload.message ||
+          errorMessage;
+      } catch {
+        //
+      }
+
       throw new Error(
-        "Failed to start AI stream."
+        errorMessage
       );
     }
 
+    /**
+     * Stream validation.
+     */
+    if (!response.body) {
+      throw new Error(
+        "Streaming response body missing."
+      );
+    }
+
+    /**
+     * SSE lifecycle.
+     */
     const reader =
       response.body.getReader();
 
@@ -395,95 +414,164 @@ export const streamAIMessage =
 
     let buffer = "";
 
-    /**
-     * Stream lifecycle.
-     */
-    while (true) {
-      const {
-        done,
-        value,
-      } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(
-        value,
-        {
-          stream: true,
-        }
-      );
-
-      /**
-       * SSE event parsing.
-       */
-      const chunks =
-        buffer.split("\n\n");
-
-      buffer =
-        chunks.pop() || "";
-
-      for (const chunk of chunks) {
-        const cleanChunk =
-          chunk.trim();
-
+    try {
+      while (true) {
+        /**
+         * Abort protection.
+         */
         if (
-          !cleanChunk.startsWith(
-            "data:"
-          )
+          signal?.aborted
         ) {
-          continue;
-        }
-
-        try {
-          const json =
-            JSON.parse(
-              cleanChunk.replace(
-                /^data:\s*/,
-                ""
-              )
-            );
-
-          /**
-           * SSE event routing.
-           */
-          switch (
-            json.type
-          ) {
-            case "connected":
-              onConnected?.(
-                json
-              );
-              break;
-
-            case "token":
-              onToken?.(
-                json
-              );
-              break;
-
-            case "done":
-              onDone?.(
-                json
-              );
-              break;
-
-            case "error":
-              onError?.(
-                json
-              );
-              break;
-
-            default:
-              break;
-          }
-        } catch (error) {
-          console.error(
-            "[SSE PARSE ERROR]",
-            error
+          throw new DOMException(
+            "Stream aborted",
+            "AbortError"
           );
         }
+
+        const {
+          done,
+          value,
+        } =
+          await reader.read();
+
+        /**
+         * Stream completed.
+         */
+        if (done) {
+          break;
+        }
+
+        /**
+         * Decode streamed chunk.
+         */
+        buffer += decoder.decode(
+          value,
+          {
+            stream: true,
+          }
+        );
+
+        /**
+         * Split SSE events.
+         */
+        const events =
+          buffer.split(
+            "\n\n"
+          );
+
+        /**
+         * Preserve incomplete chunk.
+         */
+        buffer =
+          events.pop() || "";
+
+        /**
+         * Parse events safely.
+         */
+        for (const event of events) {
+          const trimmedEvent =
+            event.trim();
+
+          if (
+            !trimmedEvent.startsWith(
+              "data:"
+            )
+          ) {
+            continue;
+          }
+
+          try {
+            /**
+             * Remove SSE prefix.
+             */
+            const rawJson =
+              trimmedEvent.replace(
+                /^data:\s*/,
+                ""
+              );
+
+            if (!rawJson) {
+              continue;
+            }
+
+            const payload =
+              JSON.parse(
+                rawJson
+              );
+
+            /**
+             * Event routing.
+             */
+            switch (
+              payload.type
+            ) {
+              case "connected":
+                onConnected?.(
+                  payload
+                );
+                break;
+
+              case "token":
+                onToken?.(
+                  payload
+                );
+                break;
+
+              case "done":
+                onDone?.(
+                  payload
+                );
+                break;
+
+              case "error":
+                onError?.(
+                  payload
+                );
+
+                throw new Error(
+                  payload.message ||
+                    "AI stream failed."
+                );
+
+              default:
+                break;
+            }
+          } catch (error) {
+            /**
+             * Ignore malformed SSE chunks.
+             */
+            console.error(
+              "[SSE PARSE ERROR]",
+              error
+            );
+          }
+        }
+      }
+    } catch (error) {
+      /**
+       * Ignore abort lifecycle.
+       */
+      if (
+        error?.name ===
+        "AbortError"
+      ) {
+        throw error;
+      }
+
+      console.error(
+        "[STREAM ERROR]",
+        error
+      );
+
+      throw error;
+    } finally {
+      /**
+       * Cleanup reader safely.
+       */
+      try {
+        reader.releaseLock();
+      } catch {
+        //
       }
     }
   };

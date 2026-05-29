@@ -4,14 +4,14 @@ import {
 } from "react";
 
 /**
- * Stable streaming cursor.
- *
- * ChatGPT-style typing feel.
+ * -------------------------------------------------------
+ * Streaming typing cursor.
+ * -------------------------------------------------------
  */
 const StreamingCursor =
   memo(() => {
     return (
-      <span className="ml-1 inline-block animate-pulse font-semibold text-gray-400">
+      <span className="ml-1 inline-block animate-pulse text-gray-400">
         ▋
       </span>
     );
@@ -21,16 +21,41 @@ StreamingCursor.displayName =
   "StreamingCursor";
 
 /**
- * Stable text content renderer.
- *
- * Future-ready for:
- * - markdown
- * - syntax highlighting
- * - code blocks
+ * -------------------------------------------------------
+ * AI loading renderer.
+ * -------------------------------------------------------
+ */
+const LoadingIndicator =
+  memo(() => {
+    return (
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1">
+          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400"></span>
+
+          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:120ms]"></span>
+
+          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:240ms]"></span>
+        </div>
+
+        <span className="text-sm text-gray-500">
+          AI is thinking...
+        </span>
+      </div>
+    );
+  });
+
+LoadingIndicator.displayName =
+  "LoadingIndicator";
+
+/**
+ * -------------------------------------------------------
+ * Stable multiline renderer.
+ * -------------------------------------------------------
  */
 const MessageContent = memo(
   ({
-    content,
+    content = "",
+
     isStreaming =
       false,
   }) => {
@@ -39,38 +64,41 @@ const MessageContent = memo(
     }
 
     /**
-     * Preserve AI formatting.
-     *
-     * Important for:
-     * - markdown
-     * - code blocks
-     * - spacing
-     * - lists
+     * Prevent rendering crashes.
+     */
+    const safeContent =
+      String(content);
+
+    /**
+     * Prevent huge render explosions.
      */
     const lines =
-      content.split("\n");
+      safeContent
+        .slice(0, 50000)
+        .split("\n");
 
     return (
       <div
-        className="space-y-2"
         aria-live={
           isStreaming
             ? "polite"
             : undefined
         }
+        className="space-y-2"
       >
         {lines.map(
-          (line, index) => (
+          (
+            line,
+            index
+          ) => (
             <p
-              key={index}
-              className="break-words whitespace-pre-wrap text-sm leading-6"
+              key={`${index}-${line.length}`}
+              className="break-words whitespace-pre-wrap text-sm leading-7"
             >
-              {
-                line ||
-                "\u00A0"
-              }
+              {line ||
+                "\u00A0"}
 
-              {/* Live streaming cursor */}
+              {/* Streaming Cursor */}
               {isStreaming &&
                 index ===
                   lines.length -
@@ -89,45 +117,27 @@ MessageContent.displayName =
   "MessageContent";
 
 /**
- * Stable AI loading indicator.
- */
-const LoadingIndicator = memo(
-  () => {
-    return (
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400"></span>
-
-          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:150ms]"></span>
-
-          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:300ms]"></span>
-        </div>
-
-        <span className="text-sm text-gray-500">
-          AI is thinking...
-        </span>
-      </div>
-    );
-  }
-);
-
-LoadingIndicator.displayName =
-  "LoadingIndicator";
-
-/**
- * Stable image gallery renderer.
+ * -------------------------------------------------------
+ * Stable message images renderer.
+ * -------------------------------------------------------
  */
 const MessageImages = memo(
   ({
     images = [],
+
     messageId,
   }) => {
-    if (!images.length) {
+    if (
+      !Array.isArray(
+        images
+      ) ||
+      images.length === 0
+    ) {
       return null;
     }
 
     return (
-      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-3">
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3">
         {images.map(
           (
             image,
@@ -135,19 +145,18 @@ const MessageImages = memo(
           ) => (
             <div
               key={`${messageId}-${index}`}
-              className="overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
+              className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-100"
             >
               <img
                 src={
                   image.imageUrl
                 }
-                alt={`Uploaded ${index}`}
+                alt={`upload-${index}`}
                 loading="lazy"
-                className="max-h-60 w-full object-cover transition"
+                className="max-h-72 w-full object-cover"
 
                 /**
-                 * Prevent layout corruption
-                 * from failed image loads.
+                 * Prevent broken image layouts.
                  */
                 onError={(
                   event
@@ -168,35 +177,68 @@ MessageImages.displayName =
   "MessageImages";
 
 /**
- * Production-grade chat message bubble.
+ * -------------------------------------------------------
+ * Format timestamp safely.
+ * -------------------------------------------------------
+ */
+const formatTimestamp = (
+  value
+) => {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    return new Date(
+      value
+    ).toLocaleTimeString(
+      [],
+      {
+        hour: "numeric",
+        minute:
+          "2-digit",
+      }
+    );
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * -------------------------------------------------------
+ * Production-grade AI chat message.
+ * -------------------------------------------------------
  *
  * Handles:
  * - user messages
  * - assistant messages
- * - streamed responses
- * - AI loading states
+ * - streaming lifecycle
  * - image rendering
- * - metadata rendering
+ * - loading states
  * - error states
- *
- * Future-ready for:
- * - markdown
- * - code blocks
- * - syntax highlighting
- * - copy actions
+ * - metadata rendering
+ * - large content rendering
  */
 const ChatMessage = ({
   message,
 }) => {
   /**
+   * -------------------------------------------------------
    * Safety guard.
+   * -------------------------------------------------------
    */
-  if (!message) {
+  if (
+    !message ||
+    typeof message !==
+      "object"
+  ) {
     return null;
   }
 
   /**
-   * Stable role helpers.
+   * -------------------------------------------------------
+   * Role lifecycle.
+   * -------------------------------------------------------
    */
   const isUser =
     message.role === "user";
@@ -206,7 +248,9 @@ const ChatMessage = ({
     "assistant";
 
   /**
-   * Stable lifecycle states.
+   * -------------------------------------------------------
+   * Status lifecycle.
+   * -------------------------------------------------------
    */
   const isLoading =
     Boolean(
@@ -217,22 +261,15 @@ const ChatMessage = ({
     message.isError
   );
 
-  /**
-   * Streaming state.
-   *
-   * Active during:
-   * SSE chunk rendering.
-   */
   const isStreaming =
-    isAssistant &&
-    !isLoading &&
-    !isError &&
     Boolean(
       message.isStreaming
     );
 
   /**
-   * Stable images array.
+   * -------------------------------------------------------
+   * Stable images lifecycle.
+   * -------------------------------------------------------
    */
   const images =
     Array.isArray(
@@ -242,42 +279,59 @@ const ChatMessage = ({
       : [];
 
   /**
-   * Stable bubble styles.
+   * -------------------------------------------------------
+   * Safe metadata.
+   * -------------------------------------------------------
+   */
+  const safeContent =
+    typeof message.content ===
+    "string"
+      ? message.content
+      : "";
+
+  /**
+   * -------------------------------------------------------
+   * Bubble styles.
+   * -------------------------------------------------------
    */
   const bubbleStyles =
     useMemo(() => {
       if (isUser) {
-        return "rounded-br-md bg-blue-600 text-white";
+        return "bg-blue-600 text-white rounded-br-md";
       }
 
       if (isError) {
-        return "rounded-bl-md border border-red-200 bg-red-50 text-red-700";
+        return "bg-red-50 border border-red-200 text-red-700 rounded-bl-md";
       }
 
-      return "rounded-bl-md border border-gray-100 bg-white text-gray-800";
+      return "bg-white border border-gray-200 text-gray-800 rounded-bl-md";
     }, [
       isUser,
       isError,
     ]);
 
   /**
-   * Stable metadata visibility.
+   * -------------------------------------------------------
+   * Metadata visibility.
+   * -------------------------------------------------------
    */
   const showMetadata =
     useMemo(() => {
       return (
         isAssistant &&
         !isLoading &&
-        !isError &&
         (message.model ||
-          message.latencyMs)
+          message.latencyMs ||
+          message.createdAt ||
+          isStreaming)
       );
     }, [
       isAssistant,
       isLoading,
-      isError,
       message.model,
       message.latencyMs,
+      message.createdAt,
+      isStreaming,
     ]);
 
   return (
@@ -291,7 +345,29 @@ const ChatMessage = ({
           : "justify-start"
       }`}
     >
-      <div className="max-w-[88%] md:max-w-[80%]">
+      <div className="max-w-[92%] md:max-w-[80%]">
+        {/* ------------------------------------------------ */}
+        {/* Role Label */}
+        {/* ------------------------------------------------ */}
+        <div
+          className={`mb-1 px-1 text-[11px] font-medium ${
+            isUser
+              ? "text-right text-blue-600"
+              : isError
+                ? "text-red-500"
+                : "text-gray-500"
+          }`}
+        >
+          {isUser
+            ? "You"
+            : isError
+              ? "AI Error"
+              : "AI Assistant"}
+        </div>
+
+        {/* ------------------------------------------------ */}
+        {/* Bubble */}
+        {/* ------------------------------------------------ */}
         <div
           className={`rounded-2xl px-4 py-3 shadow-sm transition-colors duration-200 ${bubbleStyles}`}
         >
@@ -299,28 +375,29 @@ const ChatMessage = ({
           <MessageImages
             images={images}
             messageId={
+              message._id ||
               message.id
             }
           />
 
-          {/* AI Loading */}
+          {/* Loading */}
           {isLoading ? (
             <LoadingIndicator />
           ) : (
             <>
-              {/* Streamed Message Content */}
+              {/* Content */}
               <MessageContent
                 content={
-                  message.content
+                  safeContent
                 }
                 isStreaming={
                   isStreaming
                 }
               />
 
-              {/* AI Metadata */}
+              {/* Metadata */}
               {showMetadata && (
-                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-50 pt-2 text-xs text-gray-400">
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2 text-[11px] text-gray-400">
                   {message.model && (
                     <span>
                       {
@@ -339,7 +416,15 @@ const ChatMessage = ({
                     </span>
                   )}
 
-                  {/* Streaming Status */}
+                  {message.createdAt && (
+                    <span>
+                      •{" "}
+                      {formatTimestamp(
+                        message.createdAt
+                      )}
+                    </span>
+                  )}
+
                   {isStreaming && (
                     <span className="text-blue-500">
                       • streaming
@@ -355,9 +440,6 @@ const ChatMessage = ({
   );
 };
 
-/**
- * Prevent unnecessary rerenders.
- */
 export default memo(
   ChatMessage
 );

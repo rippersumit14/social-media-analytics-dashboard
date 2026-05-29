@@ -24,6 +24,7 @@ import {
  * - abort lifecycle
  * - stale request protection
  * - usage synchronization
+ * - backend _id alignment
  */
 const useAIChat = ({
   activeSessionId,
@@ -134,7 +135,8 @@ const useAIChat = ({
       ) => {
         setMessages((prev) =>
           prev.map((message) =>
-            message.id ===
+            (message.id ||
+              message._id) ===
             assistantMessageId
               ? updater(
                   message
@@ -327,7 +329,11 @@ const useAIChat = ({
          */
         const optimisticUserMessage =
           {
-            id: crypto.randomUUID(),
+            _id:
+              crypto.randomUUID(),
+
+            id:
+              crypto.randomUUID(),
 
             role: "user",
 
@@ -357,7 +363,11 @@ const useAIChat = ({
 
         const assistantPlaceholder =
           {
-            id: assistantMessageId,
+            _id:
+              assistantMessageId,
+
+            id:
+              assistantMessageId,
 
             role:
               "assistant",
@@ -503,6 +513,18 @@ const useAIChat = ({
                 await loadSessions(
                   socialAccountId
                 );
+
+                /**
+                 * Auto-select
+                 * backend-created session.
+                 */
+                if (
+                  payload.sessionId
+                ) {
+                  setActiveSessionId(
+                    payload.sessionId
+                  );
+                }
 
                 /**
                  * Cleanup uploads.

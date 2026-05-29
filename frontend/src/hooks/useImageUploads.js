@@ -2,44 +2,51 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 /**
+ * -------------------------------------------------------
  * Upload constraints.
+ * -------------------------------------------------------
  */
-const MAX_IMAGES = 6;
+const MAX_IMAGES = 10;
 
 const MAX_FILE_SIZE =
   10 * 1024 * 1024;
 
 /**
- * Production-grade image upload hook.
+ * Supported image formats.
+ */
+const SUPPORTED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+];
+
+/**
+ * -------------------------------------------------------
+ * Production-grade upload lifecycle hook.
+ * -------------------------------------------------------
  *
  * Handles:
- * - multiple uploads
+ * - upload validation
  * - preview generation
- * - cleanup lifecycle
- * - validation
+ * - drag/drop lifecycle
  * - duplicate prevention
+ * - memory cleanup
  * - OCR-ready metadata
- * - memory leak prevention
+ * - upload state normalization
+ * - upload processing states
  */
 const useImageUploads =
   () => {
     /**
-     * Selected image state.
-     *
-     * Structure:
-     * [
-     *   {
-     *     id,
-     *     file,
-     *     preview,
-     *     status,
-     *     uploadedAt
-     *   }
-     * ]
+     * ---------------------------------------------------
+     * Upload state.
+     * ---------------------------------------------------
      */
     const [
       selectedImages,
@@ -47,23 +54,32 @@ const useImageUploads =
     ] = useState([]);
 
     /**
-     * Upload lifecycle state.
+     * ---------------------------------------------------
+     * Upload lifecycle.
+     * ---------------------------------------------------
      */
     const [
       uploadError,
       setUploadError,
     ] = useState("");
 
-    /**
-     * Upload processing state.
-     */
     const [
       isProcessingUploads,
       setIsProcessingUploads,
     ] = useState(false);
 
     /**
-     * Current image count.
+     * ---------------------------------------------------
+     * Prevent double revoke.
+     * ---------------------------------------------------
+     */
+    const revokedUrlsRef =
+      useRef(new Set());
+
+    /**
+     * ---------------------------------------------------
+     * Image count.
+     * ---------------------------------------------------
      */
     const imageCount =
       useMemo(() => {
@@ -71,37 +87,58 @@ const useImageUploads =
       }, [selectedImages]);
 
     /**
-     * Cleanup preview URL safely.
+     * ---------------------------------------------------
+     * Safe preview cleanup.
+     * ---------------------------------------------------
      */
     const revokePreview =
       useCallback(
         (previewUrl) => {
           if (
-            previewUrl
+            !previewUrl ||
+            revokedUrlsRef.current.has(
+              previewUrl
+            )
           ) {
+            return;
+          }
+
+          try {
             URL.revokeObjectURL(
               previewUrl
             );
+
+            revokedUrlsRef.current.add(
+              previewUrl
+            );
+          } catch {
+            //
           }
         },
         []
       );
 
     /**
-     * Validate uploaded file.
+     * ---------------------------------------------------
+     * Validate image safely.
+     * ---------------------------------------------------
      */
     const validateFile =
       useCallback(
         (file) => {
+          if (!file) {
+            return "Invalid image file.";
+          }
+
           /**
-           * Image validation.
+           * File type validation.
            */
           if (
-            !file.type.startsWith(
-              "image/"
+            !SUPPORTED_IMAGE_TYPES.includes(
+              file.type
             )
           ) {
-            return "Only image files are allowed.";
+            return "Unsupported image format.";
           }
 
           /**
@@ -120,142 +157,163 @@ const useImageUploads =
       );
 
     /**
-     * Duplicate detection.
+     * ---------------------------------------------------
+     * Handle uploads safely.
+     * ---------------------------------------------------
      */
-    const isDuplicateFile =
+    const addImages =
       useCallback(
-        (file) => {
-          return selectedImages.some(
-            (image) => {
-              return (
-                image.file
-                  ?.name ===
-                  file.name &&
-                image.file
-                  ?.size ===
-                  file.size &&
-                image.file
-                  ?.lastModified ===
-                  file.lastModified
-              );
-            }
-          );
-        },
-        [selectedImages]
-      );
-
-    /**
-     * Handle image selection.
-     */
-    const handleImageChange =
-      useCallback(
-        async (event) => {
+        async (
+          incomingFiles = []
+        ) => {
           const files =
             Array.from(
-              event.target
-                .files || []
+              incomingFiles
             );
 
           if (
-            !files.length
+            files.length === 0
           ) {
             return;
           }
 
-          setUploadError(
-            ""
-          );
+          setUploadError("");
 
           setIsProcessingUploads(
             true
           );
 
           try {
-            /**
-             * Max upload limit.
-             */
-            if (
-              imageCount +
-                files.length >
-              MAX_IMAGES
-            ) {
-              throw new Error(
-                `Maximum ${MAX_IMAGES} images allowed.`
-              );
-            }
-
-            /**
-             * Validate files.
-             */
-            for (const file of files) {
-              const validationError =
-                validateFile(
-                  file
-                );
-
-              if (
-                validationError
-              ) {
-                throw new Error(
-                  validationError
-                );
-              }
-            }
-
-            /**
-             * Remove duplicate uploads.
-             */
-            const uniqueFiles =
-              files.filter(
-                (
-                  file
-                ) =>
-                  !isDuplicateFile(
-                    file
-                  )
-              );
-
-            /**
-             * Normalize upload structure.
-             */
-            const mappedImages =
-              uniqueFiles.map(
-                (
-                  file
-                ) => ({
-                  id: crypto.randomUUID(),
-
-                  file,
-
-                  /**
-                   * Local preview URL.
-                   */
-                  preview:
-                    URL.createObjectURL(
-                      file
-                    ),
-
-                  /**
-                   * Upload lifecycle.
-                   */
-                  status:
-                    "pending",
-
-                  uploadedAt:
-                    Date.now(),
-                })
-              );
-
-            /**
-             * Append uploads safely.
-             */
             setSelectedImages(
               (
-                prev
-              ) => [
-                ...prev,
-                ...mappedImages,
-              ]
+                previousImages
+              ) => {
+                /**
+                 * Upload limit protection.
+                 */
+                if (
+                  previousImages.length +
+                    files.length >
+                  MAX_IMAGES
+                ) {
+                  setUploadError(
+                    `Maximum ${MAX_IMAGES} images allowed.`
+                  );
+
+                  return previousImages;
+                }
+
+                /**
+                 * Existing file map.
+                 */
+                const existingFiles =
+                  new Set(
+                    previousImages.map(
+                      (
+                        image
+                      ) =>
+                        `${image.file.name}-${image.file.size}-${image.file.lastModified}`
+                    )
+                  );
+
+                const nextImages =
+                  [];
+
+                for (const file of files) {
+                  /**
+                   * Validate file.
+                   */
+                  const validationError =
+                    validateFile(
+                      file
+                    );
+
+                  if (
+                    validationError
+                  ) {
+                    setUploadError(
+                      validationError
+                    );
+
+                    continue;
+                  }
+
+                  /**
+                   * Duplicate prevention.
+                   */
+                  const duplicateKey =
+                    `${file.name}-${file.size}-${file.lastModified}`;
+
+                  if (
+                    existingFiles.has(
+                      duplicateKey
+                    )
+                  ) {
+                    continue;
+                  }
+
+                  existingFiles.add(
+                    duplicateKey
+                  );
+
+                  /**
+                   * Generate preview safely.
+                   */
+                  const preview =
+                    URL.createObjectURL(
+                      file
+                    );
+
+                  /**
+                   * Stable upload structure.
+                   */
+                  nextImages.push(
+                    {
+                      _id:
+                        crypto.randomUUID(),
+
+                      id:
+                        crypto.randomUUID(),
+
+                      file,
+
+                      preview,
+
+                      name:
+                        file.name,
+
+                      size:
+                        file.size,
+
+                      type:
+                        file.type,
+
+                      lastModified:
+                        file.lastModified,
+
+                      /**
+                       * Upload lifecycle.
+                       */
+                      status:
+                        "pending",
+
+                      uploaded:
+                        false,
+
+                      uploadedAt:
+                        Date.now(),
+
+                      createdAt:
+                        new Date().toISOString(),
+                    }
+                  );
+                }
+
+                return [
+                  ...previousImages,
+                  ...nextImages,
+                ];
+              }
             );
           } catch (
             error
@@ -275,43 +333,45 @@ const useImageUploads =
             );
           }
         },
-        [
-          imageCount,
-          validateFile,
-          isDuplicateFile,
-        ]
+        [validateFile]
       );
 
     /**
-     * Remove single image.
+     * ---------------------------------------------------
+     * Remove one image safely.
+     * ---------------------------------------------------
      */
     const removeImage =
       useCallback(
         (imageId) => {
           setSelectedImages(
-            (prev) => {
+            (previousImages) => {
               const imageToRemove =
-                prev.find(
+                previousImages.find(
                   (
                     image
                   ) =>
                     image.id ===
-                    imageId
+                      imageId ||
+                    image._id ===
+                      imageId
                 );
 
               /**
-               * Cleanup preview URL.
+               * Cleanup preview.
                */
               revokePreview(
                 imageToRemove?.preview
               );
 
-              return prev.filter(
+              return previousImages.filter(
                 (
                   image
                 ) =>
                   image.id !==
-                  imageId
+                    imageId &&
+                  image._id !==
+                    imageId
               );
             }
           );
@@ -320,34 +380,41 @@ const useImageUploads =
       );
 
     /**
-     * Clear all uploads.
+     * ---------------------------------------------------
+     * Clear uploads safely.
+     * ---------------------------------------------------
      */
     const clearImages =
       useCallback(() => {
-        selectedImages.forEach(
-          (image) => {
-            revokePreview(
-              image.preview
+        setSelectedImages(
+          (
+            previousImages
+          ) => {
+            previousImages.forEach(
+              (
+                image
+              ) => {
+                revokePreview(
+                  image.preview
+                );
+              }
             );
+
+            return [];
           }
         );
 
-        setSelectedImages(
-          []
-        );
+        setUploadError("");
 
-        setUploadError(
-          ""
+        setIsProcessingUploads(
+          false
         );
-      }, [
-        selectedImages,
-        revokePreview,
-      ]);
+      }, [revokePreview]);
 
     /**
+     * ---------------------------------------------------
      * Cleanup previews on unmount.
-     *
-     * Prevents memory leaks.
+     * ---------------------------------------------------
      */
     useEffect(() => {
       return () => {
@@ -366,7 +433,7 @@ const useImageUploads =
 
     return {
       /**
-       * State.
+       * Upload state.
        */
       selectedImages,
 
@@ -377,9 +444,9 @@ const useImageUploads =
       imageCount,
 
       /**
-       * Actions.
+       * Upload actions.
        */
-      handleImageChange,
+      addImages,
 
       removeImage,
 

@@ -6,7 +6,9 @@ import {
 } from "react";
 
 /**
+ * -------------------------------------------------------
  * Format session timestamp safely.
+ * -------------------------------------------------------
  */
 const formatSessionTime = (
   timestamp
@@ -15,20 +17,25 @@ const formatSessionTime = (
     return "";
   }
 
-  const date =
-    new Date(timestamp);
-
-  return date.toLocaleDateString(
-    [],
-    {
-      month: "short",
-      day: "numeric",
-    }
-  );
+  try {
+    return new Date(
+      timestamp
+    ).toLocaleDateString(
+      [],
+      {
+        month: "short",
+        day: "numeric",
+      }
+    );
+  } catch {
+    return "";
+  }
 };
 
 /**
+ * -------------------------------------------------------
  * Stable session card renderer.
+ * -------------------------------------------------------
  */
 const SessionCard = memo(
   ({
@@ -55,14 +62,17 @@ const SessionCard = memo(
     disabled,
   }) => {
     /**
-     * Stable session ID.
+     * -------------------------------------------------------
+     * Stable backend session ID.
+     * -------------------------------------------------------
      */
     const sessionId =
-      session?.sessionId ||
       session?._id;
 
     /**
-     * Stable click lifecycle.
+     * -------------------------------------------------------
+     * Session selection lifecycle.
+     * -------------------------------------------------------
      */
     const handleSelect =
       useCallback(() => {
@@ -83,7 +93,9 @@ const SessionCard = memo(
       ]);
 
     /**
-     * Stable rename trigger.
+     * -------------------------------------------------------
+     * Rename trigger lifecycle.
+     * -------------------------------------------------------
      */
     const handleRenameClick =
       useCallback(
@@ -103,7 +115,9 @@ const SessionCard = memo(
       );
 
     /**
-     * Stable delete lifecycle.
+     * -------------------------------------------------------
+     * Delete lifecycle.
+     * -------------------------------------------------------
      */
     const handleDeleteClick =
       useCallback(
@@ -140,7 +154,9 @@ const SessionCard = memo(
       );
 
     /**
-     * Stable rename submit.
+     * -------------------------------------------------------
+     * Rename submit lifecycle.
+     * -------------------------------------------------------
      */
     const handleSubmit =
       useCallback(() => {
@@ -164,7 +180,7 @@ const SessionCard = memo(
         onClick={
           handleSelect
         }
-        className={`group rounded-xl border p-3 transition-all duration-200 ${
+        className={`group rounded-2xl border p-3 transition-all duration-200 ${
           disabled
             ? "cursor-not-allowed opacity-70"
             : "cursor-pointer"
@@ -174,7 +190,9 @@ const SessionCard = memo(
             : "border-gray-200 bg-gray-50 hover:bg-gray-100"
         }`}
       >
+        {/* ------------------------------------------------ */}
         {/* Rename Mode */}
+        {/* ------------------------------------------------ */}
         {isEditing ? (
           <input
             value={
@@ -194,7 +212,7 @@ const SessionCard = memo(
               event.stopPropagation()
             }
             autoFocus
-            className="w-full rounded-md border border-gray-300 px-2 py-1 text-sm outline-none focus:border-blue-500"
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
 
             onBlur={
               handleSubmit
@@ -220,7 +238,9 @@ const SessionCard = memo(
           />
         ) : (
           <>
+            {/* ------------------------------------------------ */}
             {/* Header */}
+            {/* ------------------------------------------------ */}
             <div className="flex items-start justify-between gap-2">
               <h4 className="truncate text-sm font-semibold text-gray-900">
                 {session?.title ||
@@ -236,33 +256,48 @@ const SessionCard = memo(
               )}
             </div>
 
+            {/* ------------------------------------------------ */}
             {/* Preview */}
-            <p className="mt-1 line-clamp-2 text-xs text-gray-500">
-              {session?.lastMessagePreview ||
+            {/* ------------------------------------------------ */}
+            <p className="mt-2 line-clamp-2 text-xs leading-5 text-gray-500">
+              {session?.latestMessage
+                ?.slice(0, 120) ||
                 "No messages yet"}
             </p>
 
-            {/* Actions */}
-            <div className="mt-3 flex items-center gap-3 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
-              <button
-                type="button"
-                onClick={
-                  handleRenameClick
-                }
-                className="text-xs text-gray-600 transition hover:text-blue-600"
-              >
-                Rename
-              </button>
+            {/* ------------------------------------------------ */}
+            {/* Metadata */}
+            {/* ------------------------------------------------ */}
+            <div className="mt-3 flex items-center justify-between">
+              <span className="text-[11px] text-gray-400">
+                {
+                  session?.messageCount
+                }{" "}
+                messages
+              </span>
 
-              <button
-                type="button"
-                onClick={
-                  handleDeleteClick
-                }
-                className="text-xs text-red-500 transition hover:text-red-600"
-              >
-                Delete
-              </button>
+              {/* Actions */}
+              <div className="flex items-center gap-3 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={
+                    handleRenameClick
+                  }
+                  className="text-[11px] text-gray-600 transition hover:text-blue-600"
+                >
+                  Rename
+                </button>
+
+                <button
+                  type="button"
+                  onClick={
+                    handleDeleteClick
+                  }
+                  className="text-[11px] text-red-500 transition hover:text-red-600"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -275,7 +310,16 @@ SessionCard.displayName =
   "SessionCard";
 
 /**
+ * -------------------------------------------------------
  * Production-grade AI chat sidebar.
+ * -------------------------------------------------------
+ *
+ * Handles:
+ * - session rendering
+ * - active session synchronization
+ * - rename/delete lifecycle
+ * - session switching
+ * - loading states
  */
 const ChatSidebar = ({
   sessions = [],
@@ -293,23 +337,24 @@ const ChatSidebar = ({
   isLoading = false,
 }) => {
   /**
-   * Current editing lifecycle.
+   * -------------------------------------------------------
+   * Rename lifecycle.
+   * -------------------------------------------------------
    */
   const [
     editingSessionId,
     setEditingSessionId,
   ] = useState(null);
 
-  /**
-   * Rename state.
-   */
   const [
     editTitle,
     setEditTitle,
   ] = useState("");
 
   /**
-   * Stable empty state.
+   * -------------------------------------------------------
+   * Empty state.
+   * -------------------------------------------------------
    */
   const isEmpty =
     useMemo(() => {
@@ -324,19 +369,21 @@ const ChatSidebar = ({
     ]);
 
   /**
+   * -------------------------------------------------------
    * Start rename lifecycle.
+   * -------------------------------------------------------
    */
   const handleStartEdit =
     useCallback(
       (session) => {
         if (
-          !session?.sessionId
+          !session?._id
         ) {
           return;
         }
 
         setEditingSessionId(
-          session.sessionId
+          session._id
         );
 
         setEditTitle(
@@ -348,7 +395,9 @@ const ChatSidebar = ({
     );
 
   /**
+   * -------------------------------------------------------
    * Cancel rename safely.
+   * -------------------------------------------------------
    */
   const handleCancelEdit =
     useCallback(() => {
@@ -360,20 +409,25 @@ const ChatSidebar = ({
     }, []);
 
   /**
+   * -------------------------------------------------------
    * Submit rename safely.
+   * -------------------------------------------------------
    */
   const handleSubmitEdit =
     useCallback(
       async (
         sessionId
       ) => {
-        const cleanTitle =
+        const cleanTitle = 
           editTitle.trim();
 
-        if (
-          !sessionId ||
-          !cleanTitle
-        ) {
+        if(!sessionId){
+          return;
+        }
+
+        //Prevent empty titles 
+        if(!cleanTitle){
+          handleCancelEdit();
           return;
         }
 
@@ -396,26 +450,34 @@ const ChatSidebar = ({
   return (
     <aside
       data-testid="chat-sidebar"
-      className="flex h-full w-full min-w-[260px] max-w-[320px] flex-col border-r border-gray-200 bg-white"
+      className="flex h-full min-h-0 w-full min-w-[280px] max-w-[320px] flex-col border-r border-gray-200 bg-white"
     >
+      {/* ------------------------------------------------ */}
       {/* Header */}
+      {/* ------------------------------------------------ */}
       <div className="border-b border-gray-200 p-4">
         <button
           data-testid="new-chat-button"
           type="button"
-          onClick={onNewChat}
-          disabled={isLoading}
+          onClick={
+            onNewChat
+          }
+          disabled={
+            isLoading
+          }
           className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
         >
           + New Chat
         </button>
       </div>
 
-      {/* Session List */}
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">
+      {/* ------------------------------------------------ */}
+      {/* Sessions */}
+      {/* ------------------------------------------------ */}
+      <div className="flex-1 space-y-3 overflow-y-auto p-3">
         {/* Loading */}
         {isLoading && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {Array.from({
               length: 5,
             }).map(
@@ -424,8 +486,10 @@ const ChatSidebar = ({
                 index
               ) => (
                 <div
-                  key={index}
-                  className="h-20 animate-pulse rounded-xl bg-gray-100"
+                  key={
+                    index
+                  }
+                  className="h-24 animate-pulse rounded-2xl bg-gray-100"
                 />
               )
             )}
@@ -434,62 +498,60 @@ const ChatSidebar = ({
 
         {/* Empty */}
         {isEmpty && (
-          <p className="mt-4 text-center text-sm text-gray-500">
-            No chat history yet
-          </p>
+          <div className="flex h-full items-center justify-center">
+            <p className="text-sm text-gray-500">
+              No chat history yet
+            </p>
+          </div>
         )}
 
         {/* Sessions */}
         {!isLoading &&
           sessions.map(
-            (session) => {
-              const sessionId =
-                session?.sessionId ||
-                session?._id;
-
-              return (
-                <SessionCard
-                  key={
-                    sessionId
-                  }
-                  session={
-                    session
-                  }
-                  isActive={
-                    activeSessionId ===
-                    sessionId
-                  }
-                  isEditing={
-                    editingSessionId ===
-                    sessionId
-                  }
-                  editTitle={
-                    editTitle
-                  }
-                  setEditTitle={
-                    setEditTitle
-                  }
-                  onSelect={
-                    onSelectSession
-                  }
-                  onStartEdit={
-                    handleStartEdit
-                  }
-                  onSubmitEdit={
-                    handleSubmitEdit
-                  }
-                  onCancelEdit={
-                    handleCancelEdit
-                  }
-                  onDelete={
-                    onDeleteSession
-                  }
-                  disabled={
-                    isLoading
-                  }
-                />
-              );
-            }
+            (
+              session
+            ) => (
+              <SessionCard
+                key={
+                  session._id
+                }
+                session={
+                  session
+                }
+                isActive={
+                  activeSessionId ===
+                  session._id
+                }
+                isEditing={
+                  editingSessionId ===
+                  session._id
+                }
+                editTitle={
+                  editTitle
+                }
+                setEditTitle={
+                  setEditTitle
+                }
+                onSelect={
+                  onSelectSession
+                }
+                onStartEdit={
+                  handleStartEdit
+                }
+                onSubmitEdit={
+                  handleSubmitEdit
+                }
+                onCancelEdit={
+                  handleCancelEdit
+                }
+                onDelete={
+                  onDeleteSession
+                }
+                disabled={
+                  isLoading
+                }
+              />
+            )
           )}
       </div>
     </aside>
