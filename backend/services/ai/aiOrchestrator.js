@@ -193,9 +193,6 @@ export const generateAIResponse =
  * ---------------------------------------------------
  * Generate Streaming AI Response
  * ---------------------------------------------------
- *
- * Initial streaming provider:
- * Groq
  */
 
 export const generateStreamingAIResponse =
@@ -205,8 +202,10 @@ export const generateStreamingAIResponse =
   }) => {
 
     /**
-     * Stream from Groq
+     * For now:
+     * use Groq native streaming
      */
+
     return await generateGroqStreamResponse({
 
       prompt,

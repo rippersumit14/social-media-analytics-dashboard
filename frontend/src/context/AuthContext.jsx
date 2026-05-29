@@ -1,8 +1,10 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -25,12 +27,14 @@ const TOKEN_KEY = "token";
 /**
  * Production-grade authentication provider.
  *
- * Handles:
+ * Responsibilities:
  * - auth persistence
  * - auth hydration
- * - login/register lifecycle
+ * - login lifecycle
+ * - register lifecycle
  * - logout lifecycle
- * - token synchronization
+ * - session restoration
+ * - auth synchronization
  */
 export const AuthProvider = ({
   children,
@@ -52,50 +56,87 @@ export const AuthProvider = ({
     );
 
   /**
-   * Global auth loading state.
+   * Auth hydration lifecycle.
    */
-  const [loading, setLoading] =
+  const [
+    hydrationLoading,
+    setHydrationLoading,
+  ] = useState(true);
+
+  /**
+   * Auth action lifecycle.
+   */
+  const [authLoading, setAuthLoading] =
     useState(false);
 
   /**
-   * Persist token safely.
+   * Hydration guard.
+   *
+   * Prevents duplicate
+   * hydration in strict mode.
    */
-  const persistToken = (
-    authToken
-  ) => {
-    if (!authToken) {
-      return;
-    }
-
-    localStorage.setItem(
-      TOKEN_KEY,
-      authToken
-    );
-
-    setToken(authToken);
-  };
+  const hasHydratedRef =
+    useRef(false);
 
   /**
-   * Clear auth lifecycle safely.
+   * Persist auth token safely.
    */
-  const clearAuth = () => {
-    localStorage.removeItem(
-      TOKEN_KEY
+  const persistToken =
+    useCallback(
+      (authToken) => {
+        if (!authToken) {
+          return;
+        }
+
+        localStorage.setItem(
+          TOKEN_KEY,
+          authToken
+        );
+
+        setToken(authToken);
+      },
+      []
     );
 
-    setToken(null);
+  /**
+   * Stable auth cleanup.
+   */
+  const clearAuth =
+    useCallback(() => {
+      localStorage.removeItem(
+        TOKEN_KEY
+      );
 
-    setUser(null);
-  };
+      setToken(null);
+
+      setUser(null);
+    }, []);
 
   /**
    * Restore authenticated session.
    */
   useEffect(() => {
     /**
+     * Prevent strict mode
+     * double hydration.
+     */
+    if (
+      hasHydratedRef.current
+    ) {
+      return;
+    }
+
+    hasHydratedRef.current =
+      true;
+
+    /**
      * No token available.
      */
     if (!token) {
+      setHydrationLoading(
+        false
+      );
+
       return;
     }
 
@@ -105,13 +146,13 @@ export const AuthProvider = ({
     const hydrateUser =
       async () => {
         try {
-          setLoading(true);
+          setHydrationLoading(
+            true
+          );
 
           const response =
             await getCurrentUserService(
               {
-                token,
-
                 signal:
                   controller.signal,
               }
@@ -143,7 +184,9 @@ export const AuthProvider = ({
            */
           clearAuth();
         } finally {
-          setLoading(false);
+          setHydrationLoading(
+            false
+          );
         }
       };
 
@@ -155,71 +198,106 @@ export const AuthProvider = ({
     return () => {
       controller.abort();
     };
-  }, [token]);
+  }, [
+    token,
+    clearAuth,
+  ]);
 
   /**
    * Login existing user.
    */
-  const login = async (
-    formData
-  ) => {
-    const response =
-      await loginUserService({
-        userData:
-          formData,
-      });
+  const login =
+    useCallback(
+      async (formData) => {
+        try {
+          setAuthLoading(
+            true
+          );
 
-    /**
-     * Stable backend contract.
-     */
-    const authData =
-      response.data || {};
+          const response =
+            await loginUserService(
+              {
+                userData:
+                  formData,
+              }
+            );
 
-    persistToken(
-      authData.token
+          /**
+           * Stable backend contract.
+           */
+          const authData =
+            response.data ||
+            {};
+
+          persistToken(
+            authData.token
+          );
+
+          setUser(
+            authData.user
+          );
+
+          return response;
+        } finally {
+          setAuthLoading(
+            false
+          );
+        }
+      },
+      [persistToken]
     );
-
-    setUser(authData.user);
-
-    return response;
-  };
 
   /**
    * Register new user.
    */
   const register =
-    async (formData) => {
-      const response =
-        await registerUserService(
-          {
-            userData:
-              formData,
-          }
-        );
+    useCallback(
+      async (formData) => {
+        try {
+          setAuthLoading(
+            true
+          );
 
-      /**
-       * Stable backend contract.
-       */
-      const authData =
-        response.data || {};
+          const response =
+            await registerUserService(
+              {
+                userData:
+                  formData,
+              }
+            );
 
-      persistToken(
-        authData.token
-      );
+          /**
+           * Stable backend contract.
+           */
+          const authData =
+            response.data ||
+            {};
 
-      setUser(
-        authData.user
-      );
+          persistToken(
+            authData.token
+          );
 
-      return response;
-    };
+          setUser(
+            authData.user
+          );
+
+          return response;
+        } finally {
+          setAuthLoading(
+            false
+          );
+        }
+      },
+      [persistToken]
+    );
 
   /**
    * Logout authenticated user.
    */
-  const logout = () => {
-    clearAuth();
-  };
+  const logout =
+    useCallback(() => {
+      clearAuth();
+    }, [clearAuth]);
 
   /**
    * Stable authentication state.
@@ -236,25 +314,40 @@ export const AuthProvider = ({
    */
   const value = useMemo(
     () => ({
+      /**
+       * Auth state.
+       */
       user,
 
       token,
 
-      loading,
+      isAuthenticated,
 
+      /**
+       * Lifecycle states.
+       */
+      hydrationLoading,
+
+      authLoading,
+
+      /**
+       * Actions.
+       */
       login,
 
       register,
 
       logout,
-
-      isAuthenticated,
     }),
     [
       user,
       token,
-      loading,
       isAuthenticated,
+      hydrationLoading,
+      authLoading,
+      login,
+      register,
+      logout,
     ]
   );
 

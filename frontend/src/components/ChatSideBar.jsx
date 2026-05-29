@@ -6,21 +6,50 @@ import {
 } from "react";
 
 /**
+ * Format session timestamp safely.
+ */
+const formatSessionTime = (
+  timestamp
+) => {
+  if (!timestamp) {
+    return "";
+  }
+
+  const date =
+    new Date(timestamp);
+
+  return date.toLocaleDateString(
+    [],
+    {
+      month: "short",
+      day: "numeric",
+    }
+  );
+};
+
+/**
  * Stable session card renderer.
  */
 const SessionCard = memo(
   ({
     session,
+
     isActive,
+
     isEditing,
 
     editTitle,
+
     setEditTitle,
 
     onSelect,
+
     onStartEdit,
+
     onSubmitEdit,
+
     onCancelEdit,
+
     onDelete,
 
     disabled,
@@ -44,7 +73,9 @@ const SessionCard = memo(
           return;
         }
 
-        onSelect?.(sessionId);
+        onSelect?.(
+          sessionId
+        );
       }, [
         sessionId,
         disabled,
@@ -56,7 +87,9 @@ const SessionCard = memo(
      */
     const handleRenameClick =
       useCallback(
-        (event) => {
+        (
+          event
+        ) => {
           event.stopPropagation();
 
           onStartEdit?.(
@@ -70,14 +103,29 @@ const SessionCard = memo(
       );
 
     /**
-     * Stable delete trigger.
+     * Stable delete lifecycle.
      */
     const handleDeleteClick =
       useCallback(
-        (event) => {
+        (
+          event
+        ) => {
           event.stopPropagation();
 
-          if (!sessionId) {
+          if (
+            !sessionId
+          ) {
+            return;
+          }
+
+          const confirmed =
+            window.confirm(
+              "Delete this chat session?"
+            );
+
+          if (
+            !confirmed
+          ) {
             return;
           }
 
@@ -92,11 +140,13 @@ const SessionCard = memo(
       );
 
     /**
-     * Stable edit submit.
+     * Stable rename submit.
      */
     const handleSubmit =
       useCallback(() => {
-        if (!sessionId) {
+        if (
+          !sessionId
+        ) {
           return;
         }
 
@@ -110,27 +160,37 @@ const SessionCard = memo(
 
     return (
       <div
-        onClick={handleSelect}
-        className={`group rounded-xl border p-3 transition ${
+        data-testid="chat-session-card"
+        onClick={
+          handleSelect
+        }
+        className={`group rounded-xl border p-3 transition-all duration-200 ${
           disabled
             ? "cursor-not-allowed opacity-70"
             : "cursor-pointer"
         } ${
           isActive
-            ? "border-blue-600 bg-blue-50"
+            ? "border-blue-500 bg-blue-50 shadow-sm"
             : "border-gray-200 bg-gray-50 hover:bg-gray-100"
         }`}
       >
         {/* Rename Mode */}
         {isEditing ? (
           <input
-            value={editTitle}
-            onChange={(event) =>
+            value={
+              editTitle
+            }
+            onChange={(
+              event
+            ) =>
               setEditTitle(
-                event.target.value
+                event.target
+                  .value
               )
             }
-            onClick={(event) =>
+            onClick={(
+              event
+            ) =>
               event.stopPropagation()
             }
             autoFocus
@@ -166,6 +226,14 @@ const SessionCard = memo(
                 {session?.title ||
                   "New Chat"}
               </h4>
+
+              {session?.updatedAt && (
+                <span className="shrink-0 text-[10px] text-gray-400">
+                  {formatSessionTime(
+                    session.updatedAt
+                  )}
+                </span>
+              )}
             </div>
 
             {/* Preview */}
@@ -176,7 +244,6 @@ const SessionCard = memo(
 
             {/* Actions */}
             <div className="mt-3 flex items-center gap-3 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
-              {/* Rename */}
               <button
                 type="button"
                 onClick={
@@ -187,7 +254,6 @@ const SessionCard = memo(
                 Rename
               </button>
 
-              {/* Delete */}
               <button
                 type="button"
                 onClick={
@@ -210,12 +276,6 @@ SessionCard.displayName =
 
 /**
  * Production-grade AI chat sidebar.
- *
- * Handles:
- * - session rendering
- * - rename lifecycle
- * - delete lifecycle
- * - active session synchronization
  */
 const ChatSidebar = ({
   sessions = [],
@@ -233,7 +293,7 @@ const ChatSidebar = ({
   isLoading = false,
 }) => {
   /**
-   * Current editing session.
+   * Current editing lifecycle.
    */
   const [
     editingSessionId,
@@ -241,10 +301,12 @@ const ChatSidebar = ({
   ] = useState(null);
 
   /**
-   * Rename input state.
+   * Rename state.
    */
-  const [editTitle, setEditTitle] =
-    useState("");
+  const [
+    editTitle,
+    setEditTitle,
+  ] = useState("");
 
   /**
    * Stable empty state.
@@ -253,7 +315,8 @@ const ChatSidebar = ({
     useMemo(() => {
       return (
         !isLoading &&
-        sessions.length === 0
+        sessions.length ===
+          0
       );
     }, [
       isLoading,
@@ -320,9 +383,6 @@ const ChatSidebar = ({
             cleanTitle
           );
         } finally {
-          /**
-           * Always cleanup UI.
-           */
           handleCancelEdit();
         }
       },
@@ -334,13 +394,18 @@ const ChatSidebar = ({
     );
 
   return (
-    <aside className="flex h-full w-full min-w-[260px] max-w-[320px] flex-col border-r border-gray-200 bg-white">
+    <aside
+      data-testid="chat-sidebar"
+      className="flex h-full w-full min-w-[260px] max-w-[320px] flex-col border-r border-gray-200 bg-white"
+    >
       {/* Header */}
       <div className="border-b border-gray-200 p-4">
         <button
+          data-testid="new-chat-button"
           type="button"
           onClick={onNewChat}
-          className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+          disabled={isLoading}
+          className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
         >
           + New Chat
         </button>
@@ -350,9 +415,21 @@ const ChatSidebar = ({
       <div className="flex-1 space-y-2 overflow-y-auto p-3">
         {/* Loading */}
         {isLoading && (
-          <p className="mt-4 text-center text-sm text-gray-500">
-            Loading chats...
-          </p>
+          <div className="space-y-2">
+            {Array.from({
+              length: 5,
+            }).map(
+              (
+                _,
+                index
+              ) => (
+                <div
+                  key={index}
+                  className="h-20 animate-pulse rounded-xl bg-gray-100"
+                />
+              )
+            )}
+          </div>
         )}
 
         {/* Empty */}
@@ -372,7 +449,9 @@ const ChatSidebar = ({
 
               return (
                 <SessionCard
-                  key={sessionId}
+                  key={
+                    sessionId
+                  }
                   session={
                     session
                   }
@@ -417,9 +496,6 @@ const ChatSidebar = ({
   );
 };
 
-/**
- * Prevent unnecessary rerenders.
- */
 export default memo(
   ChatSidebar
 );

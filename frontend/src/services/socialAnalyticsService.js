@@ -1,44 +1,111 @@
 import api from "./api.js";
 
 /**
- * Get all connected social accounts for the logged-in user
+ * Normalize backend response safely.
  */
-export const getSocialAccounts = async (token) => {
-  const response = await api.get("/social-accounts", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+const normalizeResponse = (
+  responseData = {}
+) => {
+  return {
+    /**
+     * Accounts API returns:
+     * {
+     *   count,
+     *   accounts
+     * }
+     */
+    accounts:
+      responseData.accounts ||
+      [],
 
-  return response.data;
+    /**
+     * Analytics API may return:
+     * {
+     *   snapshots
+     * }
+     */
+    snapshots:
+      responseData.snapshots ||
+      [],
+
+    /**
+     * Generic message.
+     */
+    message:
+      responseData.message ||
+      "",
+
+    /**
+     * Success fallback.
+     */
+    success: true,
+
+    /**
+     * Raw response.
+     */
+    data: responseData,
+  };
 };
 
 /**
- * Trigger sync for one social account
+ * Get all connected social accounts.
  */
-export const syncSocialAccount = async (accountId, token) => {
-  const response = await api.post(
-    `/social-accounts/${accountId}/sync`,
-    {},
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-  );
+export const getSocialAccounts =
+  async ({
+    signal,
+  } = {}) => {
+    const response =
+      await api.get(
+        "/social-accounts",
+        {
+          signal,
+        }
+      );
 
-  return response.data;
-};
+    return normalizeResponse(
+      response.data
+    );
+  };
 
 /**
- * Get analytics snapshots for one social account
+ * Trigger sync for one social account.
  */
-export const getAnalyticsSnapshots = async (accountId, token) => {
-  const response = await api.get(`/analytics-snapshots/${accountId}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+export const syncSocialAccount =
+  async ({
+    accountId,
+    signal,
+  }) => {
+    const response =
+      await api.post(
+        `/social-accounts/${accountId}/sync`,
+        {},
+        {
+          signal,
+        }
+      );
 
-  return response.data;
-};
+    return normalizeResponse(
+      response.data
+    );
+  };
+
+/**
+ * Get analytics snapshots.
+ */
+export const getAnalyticsSnapshots =
+  async ({
+    socialAccountId,
+    signal,
+  }) => {
+    const response =
+      await api.get(
+        `/analytics-snapshots/${socialAccountId}`,
+        {
+          signal,
+        }
+      );
+
+    return normalizeResponse(
+      response.data
+    );
+  };

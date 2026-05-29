@@ -1,23 +1,8 @@
-// services/ocrService.js
+import Tesseract
+  from "tesseract.js";
 
-/**
- * ---------------------------------------------------
- * OCR Service
- * ---------------------------------------------------
- *
- * Purpose:
- * - Extract text from uploaded images
- * - Prevent AI token explosion
- * - Keep OCR orchestration isolated
- * - Protect backend from hanging OCR jobs
- *
- * Stack:
- * - Tesseract.js
- */
-
-import Tesseract from "tesseract.js";
-
-import AppError from "../utils/AppError.js";
+import logger
+  from "../utils/logger.js";
 
 /**
  * ---------------------------------------------------
@@ -26,197 +11,180 @@ import AppError from "../utils/AppError.js";
  */
 
 /**
- * Maximum OCR text length
+ * Maximum extracted text length
  *
  * Prevents:
- * - massive prompts
  * - token explosion
- * - memory waste
+ * - noisy OCR overload
+ * - massive prompts
  */
-const MAX_OCR_TEXT_LENGTH = 4000;
 
-/**
- * OCR timeout duration
- *
- * Prevents hanging OCR workers
- */
-const OCR_TIMEOUT_MS = 20000;
+const MAX_OCR_TEXT_LENGTH =
+  4000;
 
 /**
  * ---------------------------------------------------
- * Clean OCR Extracted Text
+ * Clean OCR Text
  * ---------------------------------------------------
- *
- * Removes:
- * - excessive whitespace
- * - malformed characters
- * - unnecessary prompt noise
  */
 
-const cleanOCRText = (
+const cleanOCRText =
+  (
     text = ""
-) => {
+  ) => {
 
     return text
 
-        /**
-         * Normalize whitespace
-         */
-        .replace(/\s+/g, " ")
+      /**
+       * Normalize spaces
+       */
+      .replace(/\s+/g, " ")
 
-        /**
-         * Remove unsupported characters
-         */
-        .replace(
-            /[^\x20-\x7E\n]/g,
-            ""
-        )
+      /**
+       * Remove invisible unicode chars
+       */
+      .replace(
+        /[\u200B-\u200D\uFEFF]/g,
+        ""
+      )
 
-        /**
-         * Trim surrounding spaces
-         */
-        .trim()
+      /**
+       * Trim whitespace
+       */
+      .trim()
 
-        /**
-         * Limit prompt size
-         */
-        .slice(
-            0,
-            MAX_OCR_TEXT_LENGTH
-        );
-};
-
-/**
- * ---------------------------------------------------
- * Promise Timeout Wrapper
- * ---------------------------------------------------
- *
- * Prevents OCR from hanging forever
- */
-
-const withTimeout = (
-    promise,
-    timeoutMs
-) => {
-
-    return Promise.race([
-
-        promise,
-
-        new Promise(
-            (_, reject) =>
-
-                setTimeout(
-                    () =>
-
-                        reject(
-                            new AppError(
-                                "OCR timeout exceeded",
-                                408
-                            )
-                        ),
-
-                    timeoutMs
-                )
-        ),
-    ]);
-};
+      /**
+       * Limit OCR output size
+       */
+      .slice(
+        0,
+        MAX_OCR_TEXT_LENGTH
+      );
+  };
 
 /**
  * ---------------------------------------------------
  * Extract Text From Image
  * ---------------------------------------------------
  *
- * Main OCR orchestration function
+ * Features:
+ * - OCR extraction
+ * - analytics screenshot parsing
+ * - cleaned text output
+ * - optimized AI-ready text
  */
 
 export const extractTextFromImage =
-    async (
-        imageBuffer
-    ) => {
+  async (
+    imageBuffer
+  ) => {
 
-        try {
+    try {
 
-            /**
-             * Empty image protection
-             */
-            if (!imageBuffer) {
+      /**
+       * Validate image buffer
+       */
+      if (!imageBuffer) {
 
-                return "";
-            }
+        throw new Error(
+          "Missing image buffer"
+        );
+      }
 
-            /**
-             * OCR recognition promise
-             */
-            const ocrPromise =
-                Tesseract.recognize(
+      logger.ai(
+        "Starting OCR extraction"
+      );
 
-                    imageBuffer,
+      /**
+       * Run OCR recognition
+       */
+      const result =
+        await Tesseract.recognize(
 
-                    /**
-                     * OCR language
-                     */
-                    "eng",
+          imageBuffer,
 
-                    {
+          "eng",
 
-                        /**
-                         * Disable verbose OCR logs
-                         */
-                        logger: () => {},
-                    }
-                );
+          {
 
             /**
-             * Timeout-protected OCR execution
-             */
-            const result =
-                await withTimeout(
-                    ocrPromise,
-                    OCR_TIMEOUT_MS
-                );
-
-            /**
-             * Extract raw OCR text
-             */
-            const rawText =
-                result?.data?.text || "";
-
-            /**
-             * Clean extracted text
-             */
-            const cleanedText =
-                cleanOCRText(
-                    rawText
-                );
-
-            return cleanedText;
-
-        } catch (error) {
-
-            /**
-             * OCR failure logging
-             */
-            console.error(
-                "[OCR_EXTRACTION_ERROR]",
-                {
-                    message:
-                        error.message,
-
-                    stack:
-                        process.env.NODE_ENV ===
-                        "development"
-                            ? error.stack
-                            : undefined,
-                }
-            );
-
-            /**
-             * Never crash AI orchestration
+             * OCR progress logger
              *
-             * OCR is treated as
-             * optional enhancement layer.
+             * Tesseract requires:
+             * logger MUST be function
              */
-            return "";
+
+            logger: (
+              message
+            ) => {
+
+              if (
+
+                process.env.NODE_ENV ===
+                "development"
+
+              ) {
+
+                if (
+                  message?.status
+                ) {
+
+                  console.log(
+
+                    `[OCR] ${message.status}`
+                  );
+                }
+              }
+            },
+          }
+        );
+
+      /**
+       * Raw OCR output
+       */
+      const rawText =
+        result?.data?.text || "";
+
+      /**
+       * Clean OCR text
+       */
+      const cleanedText =
+        cleanOCRText(
+          rawText
+        );
+
+      logger.success(
+        "OCR extraction completed",
+
+        {
+          extractedLength:
+            cleanedText.length,
         }
-    };
+      );
+
+      /**
+       * Structured OCR response
+       */
+      return {
+
+        extractedText:
+          cleanedText,
+
+        hasText:
+          cleanedText.length > 0,
+      };
+
+    } catch (error) {
+
+      logger.error(
+        "OCR extraction failed",
+
+        {
+          message:
+            error.message,
+        }
+      );
+
+      throw error;
+    }
+  };

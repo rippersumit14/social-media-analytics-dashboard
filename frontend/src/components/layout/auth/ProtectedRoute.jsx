@@ -13,11 +13,12 @@ import { useAuth } from "../../../context/AuthContext.jsx";
 /**
  * Production-grade protected route.
  *
- * Handles:
- * - auth hydration
+ * Responsibilities:
+ * - auth hydration synchronization
  * - protected route access
- * - redirect synchronization
+ * - redirect stabilization
  * - stale auth prevention
+ * - route flicker prevention
  */
 const ProtectedRoute = ({
   children,
@@ -28,7 +29,7 @@ const ProtectedRoute = ({
   const {
     isAuthenticated,
 
-    loading,
+    hydrationLoading,
   } = useAuth();
 
   /**
@@ -38,17 +39,17 @@ const ProtectedRoute = ({
     useLocation();
 
   /**
-   * Stable loading state.
+   * Stable hydration state.
    */
-  const isLoading =
+  const isHydrating =
     useMemo(() => {
       return Boolean(
-        loading
+        hydrationLoading
       );
-    }, [loading]);
+    }, [hydrationLoading]);
 
   /**
-   * Stable authentication state.
+   * Stable access state.
    */
   const canAccessRoute =
     useMemo(() => {
@@ -59,16 +60,26 @@ const ProtectedRoute = ({
 
   /**
    * Block rendering during
-   * auth hydration.
+   * auth session restoration.
+   *
+   * Prevents:
+   * - redirect flickers
+   * - stale auth redirects
+   * - route hydration mismatches
    */
-  if (isLoading) {
+  if (isHydrating) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
         <div className="rounded-2xl bg-white px-6 py-5 shadow-sm">
-          <p className="text-sm font-medium text-gray-600">
-            Restoring your
-            session...
-          </p>
+          <div className="flex items-center gap-3">
+            {/* Loading Spinner */}
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+
+            <p className="text-sm font-medium text-gray-600">
+              Restoring your
+              session...
+            </p>
+          </div>
         </div>
       </div>
     );

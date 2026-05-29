@@ -1,33 +1,250 @@
 import api from "./api.js";
 
 /**
- * Stable SSE event registry.
- * Prevents magic strings across app.
+ * -------------------------------------------------------
+ * Normalize backend AI responses safely.
+ * -------------------------------------------------------
  */
-export const SSE_EVENTS = {
-  SESSION: "session",
-  USER_MESSAGE: "userMessage",
-  MODEL: "model",
-  CHUNK: "chunk",
-  DONE: "done",
-  ERROR: "error",
+const normalizeAIResponse = (
+  responseData = {}
+) => {
+  return {
+    success:
+      responseData.success ??
+      true,
+
+    message:
+      responseData.message ||
+      "",
+
+    /**
+     * AI insights payload.
+     */
+    insights:
+      responseData.insights ||
+      responseData.data
+        ?.insights ||
+      null,
+
+    /**
+     * Chat sessions payload.
+     */
+    sessions:
+      responseData.sessions ||
+      responseData.data
+        ?.sessions ||
+      [],
+
+    /**
+     * Chat messages payload.
+     */
+    messages:
+      responseData.messages ||
+      responseData.data
+        ?.messages ||
+      [],
+
+    /**
+     * Session payload.
+     */
+    session:
+      responseData.session ||
+      responseData.data
+        ?.session ||
+      null,
+
+    /**
+     * Remaining usage info.
+     */
+    usage:
+      responseData.usage ||
+      responseData.data
+        ?.usage ||
+      null,
+
+    /**
+     * Raw backend payload.
+     */
+    data:
+      responseData.data ||
+      responseData,
+  };
 };
 
 /**
- * Build multipart AI payload.
+ * -------------------------------------------------------
+ * Get AI insights.
+ * -------------------------------------------------------
+ */
+export const getAIInsights =
+  async ({
+    socialAccountId,
+    signal,
+  }) => {
+    if (!socialAccountId) {
+      throw new Error(
+        "Social account ID is required."
+      );
+    }
+
+    const response =
+      await api.post(
+        `/ai/insights/${socialAccountId}`,
+        {},
+        {
+          signal,
+        }
+      );
+
+    return normalizeAIResponse(
+      response.data
+    );
+  };
+
+/**
+ * -------------------------------------------------------
+ * Get all chat sessions.
+ * -------------------------------------------------------
+ */
+export const getChatSessions =
+  async ({
+    socialAccountId,
+    signal,
+  }) => {
+    if (!socialAccountId) {
+      throw new Error(
+        "Social account ID is required."
+      );
+    }
+
+    const response =
+      await api.get(
+        `/ai/chat/sessions/${socialAccountId}`,
+        {
+          signal,
+        }
+      );
+
+    return normalizeAIResponse(
+      response.data
+    );
+  };
+
+/**
+ * -------------------------------------------------------
+ * Get session messages.
+ * -------------------------------------------------------
+ */
+export const getSessionMessages =
+  async ({
+    sessionId,
+    signal,
+  }) => {
+    if (!sessionId) {
+      throw new Error(
+        "Session ID is required."
+      );
+    }
+
+    const response =
+      await api.get(
+        `/ai/chat/session/${sessionId}/messages`,
+        {
+          signal,
+        }
+      );
+
+    return normalizeAIResponse(
+      response.data
+    );
+  };
+
+/**
+ * -------------------------------------------------------
+ * Rename chat session.
+ * -------------------------------------------------------
+ */
+export const renameChatSession =
+  async ({
+    sessionId,
+    title,
+    signal,
+  }) => {
+    if (!sessionId) {
+      throw new Error(
+        "Session ID is required."
+      );
+    }
+
+    const response =
+      await api.patch(
+        `/ai/chat/session/${sessionId}`,
+        {
+          title,
+        },
+        {
+          signal,
+        }
+      );
+
+    return normalizeAIResponse(
+      response.data
+    );
+  };
+
+/**
+ * -------------------------------------------------------
+ * Delete chat session.
+ * -------------------------------------------------------
+ */
+export const deleteChatSession =
+  async ({
+    sessionId,
+    signal,
+  }) => {
+    if (!sessionId) {
+      throw new Error(
+        "Session ID is required."
+      );
+    }
+
+    const response =
+      await api.delete(
+        `/ai/chat/session/${sessionId}`,
+        {
+          signal,
+        }
+      );
+
+    return normalizeAIResponse(
+      response.data
+    );
+  };
+
+/**
+ * -------------------------------------------------------
+ * Create multipart AI request payload.
+ * -------------------------------------------------------
  */
 const buildChatFormData = ({
   message,
-  sessionId,
   images = [],
+  sessionId,
 }) => {
-  const formData = new FormData();
+  const formData =
+    new FormData();
 
+  /**
+   * User message.
+   */
   formData.append(
     "message",
     message || ""
   );
 
+  /**
+   * Existing session support.
+   */
   if (sessionId) {
     formData.append(
       "sessionId",
@@ -38,121 +255,57 @@ const buildChatFormData = ({
   /**
    * Multiple image uploads.
    */
-  images.forEach((imageFile) => {
-    formData.append(
-      "images",
-      imageFile
-    );
+  images.forEach((image) => {
+    if (image?.file) {
+      formData.append(
+        "images",
+        image.file
+      );
+    }
   });
 
   return formData;
 };
 
 /**
- * Stable backend response adapter.
- * Protects frontend from backend shape drift.
- */
-const normalizeAIResponse = (
-  data = {}
-) => {
-  return {
-    success:
-      Boolean(data.success),
-
-    /**
-     * Session metadata.
-     */
-    sessionId:
-      data.sessionId || null,
-
-    sessionTitle:
-      data.sessionTitle || "",
-
-    /**
-     * Messages.
-     */
-    assistantMessage:
-      data.assistantMessage ||
-      null,
-
-    userMessage:
-      data.userMessage || null,
-
-    /**
-     * AI metadata.
-     */
-    modelUsed:
-      data.modelUsed || "",
-
-    modelName:
-      data.modelName || "",
-
-    latencyMs:
-      data.latencyMs || null,
-
-    /**
-     * Usage tracking.
-     */
-    usage:
-      data.usage || null,
-
-    remainingUsage:
-      data.remainingUsage ??
-      null,
-  };
-};
-
-/**
- * Extract safe API error message.
- */
-const extractErrorMessage = async (
-  response
-) => {
-  try {
-    const errorData =
-      await response.json();
-
-    return (
-      errorData?.message ||
-      "Request failed."
-    );
-  } catch {
-    return "Request failed.";
-  }
-};
-
-/**
- * Production-safe non-streaming AI request.
+ * -------------------------------------------------------
+ * Standard AI message request.
  *
- * Used for:
- * - fallback mode
- * - backup lifecycle
+ * Non-streaming fallback.
+ * -------------------------------------------------------
  */
-export const sendAIChat =
+export const sendAIMessage =
   async ({
-    accountId,
-    token,
-    message = "",
-    sessionId = null,
+    socialAccountId,
+    message,
     images = [],
+    sessionId,
+    signal,
   }) => {
+    if (!socialAccountId) {
+      throw new Error(
+        "Social account ID is required."
+      );
+    }
+
     const formData =
       buildChatFormData({
         message,
-        sessionId,
         images,
+        sessionId,
       });
 
     const response =
       await api.post(
-        `/ai/chat/${accountId}`,
+        `/ai/chat/${socialAccountId}`,
         formData,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          signal,
 
-          timeout: 120000,
+          headers: {
+            "Content-Type":
+              "multipart/form-data",
+          },
         }
       );
 
@@ -162,140 +315,64 @@ export const sendAIChat =
   };
 
 /**
- * Parse raw SSE block safely.
+ * -------------------------------------------------------
+ * Real SSE AI streaming request.
+ * -------------------------------------------------------
+ *
+ * Handles:
+ * - token streaming
+ * - chunk rendering
+ * - done events
+ * - error events
+ * - session creation
+ * - multimodal uploads
  */
-const parseSSEBlock = (block) => {
-  const lines =
-    block.split("\n");
-
-  const eventLine =
-    lines.find((line) =>
-      line.startsWith("event:")
-    );
-
-  const dataLine =
-    lines.find((line) =>
-      line.startsWith("data:")
-    );
-
-  if (!eventLine || !dataLine) {
-    return null;
-  }
-
-  const event =
-    eventLine
-      .replace("event:", "")
-      .trim();
-
-  try {
-    const parsedData = JSON.parse(
-      dataLine
-        .replace("data:", "")
-        .trim()
-    );
-
-    return {
-      event,
-      data: parsedData,
-    };
-  } catch (error) {
-    console.error(
-      "SSE JSON parse failed:",
-      error
-    );
-
-    return null;
-  }
-};
-
-/**
- * Route SSE events safely.
- */
-const handleSSEEvent = ({
-  event,
-  data,
-  handlers,
-}) => {
-  switch (event) {
-    case SSE_EVENTS.SESSION:
-      handlers.onSession?.(data);
-      break;
-
-    case SSE_EVENTS.MODEL:
-      handlers.onModel?.(data);
-      break;
-
-    case SSE_EVENTS.CHUNK:
-      handlers.onChunk?.(data);
-      break;
-
-    case SSE_EVENTS.DONE:
-      handlers.onDone?.(
-        normalizeAIResponse(data)
-      );
-      break;
-
-    case SSE_EVENTS.ERROR:
-      handlers.onError?.(data);
-      break;
-
-    default:
-      break;
-  }
-};
-
-/**
- * Production-grade SSE streaming lifecycle.
- */
-export const streamAIChat =
+export const streamAIMessage =
   async ({
-    accountId,
-    token,
-
-    message = "",
-    sessionId = null,
+    socialAccountId,
+    message,
     images = [],
-
-    /**
-     * Abort support.
-     */
+    sessionId,
     signal,
 
     /**
      * SSE callbacks.
      */
-    onSession,
-    onModel,
-    onChunk,
+    onConnected,
+    onToken,
     onDone,
     onError,
   }) => {
+    if (!socialAccountId) {
+      throw new Error(
+        "Social account ID is required."
+      );
+    }
+
     const formData =
       buildChatFormData({
         message,
-        sessionId,
         images,
+        sessionId,
       });
 
-    /**
-     * Stable API base URL.
-     */
-    const API_URL =
-      import.meta.env
-        .VITE_API_URL ||
-      "http://localhost:5000/api";
+    const token =
+      localStorage.getItem(
+        "token"
+      );
 
-    /**
-     * Start streaming request.
-     */
     const response =
       await fetch(
-        `${API_URL}/ai/chat/${accountId}/stream`,
+        `${
+          import.meta.env
+            .VITE_API_URL
+        }/ai/chat/${socialAccountId}/stream`,
         {
           method: "POST",
 
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization:
+              `Bearer ${token}`,
           },
 
           body: formData,
@@ -304,121 +381,109 @@ export const streamAIChat =
         }
       );
 
-    /**
-     * Transport-level validation.
-     */
-    if (
-      !response.ok ||
-      !response.body
-    ) {
-      const errorMessage =
-        await extractErrorMessage(
-          response
-        );
-
+    if (!response.ok) {
       throw new Error(
-        errorMessage
+        "Failed to start AI stream."
       );
     }
 
-    /**
-     * Readable stream parser.
-     */
     const reader =
       response.body.getReader();
 
     const decoder =
-      new TextDecoder("utf-8");
+      new TextDecoder();
 
     let buffer = "";
 
     /**
-     * Centralized event handlers.
+     * Stream lifecycle.
      */
-    const handlers = {
-      onSession,
-      onModel,
-      onChunk,
-      onDone,
-      onError,
-    };
+    while (true) {
+      const {
+        done,
+        value,
+      } = await reader.read();
 
-    try {
-      /**
-       * Continuous stream lifecycle.
-       */
-      while (true) {
-        const {
-          done,
-          value,
-        } =
-          await reader.read();
-
-        /**
-         * Stream completed.
-         */
-        if (done) {
-          break;
-        }
-
-        /**
-         * Decode incoming chunks.
-         */
-        buffer += decoder.decode(
-          value,
-          {
-            stream: true,
-          }
-        );
-
-        /**
-         * Split SSE blocks.
-         */
-        const blocks =
-          buffer.split("\n\n");
-
-        /**
-         * Preserve incomplete block.
-         */
-        buffer =
-          blocks.pop() || "";
-
-        /**
-         * Process completed blocks.
-         */
-        for (const block of blocks) {
-          const parsedBlock =
-            parseSSEBlock(block);
-
-          if (!parsedBlock) {
-            continue;
-          }
-
-          handleSSEEvent({
-            ...parsedBlock,
-            handlers,
-          });
-        }
+      if (done) {
+        break;
       }
 
-      /**
-       * Flush remaining buffer safely.
-       */
-      if (buffer.trim()) {
-        const parsedBlock =
-          parseSSEBlock(buffer);
+      buffer += decoder.decode(
+        value,
+        {
+          stream: true,
+        }
+      );
 
-        if (parsedBlock) {
-          handleSSEEvent({
-            ...parsedBlock,
-            handlers,
-          });
+      /**
+       * SSE event parsing.
+       */
+      const chunks =
+        buffer.split("\n\n");
+
+      buffer =
+        chunks.pop() || "";
+
+      for (const chunk of chunks) {
+        const cleanChunk =
+          chunk.trim();
+
+        if (
+          !cleanChunk.startsWith(
+            "data:"
+          )
+        ) {
+          continue;
+        }
+
+        try {
+          const json =
+            JSON.parse(
+              cleanChunk.replace(
+                /^data:\s*/,
+                ""
+              )
+            );
+
+          /**
+           * SSE event routing.
+           */
+          switch (
+            json.type
+          ) {
+            case "connected":
+              onConnected?.(
+                json
+              );
+              break;
+
+            case "token":
+              onToken?.(
+                json
+              );
+              break;
+
+            case "done":
+              onDone?.(
+                json
+              );
+              break;
+
+            case "error":
+              onError?.(
+                json
+              );
+              break;
+
+            default:
+              break;
+          }
+        } catch (error) {
+          console.error(
+            "[SSE PARSE ERROR]",
+            error
+          );
         }
       }
-    } finally {
-      /**
-       * Prevent stream reader leaks.
-       */
-      reader.releaseLock();
     }
   };

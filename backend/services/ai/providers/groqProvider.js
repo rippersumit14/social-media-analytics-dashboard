@@ -77,27 +77,53 @@ export const generateGroqResponse =
     };
   };
 
-//GENERATE Groq Streaming Response
-export const generateGroqStreamResponse = 
-   async({
+/**
+ * ---------------------------------------------------
+ * Generate Streaming Groq Response
+ * ---------------------------------------------------
+ */
+
+export const generateGroqStreamResponse =
+  async ({
+
     prompt,
-   }) => {
-    const stream = 
+  }) => {
+
+    /**
+     * Start streaming completion
+     */
+
+    const stream =
       await groqClient.chat.completions.create({
+
         model:
           "llama-3.3-70b-versatile",
 
-          messages: [
-            {
-                role: "user",
+        messages: [
 
-                content: 
-                   prompt,
-            },
-          ],
+          {
+            role:
+              "user",
 
-          stream: true,
+            content:
+              prompt,
+          },
+        ],
+
+        temperature:
+          0.7,
+
+        max_tokens:
+          2048,
+
+        /**
+         * IMPORTANT:
+         * Enable streaming
+         */
+
+        stream:
+          true,
       });
 
-      return stream;
-   };
+    return stream;
+  };

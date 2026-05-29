@@ -1,31 +1,31 @@
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
 } from "react";
 
 import {
-  sendAIChat,
-  streamAIChat,
+  streamAIMessage,
 } from "../services/aiChatService.js";
 
 /**
+ * -------------------------------------------------------
  * Production-grade AI orchestration hook.
+ * -------------------------------------------------------
  *
- * Responsibilities:
+ * Handles:
+ * - real SSE streaming
  * - optimistic rendering
- * - SSE streaming lifecycle
- * - upload-aware AI orchestration
- * - fallback AI lifecycle
- * - metadata synchronization
- * - stale stream prevention
+ * - token streaming updates
+ * - upload orchestration
  * - session synchronization
+ * - streaming lifecycle
+ * - abort lifecycle
+ * - stale request protection
+ * - usage synchronization
  */
 const useAIChat = ({
-  token,
-
-  selectedAccount,
-
   activeSessionId,
 
   setActiveSessionId,
@@ -37,13 +37,17 @@ const useAIChat = ({
   loadSessions,
 }) => {
   /**
-   * User input state.
+   * -------------------------------------------------------
+   * Input lifecycle.
+   * -------------------------------------------------------
    */
   const [input, setInput] =
     useState("");
 
   /**
-   * AI lifecycle state.
+   * -------------------------------------------------------
+   * Chat lifecycle.
+   * -------------------------------------------------------
    */
   const [chatLoading, setChatLoading] =
     useState(false);
@@ -55,7 +59,9 @@ const useAIChat = ({
     useState("");
 
   /**
-   * AI metadata state.
+   * -------------------------------------------------------
+   * AI metadata lifecycle.
+   * -------------------------------------------------------
    */
   const [modelName, setModelName] =
     useState("");
@@ -64,7 +70,9 @@ const useAIChat = ({
     useState(null);
 
   /**
-   * Usage telemetry state.
+   * -------------------------------------------------------
+   * Usage lifecycle.
+   * -------------------------------------------------------
    */
   const [usageInfo, setUsageInfo] =
     useState(null);
@@ -73,16 +81,25 @@ const useAIChat = ({
     useState(null);
 
   /**
-   * Active stream protection.
-   *
-   * Prevents stale stream updates
-   * from overwriting newer streams.
+   * -------------------------------------------------------
+   * Abort lifecycle.
+   * -------------------------------------------------------
    */
-  const activeStreamRef =
+  const abortControllerRef =
     useRef(null);
 
   /**
+   * -------------------------------------------------------
+   * Active request protection.
+   * -------------------------------------------------------
+   */
+  const activeRequestRef =
+    useRef(null);
+
+  /**
+   * -------------------------------------------------------
    * Prevent unbounded memory growth.
+   * -------------------------------------------------------
    */
   const limitMessages =
     useCallback(
@@ -105,7 +122,9 @@ const useAIChat = ({
     );
 
   /**
-   * Safely replace assistant message.
+   * -------------------------------------------------------
+   * Replace assistant message safely.
+   * -------------------------------------------------------
    */
   const replaceAssistantMessage =
     useCallback(
@@ -128,24 +147,29 @@ const useAIChat = ({
     );
 
   /**
-   * Synchronize backend metadata safely.
+   * -------------------------------------------------------
+   * Synchronize backend metadata.
+   * -------------------------------------------------------
    */
-  const syncResponseMetadata =
+  const syncMetadata =
     useCallback(
-      (data = {}) => {
+      (payload = {}) => {
+        /**
+         * Session lifecycle.
+         */
         if (
-          data.sessionId
+          payload.sessionId
         ) {
           setActiveSessionId(
-            data.sessionId
+            payload.sessionId
           );
         }
 
         if (
-          data.sessionTitle
+          payload.sessionTitle
         ) {
           setSessionTitle(
-            data.sessionTitle
+            payload.sessionTitle
           );
         }
 
@@ -153,44 +177,44 @@ const useAIChat = ({
          * AI metadata.
          */
         if (
-          data.modelName !==
+          payload.modelName !==
           undefined
         ) {
           setModelName(
-            data.modelName ||
+            payload.modelName ||
               ""
           );
         }
 
         if (
-          data.latencyMs !==
+          payload.latencyMs !==
           undefined
         ) {
           setLatencyMs(
-            data.latencyMs ||
+            payload.latencyMs ||
               null
           );
         }
 
         /**
-         * Usage telemetry.
+         * Usage metadata.
          */
         if (
-          data.usage !==
+          payload.usage !==
           undefined
         ) {
           setUsageInfo(
-            data.usage ||
+            payload.usage ||
               null
           );
         }
 
         if (
-          data.remainingUsage !==
+          payload.remainingUsage !==
           undefined
         ) {
           setRemainingUsage(
-            data.remainingUsage ??
+            payload.remainingUsage ??
               null
           );
         }
@@ -202,11 +226,46 @@ const useAIChat = ({
     );
 
   /**
-   * Main AI orchestration lifecycle.
+   * -------------------------------------------------------
+   * Cancel active AI stream safely.
+   * -------------------------------------------------------
+   */
+  const cancelStream =
+    useCallback(() => {
+      abortControllerRef.current?.abort();
+
+      abortControllerRef.current =
+        null;
+
+      activeRequestRef.current =
+        null;
+
+      setChatLoading(false);
+
+      setIsUploading(false);
+    }, []);
+
+  /**
+   * -------------------------------------------------------
+   * Cleanup on unmount.
+   * -------------------------------------------------------
+   */
+  useEffect(() => {
+    return () => {
+      cancelStream();
+    };
+  }, [cancelStream]);
+
+  /**
+   * -------------------------------------------------------
+   * Main AI streaming lifecycle.
+   * -------------------------------------------------------
    */
   const sendMessage =
     useCallback(
       async ({
+        socialAccountId,
+
         message,
 
         selectedImages = [],
@@ -214,7 +273,7 @@ const useAIChat = ({
         clearImages,
       }) => {
         const trimmedMessage =
-          message.trim();
+          message?.trim() || "";
 
         /**
          * Prevent invalid requests.
@@ -223,34 +282,45 @@ const useAIChat = ({
           (!trimmedMessage &&
             selectedImages.length ===
               0) ||
-          !selectedAccount ||
-          !token ||
+          !socialAccountId ||
           chatLoading
         ) {
           return;
         }
 
         /**
-         * Reset lifecycle state.
+         * Cancel previous request.
+         */
+        cancelStream();
+
+        /**
+         * Fresh abort controller.
+         */
+        const controller =
+          new AbortController();
+
+        abortControllerRef.current =
+          controller;
+
+        /**
+         * Request tracking.
+         */
+        const requestId =
+          crypto.randomUUID();
+
+        activeRequestRef.current =
+          requestId;
+
+        /**
+         * Reset lifecycle.
          */
         setChatError("");
 
-        setChatLoading(
-          true
-        );
+        setChatLoading(true);
 
-        setIsUploading(
-          true
-        );
+        setIsUploading(true);
 
         setInput("");
-
-        /**
-         * User-visible fallback content.
-         */
-        const userVisibleContent =
-          trimmedMessage ||
-          "Uploaded image(s) for analysis.";
 
         /**
          * Optimistic user message.
@@ -262,7 +332,8 @@ const useAIChat = ({
             role: "user",
 
             content:
-              userVisibleContent,
+              trimmedMessage ||
+              "Uploaded image(s) for analysis.",
 
             images:
               selectedImages.map(
@@ -273,15 +344,18 @@ const useAIChat = ({
                     image.preview,
                 })
               ),
+
+            createdAt:
+              new Date().toISOString(),
           };
 
         /**
-         * Assistant placeholder.
+         * Streaming assistant placeholder.
          */
         const assistantMessageId =
           crypto.randomUUID();
 
-        const loadingAssistantMessage =
+        const assistantPlaceholder =
           {
             id: assistantMessageId,
 
@@ -290,90 +364,31 @@ const useAIChat = ({
 
             content: "",
 
-            images: [],
-
             isLoading: true,
+
+            isStreaming: true,
+
+            createdAt:
+              new Date().toISOString(),
           };
 
         /**
-         * Immediate optimistic UI update.
+         * Immediate optimistic rendering.
          */
-        setMessages(
-          (prev) =>
-            limitMessages([
-              ...prev,
-              optimisticUserMessage,
-              loadingAssistantMessage,
-            ])
+        setMessages((prev) =>
+          limitMessages([
+            ...prev,
+            optimisticUserMessage,
+            assistantPlaceholder,
+          ])
         );
-
-        /**
-         * Track active stream instance.
-         */
-        const currentStreamId =
-          crypto.randomUUID();
-
-        activeStreamRef.current =
-          currentStreamId;
-
-        /**
-         * Shared streamed content buffer.
-         */
-        let streamedContent =
-          "";
-
-        /**
-         * Stream-safe stale guard.
-         */
-        const isStaleStream =
-          () =>
-            activeStreamRef.current !==
-            currentStreamId;
-
-        /**
-         * Stream-safe assistant updater.
-         */
-        const updateAssistantContent =
-          (
-            content,
-            extra = {}
-          ) => {
-            /**
-             * Ignore stale streams.
-             */
-            if (
-              isStaleStream()
-            ) {
-              return;
-            }
-
-            replaceAssistantMessage(
-              assistantMessageId,
-              (
-                currentMessage
-              ) => ({
-                ...currentMessage,
-
-                content,
-
-                isLoading: false,
-
-                ...extra,
-              })
-            );
-          };
 
         try {
           /**
-           * =========================
-           * SSE STREAMING LIFECYCLE
-           * =========================
+           * Stream AI response.
            */
-          await streamAIChat({
-            accountId:
-              selectedAccount._id,
-
-            token,
+          await streamAIMessage({
+            socialAccountId,
 
             message:
               trimmedMessage,
@@ -382,257 +397,205 @@ const useAIChat = ({
               activeSessionId,
 
             images:
-              selectedImages.map(
-                (
-                  image
-                ) =>
-                  image.file
-              ),
+              selectedImages,
+
+            signal:
+              controller.signal,
 
             /**
-             * Session synchronization.
+             * SSE connection established.
              */
-            onSession: (
-              data
-            ) => {
-              if (
-                isStaleStream()
-              ) {
-                return;
-              }
-
-              syncResponseMetadata(
-                data
-              );
-            },
+            onConnected:
+              (
+                payload
+              ) => {
+                syncMetadata(
+                  payload
+                );
+              },
 
             /**
-             * AI metadata synchronization.
+             * Live token streaming.
              */
-            onModel: (
-              data
-            ) => {
-              if (
-                isStaleStream()
-              ) {
-                return;
-              }
-
-              setModelName(
-                data.modelName ||
-                  ""
-              );
-            },
-
-            /**
-             * Live chunk streaming.
-             */
-            onChunk: (
-              data
-            ) => {
-              if (
-                isStaleStream()
-              ) {
-                return;
-              }
-
-              streamedContent +=
-                data.chunk ||
-                "";
-
-              updateAssistantContent(
-                streamedContent
-              );
-            },
-
-            /**
-             * Stream completion.
-             */
-            onDone: async (
-              data
-            ) => {
-              if (
-                isStaleStream()
-              ) {
-                return;
-              }
-
-              /**
-               * Final assistant synchronization.
-               */
-              updateAssistantContent(
-                streamedContent,
-                {
-                  ...(data.assistantMessage ||
-                    {}),
+            onToken:
+              (
+                payload
+              ) => {
+                /**
+                 * Ignore stale streams.
+                 */
+                if (
+                  activeRequestRef.current !==
+                  requestId
+                ) {
+                  return;
                 }
-              );
 
-              /**
-               * Metadata synchronization.
-               */
-              syncResponseMetadata(
-                data
-              );
+                replaceAssistantMessage(
+                  assistantMessageId,
+                  (
+                    currentMessage
+                  ) => ({
+                    ...currentMessage,
 
-              /**
-               * Refresh sidebar sessions.
-               */
-              await loadSessions(
-                selectedAccount._id
-              );
-            },
+                    content:
+                      currentMessage.content +
+                      (
+                        payload.content ||
+                        ""
+                      ),
+
+                    isLoading:
+                      false,
+
+                    isStreaming:
+                      true,
+                  })
+                );
+              },
 
             /**
-             * Stream event failure.
+             * Streaming completed.
              */
-            onError: (
-              data
-            ) => {
-              throw {
-                message:
-                  data?.message ||
-                  "Streaming failed.",
-              };
-            },
-          });
+            onDone:
+              async (
+                payload
+              ) => {
+                /**
+                 * Ignore stale streams.
+                 */
+                if (
+                  activeRequestRef.current !==
+                  requestId
+                ) {
+                  return;
+                }
 
+                replaceAssistantMessage(
+                  assistantMessageId,
+                  (
+                    currentMessage
+                  ) => ({
+                    ...currentMessage,
+
+                    content:
+                      payload.fullResponse ||
+                      currentMessage.content,
+
+                    isLoading:
+                      false,
+
+                    isStreaming:
+                      false,
+                  })
+                );
+
+                /**
+                 * Synchronize metadata.
+                 */
+                syncMetadata(
+                  payload
+                );
+
+                /**
+                 * Refresh sessions.
+                 */
+                await loadSessions(
+                  socialAccountId
+                );
+
+                /**
+                 * Cleanup uploads.
+                 */
+                clearImages?.();
+              },
+
+            /**
+             * Stream error.
+             */
+            onError:
+              (
+                payload
+              ) => {
+                throw new Error(
+                  payload.message ||
+                    "Streaming failed."
+                );
+              },
+          });
+        } catch (error) {
           /**
-           * Cleanup uploads after success.
+           * Ignore abort lifecycle.
            */
-          clearImages?.();
-        } catch (streamError) {
+          if (
+            error?.name ===
+              "AbortError" ||
+            error?.cancelled
+          ) {
+            return;
+          }
+
           console.error(
-            "[SSE STREAM ERROR]",
-            streamError
+            "[AI STREAM ERROR]",
+            error
           );
 
           /**
            * Ignore stale failures.
            */
           if (
-            isStaleStream()
+            activeRequestRef.current !==
+            requestId
           ) {
             return;
           }
 
+          const cleanError =
+            error.message ||
+            "Failed to generate AI response.";
+
+          setChatError(
+            cleanError
+          );
+
           /**
-           * =========================
-           * FALLBACK AI LIFECYCLE
-           * =========================
+           * Convert placeholder
+           * into stable error state.
            */
-          try {
-            const response =
-              await sendAIChat({
-                accountId:
-                  selectedAccount._id,
+          replaceAssistantMessage(
+            assistantMessageId,
+            (
+              currentMessage
+            ) => ({
+              ...currentMessage,
 
-                token,
+              content:
+                cleanError,
 
-                message:
-                  trimmedMessage,
+              isLoading:
+                false,
 
-                sessionId:
-                  activeSessionId,
+              isStreaming:
+                false,
 
-                images:
-                  selectedImages.map(
-                    (
-                      image
-                    ) =>
-                      image.file
-                  ),
-              });
-
-            /**
-             * Ignore stale fallback responses.
-             */
-            if (
-              isStaleStream()
-            ) {
-              return;
-            }
-
-            /**
-             * Replace assistant safely.
-             */
-            updateAssistantContent(
-              response
-                .assistantMessage
-                ?.content ||
-                "",
-              {
-                ...(response.assistantMessage ||
-                  {}),
-              }
-            );
-
-            /**
-             * Synchronize backend metadata.
-             */
-            syncResponseMetadata(
-              response
-            );
-
-            /**
-             * Refresh sidebar sessions.
-             */
-            await loadSessions(
-              selectedAccount._id
-            );
-
-            /**
-             * Cleanup uploads.
-             */
-            clearImages?.();
-          } catch (
-            fallbackError
-          ) {
-            console.error(
-              "[FALLBACK AI ERROR]",
-              fallbackError
-            );
-
-            /**
-             * Interceptor-normalized error.
-             */
-            const cleanError =
-              fallbackError.message ||
-              "Failed to generate AI response.";
-
-            setChatError(
-              cleanError
-            );
-
-            /**
-             * Convert assistant bubble
-             * into stable error state.
-             */
-            updateAssistantContent(
-              cleanError,
-              {
-                isError: true,
-              }
-            );
-          }
+              isError: true,
+            })
+          );
         } finally {
           /**
-           * Cleanup ONLY current stream.
-           *
-           * Prevent stale cleanup
-           * from clearing newer streams.
+           * Cleanup current request.
            */
           if (
-            activeStreamRef.current ===
-            currentStreamId
+            activeRequestRef.current ===
+            requestId
           ) {
-            activeStreamRef.current =
+            activeRequestRef.current =
+              null;
+
+            abortControllerRef.current =
               null;
           }
 
-          /**
-           * Reset lifecycle state.
-           */
           setChatLoading(
             false
           );
@@ -643,20 +606,23 @@ const useAIChat = ({
         }
       },
       [
-        token,
-        selectedAccount,
         activeSessionId,
         chatLoading,
 
         setMessages,
+
         setActiveSessionId,
         setSessionTitle,
 
         loadSessions,
 
         limitMessages,
+
         replaceAssistantMessage,
-        syncResponseMetadata,
+
+        syncMetadata,
+
+        cancelStream,
       ]
     );
 
@@ -686,6 +652,8 @@ const useAIChat = ({
      * Actions.
      */
     sendMessage,
+
+    cancelStream,
   };
 };
 

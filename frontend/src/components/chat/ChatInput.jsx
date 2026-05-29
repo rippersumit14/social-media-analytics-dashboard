@@ -15,7 +15,8 @@ import {
  * - uploads
  * - keyboard shortcuts
  * - voice lifecycle
- * - send lifecycle
+ * - streaming lifecycle
+ * - stream cancellation
  */
 const ChatInput = ({
   /**
@@ -25,9 +26,10 @@ const ChatInput = ({
   setInput,
 
   /**
-   * Send lifecycle.
+   * AI lifecycle.
    */
   onSend,
+  onCancel,
 
   /**
    * Upload lifecycle.
@@ -77,12 +79,10 @@ const ChatInput = ({
     useMemo(() => {
       return (
         disabled ||
-        chatLoading ||
         isUsageLimitReached
       );
     }, [
       disabled,
-      chatLoading,
       isUsageLimitReached,
     ]);
 
@@ -93,12 +93,14 @@ const ChatInput = ({
     useMemo(() => {
       return (
         isInputDisabled ||
+        chatLoading ||
         (!input.trim() &&
           selectedImages.length ===
             0)
       );
     }, [
       isInputDisabled,
+      chatLoading,
       input,
       selectedImages.length,
     ]);
@@ -128,12 +130,18 @@ const ChatInput = ({
    */
   const handleUploadClick =
     useCallback(() => {
-      if (isInputDisabled) {
+      if (
+        isInputDisabled ||
+        chatLoading
+      ) {
         return;
       }
 
       fileInputRef.current?.click();
-    }, [isInputDisabled]);
+    }, [
+      isInputDisabled,
+      chatLoading,
+    ]);
 
   /**
    * Stable send lifecycle.
@@ -153,7 +161,15 @@ const ChatInput = ({
     ]);
 
   /**
-   * Stable keyboard shortcuts.
+   * Stable stream cancellation.
+   */
+  const handleCancel =
+    useCallback(() => {
+      onCancel?.();
+    }, [onCancel]);
+
+  /**
+   * Keyboard shortcuts.
    *
    * Enter:
    * send message
@@ -178,7 +194,7 @@ const ChatInput = ({
     );
 
   /**
-   * Stable image selection lifecycle.
+   * Stable image lifecycle.
    */
   const handleFileChange =
     useCallback(
@@ -212,6 +228,8 @@ const ChatInput = ({
         {/* Textarea */}
         <textarea
           ref={textareaRef}
+          aria-label="AI chat input"
+          data-testid="chat-input"
           rows={2}
           value={input}
           onChange={(event) =>
@@ -230,7 +248,7 @@ const ChatInput = ({
               ? "Daily limit reached"
               : "Ask AI about analytics, growth, content strategy, or upload images..."
           }
-          className="max-h-[220px] min-h-[56px] flex-1 resize-none overflow-y-auto rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
+          className="max-h-[220px] min-h-[56px] flex-1 resize-none overflow-y-auto rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition-colors focus:border-blue-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
         />
 
         {/* Actions */}
@@ -245,35 +263,40 @@ const ChatInput = ({
               handleFileChange
             }
             disabled={
-              isInputDisabled
+              isInputDisabled ||
+              chatLoading
             }
             className="hidden"
           />
 
           {/* Upload Button */}
           <button
+            data-testid="upload-button"
             type="button"
             onClick={
               handleUploadClick
             }
             disabled={
-              isInputDisabled
+              isInputDisabled ||
+              chatLoading
             }
-            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Images
           </button>
 
           {/* Voice Button */}
           <button
+            data-testid="voice-button"
             type="button"
             onClick={
               onVoiceClick
             }
             disabled={
-              isInputDisabled
+              isInputDisabled ||
+              chatLoading
             }
-            className={`rounded-xl border px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`rounded-xl border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
               isListening
                 ? "border-red-300 bg-red-50 text-red-600"
                 : "border-gray-200 text-gray-700 hover:bg-gray-50"
@@ -284,21 +307,36 @@ const ChatInput = ({
               : "Voice"}
           </button>
 
-          {/* Send Button */}
-          <button
-            type="button"
-            onClick={
-              handleSend
-            }
-            disabled={
-              isSendDisabled
-            }
-            className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {chatLoading
-              ? "Sending..."
-              : "Send"}
-          </button>
+          {/* Stream Cancel Button */}
+          {chatLoading ? (
+            <button
+              data-testid="stop-stream-button"
+              type="button"
+              onClick={
+                handleCancel
+              }
+              className="rounded-xl border border-red-200 bg-red-50 px-5 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100"
+            >
+              Stop
+            </button>
+          ) : (
+            /**
+             * Send Button
+             */
+            <button
+              data-testid="send-button"
+              type="button"
+              onClick={
+                handleSend
+              }
+              disabled={
+                isSendDisabled
+              }
+              className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              Send
+            </button>
+          )}
         </div>
       </div>
 
@@ -309,6 +347,16 @@ const ChatInput = ({
           Shift + Enter for
           newline.
         </p>
+
+        {chatLoading && (
+          <p
+            className="text-blue-500"
+            aria-live="polite"
+          >
+            AI is generating a
+            response...
+          </p>
+        )}
 
         {selectedImages.length >
           0 && (

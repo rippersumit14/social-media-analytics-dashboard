@@ -1,45 +1,32 @@
 import api from "./api.js";
 
 /**
- * Stable auth request configuration.
- */
-const createAuthConfig = (
-  token,
-  signal
-) => ({
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-
-  /**
-   * Abort-safe requests.
-   */
-  signal,
-});
-
-/**
- * Normalize authenticated user.
+ * Normalize authenticated user safely.
  */
 const normalizeUser = (
   user = {}
 ) => {
   return {
-    _id: user._id || "",
+    _id:
+      user._id || "",
 
-    name: user.name || "",
+    name:
+      user.name || "",
 
-    email: user.email || "",
+    email:
+      user.email || "",
 
     username:
       user.username || "",
 
     createdAt:
-      user.createdAt || null,
+      user.createdAt ||
+      null,
   };
 };
 
 /**
- * Normalize auth response.
+ * Normalize backend auth response.
  *
  * Backend contract:
  * {
@@ -49,7 +36,9 @@ const normalizeUser = (
  * }
  */
 const normalizeAuthResponse =
-  (responseData = {}) => {
+  (
+    responseData = {}
+  ) => {
     return {
       success:
         Boolean(
@@ -61,7 +50,8 @@ const normalizeAuthResponse =
         "",
 
       data:
-        responseData.data || null,
+        responseData.data ||
+        null,
     };
   };
 
@@ -82,9 +72,28 @@ export const registerUser =
         }
       );
 
-    return normalizeAuthResponse(
-      response.data
-    );
+    const normalized =
+      normalizeAuthResponse(
+        response.data
+      );
+
+    return {
+      ...normalized,
+
+      /**
+       * Stable user normalization.
+       */
+      data: {
+        ...normalized.data,
+
+        user:
+          normalizeUser(
+            normalized
+              .data
+              ?.user
+          ),
+      },
+    };
   };
 
 /**
@@ -104,27 +113,47 @@ export const loginUser =
         }
       );
 
-    return normalizeAuthResponse(
-      response.data
-    );
+    const normalized =
+      normalizeAuthResponse(
+        response.data
+      );
+
+    return {
+      ...normalized,
+
+      /**
+       * Stable user normalization.
+       */
+      data: {
+        ...normalized.data,
+
+        user:
+          normalizeUser(
+            normalized
+              .data
+              ?.user
+          ),
+      },
+    };
   };
 
 /**
  * Restore authenticated user
- * using JWT token.
+ * using stored JWT token.
+ *
+ * Auth header injected automatically
+ * by api.js interceptor.
  */
 export const getCurrentUser =
   async ({
-    token,
     signal,
-  }) => {
+  } = {}) => {
     const response =
       await api.get(
         "/auth/me",
-        createAuthConfig(
-          token,
-          signal
-        )
+        {
+          signal,
+        }
       );
 
     const normalized =
@@ -141,4 +170,3 @@ export const getCurrentUser =
         ),
     };
   };
-

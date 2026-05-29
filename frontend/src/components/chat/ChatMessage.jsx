@@ -1,4 +1,24 @@
-import { memo, useMemo } from "react";
+import {
+  memo,
+  useMemo,
+} from "react";
+
+/**
+ * Stable streaming cursor.
+ *
+ * ChatGPT-style typing feel.
+ */
+const StreamingCursor =
+  memo(() => {
+    return (
+      <span className="ml-1 inline-block animate-pulse font-semibold text-gray-400">
+        ▋
+      </span>
+    );
+  });
+
+StreamingCursor.displayName =
+  "StreamingCursor";
 
 /**
  * Stable text content renderer.
@@ -9,27 +29,54 @@ import { memo, useMemo } from "react";
  * - code blocks
  */
 const MessageContent = memo(
-  ({ content }) => {
+  ({
+    content,
+    isStreaming =
+      false,
+  }) => {
     if (!content) {
       return null;
     }
 
-    const lines = content
-      .split("\n")
-      .map((line) =>
-        line.trim()
-      )
-      .filter(Boolean);
+    /**
+     * Preserve AI formatting.
+     *
+     * Important for:
+     * - markdown
+     * - code blocks
+     * - spacing
+     * - lists
+     */
+    const lines =
+      content.split("\n");
 
     return (
-      <div className="space-y-2">
+      <div
+        className="space-y-2"
+        aria-live={
+          isStreaming
+            ? "polite"
+            : undefined
+        }
+      >
         {lines.map(
           (line, index) => (
             <p
               key={index}
               className="break-words whitespace-pre-wrap text-sm leading-6"
             >
-              {line}
+              {
+                line ||
+                "\u00A0"
+              }
+
+              {/* Live streaming cursor */}
+              {isStreaming &&
+                index ===
+                  lines.length -
+                    1 && (
+                  <StreamingCursor />
+                )}
             </p>
           )
         )}
@@ -57,7 +104,7 @@ const LoadingIndicator = memo(
         </div>
 
         <span className="text-sm text-gray-500">
-          AI is analyzing...
+          AI is thinking...
         </span>
       </div>
     );
@@ -71,7 +118,10 @@ LoadingIndicator.displayName =
  * Stable image gallery renderer.
  */
 const MessageImages = memo(
-  ({ images = [], messageId }) => {
+  ({
+    images = [],
+    messageId,
+  }) => {
     if (!images.length) {
       return null;
     }
@@ -79,7 +129,10 @@ const MessageImages = memo(
     return (
       <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-3">
         {images.map(
-          (image, index) => (
+          (
+            image,
+            index
+          ) => (
             <div
               key={`${messageId}-${index}`}
               className="overflow-hidden rounded-xl border border-gray-200 bg-gray-100"
@@ -90,11 +143,11 @@ const MessageImages = memo(
                 }
                 alt={`Uploaded ${index}`}
                 loading="lazy"
-                className="max-h-60 w-full object-cover"
+                className="max-h-60 w-full object-cover transition"
 
                 /**
-                 * Prevent broken layout
-                 * on failed image loads.
+                 * Prevent layout corruption
+                 * from failed image loads.
                  */
                 onError={(
                   event
@@ -117,16 +170,19 @@ MessageImages.displayName =
 /**
  * Production-grade chat message bubble.
  *
- * Supports:
- * - assistant messages
+ * Handles:
  * - user messages
- * - image galleries
- * - loading states
+ * - assistant messages
+ * - streamed responses
+ * - AI loading states
+ * - image rendering
+ * - metadata rendering
  * - error states
  *
  * Future-ready for:
  * - markdown
  * - code blocks
+ * - syntax highlighting
  * - copy actions
  */
 const ChatMessage = ({
@@ -150,7 +206,7 @@ const ChatMessage = ({
     "assistant";
 
   /**
-   * Stable UI states.
+   * Stable lifecycle states.
    */
   const isLoading =
     Boolean(
@@ -162,15 +218,28 @@ const ChatMessage = ({
   );
 
   /**
+   * Streaming state.
+   *
+   * Active during:
+   * SSE chunk rendering.
+   */
+  const isStreaming =
+    isAssistant &&
+    !isLoading &&
+    !isError &&
+    Boolean(
+      message.isStreaming
+    );
+
+  /**
    * Stable images array.
    */
-  const images = useMemo(() => {
-    return Array.isArray(
+  const images =
+    Array.isArray(
       message.images
     )
       ? message.images
       : [];
-  }, [message.images]);
 
   /**
    * Stable bubble styles.
@@ -198,12 +267,14 @@ const ChatMessage = ({
     useMemo(() => {
       return (
         isAssistant &&
+        !isLoading &&
         !isError &&
         (message.model ||
           message.latencyMs)
       );
     }, [
       isAssistant,
+      isLoading,
       isError,
       message.model,
       message.latencyMs,
@@ -211,6 +282,9 @@ const ChatMessage = ({
 
   return (
     <div
+      role="article"
+      aria-label={`${message.role} message`}
+      data-testid={`chat-message-${message.role}`}
       className={`flex ${
         isUser
           ? "justify-end"
@@ -219,7 +293,7 @@ const ChatMessage = ({
     >
       <div className="max-w-[88%] md:max-w-[80%]">
         <div
-          className={`rounded-2xl px-4 py-3 shadow-sm transition ${bubbleStyles}`}
+          className={`rounded-2xl px-4 py-3 shadow-sm transition-colors duration-200 ${bubbleStyles}`}
         >
           {/* Images */}
           <MessageImages
@@ -229,21 +303,24 @@ const ChatMessage = ({
             }
           />
 
-          {/* Loading */}
+          {/* AI Loading */}
           {isLoading ? (
             <LoadingIndicator />
           ) : (
             <>
-              {/* Message Content */}
+              {/* Streamed Message Content */}
               <MessageContent
                 content={
                   message.content
+                }
+                isStreaming={
+                  isStreaming
                 }
               />
 
               {/* AI Metadata */}
               {showMetadata && (
-                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2 text-xs text-gray-400">
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-gray-50 pt-2 text-xs text-gray-400">
                   {message.model && (
                     <span>
                       {
@@ -259,6 +336,13 @@ const ChatMessage = ({
                         message.latencyMs
                       }
                       ms
+                    </span>
+                  )}
+
+                  {/* Streaming Status */}
+                  {isStreaming && (
+                    <span className="text-blue-500">
+                      • streaming
                     </span>
                   )}
                 </div>

@@ -12,18 +12,22 @@ import ChatMessage from "./ChatMessage.jsx";
  *
  * Responsibilities:
  * - stable auto-scroll
+ * - stream synchronization
+ * - chunk-safe rendering
  * - empty states
- * - streaming-safe rendering
  * - responsive overflow handling
+ * - streaming UX stabilization
  */
 const ChatMessages = ({
   messages = [],
 
   chatLoading = false,
 
-  emptyTitle = "Start a conversation",
+  emptyTitle =
+    "Start a conversation",
 
-  emptyDescription = "Ask about analytics, growth, engagement, strategy, or upload images for AI analysis.",
+  emptyDescription =
+    "Ask about analytics, growth, engagement, strategy, or upload images for AI analysis.",
 }) => {
   /**
    * Scroll container reference.
@@ -44,6 +48,18 @@ const ChatMessages = ({
     useRef(messages.length);
 
   /**
+   * Animation frame synchronization.
+   */
+  const scrollFrameRef =
+    useRef(null);
+
+  /**
+   * Prevent stale animation frames.
+   */
+  const mountedRef =
+    useRef(true);
+
+  /**
    * Empty chat state.
    */
   const showEmptyState =
@@ -58,10 +74,38 @@ const ChatMessages = ({
     ]);
 
   /**
-   * Smart auto-scroll behavior.
+   * Detect active streaming state.
+   */
+  const isStreaming =
+    useMemo(() => {
+      return messages.some(
+        (message) =>
+          message.isStreaming
+      );
+    }, [messages]);
+
+  /**
+   * Cleanup lifecycle.
+   */
+  useEffect(() => {
+    return () => {
+      mountedRef.current =
+        false;
+
+      cancelAnimationFrame(
+        scrollFrameRef.current
+      );
+    };
+  }, []);
+
+  /**
+   * Stream-aware auto-scroll lifecycle.
    *
-   * Prevents excessive scrolling
-   * during rapid chunk updates.
+   * Handles:
+   * - new messages
+   * - SSE chunk rendering
+   * - streaming synchronization
+   * - near-bottom protection
    */
   useEffect(() => {
     const container =
@@ -72,45 +116,79 @@ const ChatMessages = ({
     }
 
     /**
-     * Detect if user is near bottom.
+     * Detect if user remains near bottom.
+     *
+     * Prevents aggressive scrolling
+     * when user reads older messages.
      */
     const isNearBottom =
       container.scrollHeight -
         container.scrollTop -
         container.clientHeight <
-      120;
+      140;
 
     /**
-     * Only auto-scroll when:
-     * - new messages arrive
-     * - user already near bottom
+     * Detect newly added messages.
      */
     const hasNewMessage =
       messages.length >
       previousMessageCountRef.current;
 
-    if (
+    /**
+     * Auto-scroll conditions.
+     */
+    const shouldAutoScroll =
       hasNewMessage ||
-      isNearBottom
+      (isStreaming &&
+        isNearBottom);
+
+    if (
+      shouldAutoScroll
     ) {
-      messagesEndRef.current?.scrollIntoView(
-        {
-          behavior: "smooth",
-          block: "end",
-        }
+      /**
+       * Prevent excessive scroll
+       * thrashing during rapid
+       * stream chunk updates.
+       */
+      cancelAnimationFrame(
+        scrollFrameRef.current
       );
+
+      scrollFrameRef.current =
+        requestAnimationFrame(
+          () => {
+            if (
+              !mountedRef.current
+            ) {
+              return;
+            }
+
+            messagesEndRef.current?.scrollIntoView(
+              {
+                behavior:
+                  isStreaming
+                    ? "auto"
+                    : "smooth",
+
+                block: "end",
+              }
+            );
+          }
+        );
     }
 
     previousMessageCountRef.current =
       messages.length;
   }, [
     messages.length,
+    isStreaming,
     chatLoading,
   ]);
 
   return (
     <div
       ref={containerRef}
+      data-testid="chat-messages-container"
       className="h-[550px] overflow-y-auto rounded-2xl border border-gray-100 bg-gray-50 p-4"
     >
       {showEmptyState ? (

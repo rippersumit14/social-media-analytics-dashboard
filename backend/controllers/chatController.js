@@ -26,6 +26,10 @@ import {
 } from "../services/cloudinaryStorageService.js";
 
 import {
+  extractTextFromImage,
+} from "../services/ocrService.js";
+
+import {
 
   prepareAIUsageForRequest,
 
@@ -84,7 +88,48 @@ const handleOptionalImageUploads =
   };
 
 /**
- * Load recent conversation history
+ * OCR extraction
+ */
+
+const extractOCRFromImages =
+  async (
+    files = []
+  ) => {
+
+    if (!files.length) {
+      return "";
+    }
+
+    const results =
+      await Promise.all(
+
+        files.map(
+
+          async (file) =>
+
+            await extractTextFromImage(
+              file.buffer
+            )
+        )
+      );
+
+    return results
+
+      .filter(
+        (result) =>
+          result.hasText
+      )
+
+      .map(
+        (result) =>
+          result.extractedText
+      )
+
+      .join("\n\n");
+  };
+
+/**
+ * Load recent history
  */
 
 const loadRecentHistory =
@@ -107,27 +152,45 @@ const loadRecentHistory =
 
         .lean();
 
-    /**
-     * AI expects:
-     * oldest → newest
-     */
     historyMessages.reverse();
 
     return historyMessages;
   };
 
 /**
- * Main AI Chat Route
+ * Build final user message
  */
 
-export const chatWithAIStream =
+const buildFinalUserMessage =
+  (
+    userMessageText,
+    extractedOCRText
+  ) => {
+
+    return extractedOCRText
+
+      ? `
+${userMessageText}
+
+--------------------------------------------------
+OCR EXTRACTED TEXT
+--------------------------------------------------
+
+${extractedOCRText}
+`
+
+      : userMessageText;
+  };
+
+/**
+ * Main AI Chat Controller
+ */
+
+export const chatWithAI =
   asyncHandler(async (
     req,
     res
   ) => {
-
-    const startedAt =
-      Date.now();
 
     const {
       socialAccountId,
@@ -170,19 +233,11 @@ export const chatWithAIStream =
     const userId =
       req.user._id;
 
-    /**
-     * Uploaded files
-     */
-
     const uploadedFiles =
       req.files || [];
 
     const hasImages =
       uploadedFiles.length > 0;
-
-    /**
-     * Build user message
-     */
 
     const userMessageText =
       buildUserMessageText(
@@ -204,7 +259,7 @@ export const chatWithAIStream =
     }
 
     /**
-     * Fetch user + account
+     * Fetch user + social account
      */
 
     const [
@@ -279,12 +334,33 @@ export const chatWithAIStream =
       });
 
     /**
-     * Upload images
+     * Upload optimized images
      */
 
     const uploadedImages =
       await handleOptionalImageUploads(
         uploadedFiles
+      );
+
+    /**
+     * OCR extraction
+     */
+
+    const extractedOCRText =
+      await extractOCRFromImages(
+        uploadedFiles
+      );
+
+    /**
+     * Final AI prompt message
+     */
+
+    const finalUserMessage =
+      buildFinalUserMessage(
+
+        userMessageText,
+
+        extractedOCRText
       );
 
     /**
@@ -307,14 +383,14 @@ export const chatWithAIStream =
           "user",
 
         content:
-          userMessageText,
+          finalUserMessage,
 
         images:
           uploadedImages,
       });
 
     /**
-     * Fetch optimized history
+     * Fetch history + analytics
      */
 
     const [
@@ -354,18 +430,6 @@ export const chatWithAIStream =
         snapshots.reverse()
       );
 
-    logger.ai(
-      "Generating AI response",
-
-      {
-
-        socialAccountId,
-
-        sessionId:
-          activeSession._id.toString(),
-      }
-    );
-
     /**
      * Generate AI response
      */
@@ -378,11 +442,11 @@ export const chatWithAIStream =
         historyMessages,
 
         latestUserMessage:
-          userMessageText,
+          finalUserMessage,
       });
 
     /**
-     * Finalize AI response
+     * Save AI reply
      */
 
     const {
@@ -400,19 +464,6 @@ export const chatWithAIStream =
 
         aiResult,
       });
-
-    logger.success(
-      "AI response generated",
-
-      {
-
-        sessionId:
-          activeSession._id.toString(),
-
-        latencyMs:
-          aiResult.latencyMs,
-      }
-    );
 
     return res.status(200).json(
 
@@ -432,11 +483,11 @@ export const chatWithAIStream =
 
           aiReply,
 
-          modelUsed:
-            aiResult.modelUsed,
-
           provider:
             aiResult.provider,
+
+          modelUsed:
+            aiResult.modelUsed,
 
           latencyMs:
             aiResult.latencyMs,
@@ -448,6 +499,128 @@ export const chatWithAIStream =
         }
       )
     );
+  });
+
+/**
+ * Real Streaming AI Controller
+ */
+
+export const chatWithAIStream =
+  asyncHandler(async (
+    req,
+    res
+  ) => {
+
+    const {
+      message = "",
+    } = req.body || {};
+
+    /**
+     * SSE headers
+     */
+
+    res.writeHead(200, {
+
+      "Content-Type":
+        "text/event-stream",
+
+      "Cache-Control":
+        "no-cache",
+
+      Connection:
+        "keep-alive",
+    });
+
+    /**
+     * Initial connection event
+     */
+
+    res.write(
+
+      `data: ${JSON.stringify({
+
+        type:
+          "connected",
+      })}\n\n`
+    );
+
+    /**
+     * Start AI stream
+     */
+
+    const stream =
+      await generateStreamingAnalyticsResponse({
+
+        analyticsContext:
+          "Streaming AI analysis",
+
+        historyMessages:
+          [],
+
+        latestUserMessage:
+          message,
+      });
+
+    let fullResponse =
+      "";
+
+    /**
+     * Forward tokens
+     */
+
+    for await (
+      const chunk
+      of stream
+    ) {
+
+      const token =
+        chunk?.choices?.[0]
+          ?.delta?.content || "";
+
+      if (!token) {
+        continue;
+      }
+
+      /**
+       * Accumulate response
+       */
+
+      fullResponse +=
+        token;
+
+      /**
+       * Send token to frontend
+       */
+
+      res.write(
+
+        `data: ${JSON.stringify({
+
+          type:
+            "token",
+
+          content:
+            token,
+        })}\n\n`
+      );
+    }
+
+    /**
+     * Stream completed
+     */
+
+    res.write(
+
+      `data: ${JSON.stringify({
+
+        type:
+          "done",
+
+        fullResponse,
+      })}\n\n`
+    );
+
+    res.end();
   });
 
 /**
@@ -464,14 +637,11 @@ export const getChatSessions =
       socialAccountId,
     } = req.params;
 
-    const userId =
-      req.user._id;
-
     const sessions =
       await ChatSession.find({
 
         user:
-          userId,
+          req.user._id,
 
         socialAccount:
           socialAccountId,
@@ -508,9 +678,6 @@ export const getSessionMessages =
       sessionId,
     } = req.params;
 
-    const userId =
-      req.user._id;
-
     const messages =
       await ChatMessage.find({
 
@@ -518,7 +685,7 @@ export const getSessionMessages =
           sessionId,
 
         user:
-          userId,
+          req.user._id,
       })
 
         .sort({
@@ -534,6 +701,115 @@ export const getSessionMessages =
         "Messages fetched successfully",
 
         messages
+      )
+    );
+  });
+
+/**
+ * Rename session
+ */
+
+export const renameChatSession =
+  asyncHandler(async (
+    req,
+    res
+  ) => {
+
+    const {
+      sessionId,
+    } = req.params;
+
+    const {
+      title,
+    } = req.body;
+
+    const session =
+      await ChatSession.findOne({
+
+        _id:
+          sessionId,
+
+        user:
+          req.user._id,
+      });
+
+    if (!session) {
+
+      throw new AppError(
+        "Chat session not found",
+        404
+      );
+    }
+
+    session.title =
+      title?.trim() ||
+      session.title;
+
+    await session.save();
+
+    return res.status(200).json(
+
+      new ApiResponse(
+        true,
+        "Session renamed successfully",
+
+        session
+      )
+    );
+  });
+
+/**
+ * Delete session
+ */
+
+export const deleteChatSession =
+  asyncHandler(async (
+    req,
+    res
+  ) => {
+
+    const {
+      sessionId,
+    } = req.params;
+
+    const session =
+      await ChatSession.findOne({
+
+        _id:
+          sessionId,
+
+        user:
+          req.user._id,
+      });
+
+    if (!session) {
+
+      throw new AppError(
+        "Chat session not found",
+        404
+      );
+    }
+
+    await Promise.all([
+
+      ChatMessage.deleteMany({
+
+        session:
+          sessionId,
+      }),
+
+      ChatSession.deleteOne({
+
+        _id:
+          sessionId,
+      }),
+    ]);
+
+    return res.status(200).json(
+
+      new ApiResponse(
+        true,
+        "Session deleted successfully"
       )
     );
   });
