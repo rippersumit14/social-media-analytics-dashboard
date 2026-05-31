@@ -8,7 +8,9 @@ import aiRateLimiter
   from "../middlewares/aiRateLimiter.js";
 
 import {
+
   uploadImages,
+
 } from "../middlewares/uploadMiddleware.js";
 
 import {
@@ -22,7 +24,9 @@ import {
 } from "../controllers/chatController.js";
 
 import {
+
   getAIInsights,
+
 } from "../controllers/aiController.js";
 
 const router =
@@ -62,25 +66,18 @@ router.post(
 
   aiRateLimiter,
 
-  uploadImages.array(
-
-    "images",
-
-    5
-  ),
+  uploadImages,
 
   chatWithAIStream
 );
 
 /**
  * ---------------------------------------------------
- * Temporary Alias Route
+ * Frontend Compatibility Route
  * ---------------------------------------------------
  *
- * Keeps frontend compatibility.
- *
- * Internally redirects
- * to streaming controller.
+ * Keeps older frontend
+ * contract working.
  */
 
 router.post(
@@ -91,12 +88,7 @@ router.post(
 
   aiRateLimiter,
 
-  uploadImages.array(
-
-    "images",
-
-    5
-  ),
+  uploadImages,
 
   chatWithAIStream
 );

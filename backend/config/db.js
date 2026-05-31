@@ -1,23 +1,143 @@
-import mongoose from "mongoose";
+import mongoose
+  from "mongoose";
 
-const connectDB = async () => {
-  if (!process.env.MONGO_URI) {
-    throw new Error("MONGO_URI is required to start the backend");
-  }
+import logger
+  from "../utils/logger.js";
 
-  try {
-    const conn = await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 10000,
-    });
+/**
+ * ---------------------------------------------------
+ * MongoDB Connection
+ * ---------------------------------------------------
+ */
 
-    console.log(`[DB_READY] MongoDB connected: ${conn.connection.host}`);
-  } catch (error) {
-    console.error("[DB_CONNECTION_ERROR]", {
-      message: error.message,
-    });
+const connectDB =
+  async () => {
 
-    throw error;
-  }
-};
+    /**
+     * Validate Mongo URI
+     */
+
+    if (
+      !process.env.MONGO_URI
+    ) {
+
+      throw new Error(
+        "MONGO_URI is required to start the backend"
+      );
+    }
+
+    try {
+
+      /**
+       * Strict query mode
+       *
+       * Prevents unknown query fields
+       */
+
+      mongoose.set(
+
+        "strictQuery",
+
+        true
+      );
+
+      /**
+       * Connect MongoDB
+       */
+
+      const conn =
+        await mongoose.connect(
+
+          process.env.MONGO_URI,
+
+          {
+
+            serverSelectionTimeoutMS:
+              10000,
+          }
+        );
+
+      logger.info(
+
+        "MongoDB connected successfully",
+
+        {
+
+          host:
+            conn.connection.host,
+
+          database:
+            conn.connection.name,
+        }
+      );
+
+      /**
+       * ---------------------------------------------------
+       * Mongo Connection Events
+       * ---------------------------------------------------
+       */
+
+      mongoose.connection.on(
+
+        "disconnected",
+
+        () => {
+
+          logger.warn(
+            "MongoDB disconnected"
+          );
+        }
+      );
+
+      mongoose.connection.on(
+
+        "reconnected",
+
+        () => {
+
+          logger.info(
+            "MongoDB reconnected"
+          );
+        }
+      );
+
+      mongoose.connection.on(
+
+        "error",
+
+        (error) => {
+
+          logger.error(
+
+            "MongoDB connection error",
+
+            {
+
+              message:
+                error.message,
+            }
+          );
+        }
+      );
+
+    } catch (error) {
+
+      logger.error(
+
+        "MongoDB connection failed",
+
+        {
+
+          message:
+            error.message,
+
+          stack:
+            error.stack,
+        }
+      );
+
+      throw error;
+    }
+  };
 
 export default connectDB;

@@ -88,7 +88,7 @@ const handleOptionalImageUploads =
   };
 
 /**
- * OCR extraction
+ * Extract OCR text from uploaded images
  */
 
 const extractOCRFromImages =
@@ -129,7 +129,7 @@ const extractOCRFromImages =
   };
 
 /**
- * Load recent history
+ * Load recent chat history
  */
 
 const loadRecentHistory =
@@ -137,7 +137,7 @@ const loadRecentHistory =
     sessionId
   ) => {
 
-    const historyMessages =
+    const messages =
       await ChatMessage.find({
 
         session:
@@ -152,13 +152,11 @@ const loadRecentHistory =
 
         .lean();
 
-    historyMessages.reverse();
-
-    return historyMessages;
+    return messages.reverse();
   };
 
 /**
- * Build final user message
+ * Build final AI prompt message
  */
 
 const buildFinalUserMessage =
@@ -167,9 +165,11 @@ const buildFinalUserMessage =
     extractedOCRText
   ) => {
 
-    return extractedOCRText
+    if (!extractedOCRText) {
+      return userMessageText;
+    }
 
-      ? `
+    return `
 ${userMessageText}
 
 --------------------------------------------------
@@ -177,9 +177,23 @@ OCR EXTRACTED TEXT
 --------------------------------------------------
 
 ${extractedOCRText}
-`
+`;
+  };
 
-      : userMessageText;
+/**
+ * Normalize messages response
+ */
+
+const buildMessagesResponse =
+  (
+    userMessage,
+    aiReply
+  ) => {
+
+    return [
+      userMessage,
+      aiReply,
+    ];
   };
 
 /**
@@ -202,7 +216,7 @@ export const chatWithAI =
     } = req.body || {};
 
     /**
-     * Validate ids
+     * Validate social account
      */
 
     if (
@@ -216,6 +230,10 @@ export const chatWithAI =
         400
       );
     }
+
+    /**
+     * Validate session id
+     */
 
     if (
       sessionId &&
@@ -239,6 +257,10 @@ export const chatWithAI =
     const hasImages =
       uploadedFiles.length > 0;
 
+    /**
+     * Normalize user message
+     */
+
     const userMessageText =
       buildUserMessageText(
 
@@ -259,7 +281,7 @@ export const chatWithAI =
     }
 
     /**
-     * Fetch user + social account
+     * Load user + account
      */
 
     const [
@@ -299,7 +321,7 @@ export const chatWithAI =
     }
 
     /**
-     * AI usage validation
+     * Validate AI usage
      */
 
     await prepareAIUsageForRequest(
@@ -318,7 +340,7 @@ export const chatWithAI =
     }
 
     /**
-     * Create/get session
+     * Create or fetch session
      */
 
     const activeSession =
@@ -334,7 +356,7 @@ export const chatWithAI =
       });
 
     /**
-     * Upload optimized images
+     * Upload images
      */
 
     const uploadedImages =
@@ -352,7 +374,7 @@ export const chatWithAI =
       );
 
     /**
-     * Final AI prompt message
+     * Final AI prompt
      */
 
     const finalUserMessage =
@@ -364,7 +386,7 @@ export const chatWithAI =
       );
 
     /**
-     * Save user message
+     * Persist user message
      */
 
     const userMessage =
@@ -390,7 +412,16 @@ export const chatWithAI =
       });
 
     /**
-     * Fetch history + analytics
+     * Refresh session updatedAt
+     */
+
+    activeSession.updatedAt =
+      new Date();
+
+    await activeSession.save();
+
+    /**
+     * Load history + analytics
      */
 
     const [
@@ -446,7 +477,7 @@ export const chatWithAI =
       });
 
     /**
-     * Save AI reply
+     * Persist AI reply
      */
 
     const {
@@ -465,6 +496,10 @@ export const chatWithAI =
         aiResult,
       });
 
+    /**
+     * Final normalized response
+     */
+
     return res.status(200).json(
 
       new ApiResponse(
@@ -473,15 +508,28 @@ export const chatWithAI =
 
         {
 
-          sessionId:
-            activeSession._id.toString(),
+          session: {
 
-          sessionTitle:
-            activeSession.title,
+            _id:
+              activeSession._id,
 
-          userMessage,
+            title:
+              activeSession.title,
 
-          aiReply,
+            createdAt:
+              activeSession.createdAt,
+
+            updatedAt:
+              activeSession.updatedAt,
+          },
+
+          messages:
+            buildMessagesResponse(
+
+              userMessage,
+
+              aiReply
+            ),
 
           provider:
             aiResult.provider,
@@ -512,8 +560,42 @@ export const chatWithAIStream =
   ) => {
 
     const {
+      socialAccountId,
+    } = req.params;
+
+    const {
       message = "",
+      sessionId,
     } = req.body || {};
+
+    /**
+     * Validate ids
+     */
+
+    if (
+      !isValidObjectId(
+        socialAccountId
+      )
+    ) {
+
+      throw new AppError(
+        "Invalid social account id",
+        400
+      );
+    }
+
+    if (
+      sessionId &&
+      !isValidObjectId(
+        sessionId
+      )
+    ) {
+
+      throw new AppError(
+        "Invalid session id",
+        400
+      );
+    }
 
     /**
      * SSE headers
@@ -532,7 +614,7 @@ export const chatWithAIStream =
     });
 
     /**
-     * Initial connection event
+     * Initial SSE event
      */
 
     res.write(
@@ -544,52 +626,137 @@ export const chatWithAIStream =
       })}\n\n`
     );
 
-    /**
-     * Start AI stream
-     */
+    try {
 
-    const stream =
-      await generateStreamingAnalyticsResponse({
+      const userId =
+        req.user._id;
 
-        analyticsContext:
-          "Streaming AI analysis",
+      /**
+       * Create or fetch session
+       */
 
-        historyMessages:
-          [],
+      const activeSession =
+        await getOrCreateChatSession({
 
-        latestUserMessage:
+          sessionId,
+
+          userId,
+
+          socialAccountId,
+
+          userMessageText:
+            message,
+        });
+
+      /**
+       * Persist user message
+       */
+
+      await ChatMessage.create({
+
+        session:
+          activeSession._id,
+
+        user:
+          userId,
+
+        socialAccount:
+          socialAccountId,
+
+        role:
+          "user",
+
+        content:
           message,
       });
 
-    let fullResponse =
-      "";
+      /**
+       * Stream AI response
+       */
 
-    /**
-     * Forward tokens
-     */
+      const stream =
+        await generateStreamingAnalyticsResponse({
 
-    for await (
-      const chunk
-      of stream
-    ) {
+          analyticsContext:
+            "Streaming AI analysis",
 
-      const token =
-        chunk?.choices?.[0]
-          ?.delta?.content || "";
+          historyMessages:
+            [],
 
-      if (!token) {
-        continue;
+          latestUserMessage:
+            message,
+        });
+
+      let fullResponse =
+        "";
+
+      /**
+       * Forward tokens
+       */
+
+      for await (
+        const chunk
+        of stream
+      ) {
+
+        const token =
+          chunk?.choices?.[0]
+            ?.delta?.content || "";
+
+        if (!token) {
+          continue;
+        }
+
+        fullResponse +=
+          token;
+
+        res.write(
+
+          `data: ${JSON.stringify({
+
+            type:
+              "token",
+
+            content:
+              token,
+          })}\n\n`
+        );
       }
 
       /**
-       * Accumulate response
+       * Persist AI reply
        */
 
-      fullResponse +=
-        token;
+      const aiReply =
+        await ChatMessage.create({
+
+          session:
+            activeSession._id,
+
+          user:
+            userId,
+
+          socialAccount:
+            socialAccountId,
+
+          role:
+            "assistant",
+
+          content:
+            fullResponse,
+        });
 
       /**
-       * Send token to frontend
+       * Refresh session timestamp
+       */
+
+      activeSession.updatedAt =
+        new Date();
+
+      await activeSession.save();
+
+      /**
+       * Stream completion event
        */
 
       res.write(
@@ -597,30 +764,59 @@ export const chatWithAIStream =
         `data: ${JSON.stringify({
 
           type:
-            "token",
+            "done",
 
-          content:
-            token,
+          session: {
+
+            _id:
+              activeSession._id,
+
+            title:
+              activeSession.title,
+
+            createdAt:
+              activeSession.createdAt,
+
+            updatedAt:
+              activeSession.updatedAt,
+          },
+
+          aiReply,
         })}\n\n`
       );
+
+      res.end();
+
+    } catch (error) {
+
+      logger.error(
+
+        "Streaming AI error",
+
+        {
+          message:
+            error.message,
+        }
+      );
+
+      /**
+       * SSE error event
+       */
+
+      res.write(
+
+        `data: ${JSON.stringify({
+
+          type:
+            "error",
+
+          message:
+            error.message,
+        })}\n\n`
+      );
+
+      res.end();
     }
-
-    /**
-     * Stream completed
-     */
-
-    res.write(
-
-      `data: ${JSON.stringify({
-
-        type:
-          "done",
-
-        fullResponse,
-      })}\n\n`
-    );
-
-    res.end();
   });
 
 /**
@@ -636,6 +832,18 @@ export const getChatSessions =
     const {
       socialAccountId,
     } = req.params;
+
+    if (
+      !isValidObjectId(
+        socialAccountId
+      )
+    ) {
+
+      throw new AppError(
+        "Invalid social account id",
+        400
+      );
+    }
 
     const sessions =
       await ChatSession.find({
@@ -659,7 +867,9 @@ export const getChatSessions =
         true,
         "Sessions fetched successfully",
 
-        sessions
+        {
+          sessions,
+        }
       )
     );
   });
@@ -677,6 +887,18 @@ export const getSessionMessages =
     const {
       sessionId,
     } = req.params;
+
+    if (
+      !isValidObjectId(
+        sessionId
+      )
+    ) {
+
+      throw new AppError(
+        "Invalid session id",
+        400
+      );
+    }
 
     const messages =
       await ChatMessage.find({
@@ -700,13 +922,15 @@ export const getSessionMessages =
         true,
         "Messages fetched successfully",
 
-        messages
+        {
+          messages,
+        }
       )
     );
   });
 
 /**
- * Rename session
+ * Rename chat session
  */
 
 export const renameChatSession =
@@ -722,6 +946,18 @@ export const renameChatSession =
     const {
       title,
     } = req.body;
+
+    if (
+      !isValidObjectId(
+        sessionId
+      )
+    ) {
+
+      throw new AppError(
+        "Invalid session id",
+        400
+      );
+    }
 
     const session =
       await ChatSession.findOne({
@@ -753,13 +989,15 @@ export const renameChatSession =
         true,
         "Session renamed successfully",
 
-        session
+        {
+          session,
+        }
       )
     );
   });
 
 /**
- * Delete session
+ * Delete chat session
  */
 
 export const deleteChatSession =
@@ -771,6 +1009,18 @@ export const deleteChatSession =
     const {
       sessionId,
     } = req.params;
+
+    if (
+      !isValidObjectId(
+        sessionId
+      )
+    ) {
+
+      throw new AppError(
+        "Invalid session id",
+        400
+      );
+    }
 
     const session =
       await ChatSession.findOne({
@@ -809,7 +1059,12 @@ export const deleteChatSession =
 
       new ApiResponse(
         true,
-        "Session deleted successfully"
+        "Session deleted successfully",
+
+        {
+          deletedSessionId:
+            sessionId,
+        }
       )
     );
   });

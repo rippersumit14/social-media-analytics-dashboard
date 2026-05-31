@@ -22,11 +22,12 @@ const IMAGE_QUALITY =
  * ---------------------------------------------------
  *
  * Features:
+ * - auto rotate
  * - resize large images
- * - compress image
  * - convert to webp
- * - strip metadata
- * - memory buffer optimization
+ * - remove metadata
+ * - reduce memory usage
+ * - OCR-safe optimization
  */
 
 export const optimizeImage =
@@ -37,8 +38,9 @@ export const optimizeImage =
     try {
 
       /**
-       * Validate buffer
+       * Validate uploaded file
        */
+
       if (
         !file?.buffer
       ) {
@@ -49,66 +51,97 @@ export const optimizeImage =
       }
 
       /**
-       * Optimize image buffer
+       * Create sharp instance
        */
-      const optimizedBuffer =
-        await sharp(
 
-          file.buffer
-        )
+      const imageProcessor =
+        sharp(
+          file.buffer,
+
+          {
+
+            /**
+             * Prevent malformed image crashes
+             */
+
+            failOn:
+              "none",
+
+            /**
+             * Better animated image handling
+             */
+
+            animated:
+              false,
+          }
+        );
+
+      /**
+       * Read image metadata
+       */
+
+      const metadata =
+        await imageProcessor.metadata();
+
+      /**
+       * Optimize image
+       */
+
+      const optimizedBuffer =
+        await imageProcessor
 
           /**
            * Auto rotate image
            */
+
           .rotate()
 
           /**
-           * Resize large images
+           * Resize oversized images
            */
+
           .resize({
 
             width:
               MAX_IMAGE_WIDTH,
+
+            fit:
+              "inside",
 
             withoutEnlargement:
               true,
           })
 
           /**
-           * Convert to webp
+           * Convert to optimized webp
            */
+
           .webp({
 
             quality:
               IMAGE_QUALITY,
+
+            effort:
+              4,
           })
 
           /**
            * Remove metadata
            */
+
           .withMetadata(false)
 
           /**
-           * Return optimized buffer
+           * Generate optimized buffer
            */
+
           .toBuffer();
 
-      logger.success(
-        "Image optimized successfully",
-
-        {
-          original:
-            file.originalname,
-
-          optimizedSize:
-            optimizedBuffer.length,
-        }
-      );
-
       /**
-       * Return optimized file
+       * Optimized response object
        */
-      return {
+
+      const optimizedFile = {
 
         ...file,
 
@@ -120,14 +153,53 @@ export const optimizeImage =
 
         size:
           optimizedBuffer.length,
+
+        width:
+          metadata.width || null,
+
+        height:
+          metadata.height || null,
+
+        format:
+          "webp",
       };
+
+      logger.success(
+
+        "Image optimized successfully",
+
+        {
+
+          originalName:
+            file.originalname,
+
+          originalSize:
+            file.size,
+
+          optimizedSize:
+            optimizedBuffer.length,
+
+          width:
+            metadata.width,
+
+          height:
+            metadata.height,
+        }
+      );
+
+      return optimizedFile;
 
     } catch (error) {
 
       logger.error(
+
         "Image optimization failed",
 
         {
+
+          fileName:
+            file?.originalname,
+
           message:
             error.message,
         }

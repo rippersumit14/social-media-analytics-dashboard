@@ -1,91 +1,149 @@
-import AppError
-  from "../utils/AppError.js";
+// services/aiService.js
+
+import {
+  generateAIResponse,
+  generateStreamingAIResponse,
+} from "./ai/aiOrchestrator.js";
 
 import logger
   from "../utils/logger.js";
 
-import {
-
-  generateAIResponse,
-
-  generateStreamingAIResponse,
-
-} from "./ai/aiOrchestrator.js";
-
-import {
-  optimizeConversationHistory,
-} from "../utils/memoryOptimizer.js";
-
 /**
  * ---------------------------------------------------
- * AI Configuration
- * ---------------------------------------------------
- */
-
-/**
- * Maximum AI response length
- */
-const MAX_RESPONSE_LENGTH =
-  15000;
-
-/**
- * ---------------------------------------------------
- * Sanitize AI Response
+ * AI System Prompt
  * ---------------------------------------------------
  *
- * Cleans unwanted characters
- * and limits response size.
+ * Core AI behavior layer.
  */
 
-const sanitizeAIResponse =
-  (
-    response = ""
-  ) => {
+const SYSTEM_PROMPT = `
+You are an advanced AI social media analytics assistant.
 
-    if (!response) {
+Your responsibilities:
+- analyze analytics data
+- explain engagement metrics
+- suggest growth strategies
+- analyze audience behavior
+- explain content performance
+- help creators improve social media growth
 
-      return (
-        "No AI response generated."
-      );
-    }
+Guidelines:
+- always provide structured responses
+- prioritize actionable insights
+- explain analytics clearly
+- avoid hallucinating fake metrics
+- be concise but insightful
+- support multimodal image understanding
+`;
 
-    return response
+/**
+ * ---------------------------------------------------
+ * Build Final AI Prompt
+ * ---------------------------------------------------
+ *
+ * Combines:
+ * - analytics context
+ * - history messages
+ * - latest user message
+ */
 
-      /**
-       * Remove excessive spaces
-       */
-      .replace(/\s+/g, " ")
+const buildFinalPrompt =
+  ({
 
-      /**
-       * Remove invisible unicode chars
-       */
-      .replace(
-        /[\u200B-\u200D\uFEFF]/g,
-        ""
-      )
+    analyticsContext,
 
-      /**
-       * Trim response
-       */
-      .trim()
+    historyMessages = [],
 
-      /**
-       * Limit response size
-       */
-      .slice(
-        0,
-        MAX_RESPONSE_LENGTH
-      );
+    latestUserMessage,
+  }) => {
+
+    /**
+     * Normalize history
+     */
+
+    const formattedHistory =
+      historyMessages
+
+        .map(
+
+          (message) => {
+
+            return `${message.role.toUpperCase()}: ${message.content}`;
+          }
+        )
+
+        .join("\n");
+
+    /**
+     * Final prompt
+     */
+
+    return `
+${SYSTEM_PROMPT}
+
+--------------------------------------------------
+ANALYTICS CONTEXT
+--------------------------------------------------
+
+${analyticsContext || "No analytics context available."}
+
+--------------------------------------------------
+CHAT HISTORY
+--------------------------------------------------
+
+${formattedHistory || "No previous history."}
+
+--------------------------------------------------
+LATEST USER MESSAGE
+--------------------------------------------------
+
+${latestUserMessage}
+`;
   };
 
 /**
  * ---------------------------------------------------
- * Build AI Prompt
+ * Normalize AI Response
  * ---------------------------------------------------
  */
 
-const buildPrompt =
-  ({
+const normalizeAIResponse =
+  (
+    aiResult,
+    latencyMs
+  ) => {
+
+    return {
+
+      reply:
+        aiResult?.reply ||
+
+        "AI response unavailable.",
+
+      provider:
+        aiResult?.provider ||
+
+        "unknown",
+
+      modelUsed:
+        aiResult?.modelUsed ||
+
+        "unknown",
+
+      latencyMs,
+    };
+  };
+
+/**
+ * ---------------------------------------------------
+ * Generate Analytics AI Response
+ * ---------------------------------------------------
+ *
+ * Main non-streaming AI execution flow.
+ */
+
+export const generateAnalyticsResponse =
+  async ({
 
     analyticsContext,
 
@@ -94,255 +152,98 @@ const buildPrompt =
     latestUserMessage,
   }) => {
 
-    /**
-     * Convert conversation history
-     * into structured text
-     */
-    const history =
-      historyMessages
-        ?.map(
-          (message) =>
-
-            `${message.role.toUpperCase()}: ${message.content}`
-        )
-        .join("\n");
-
-    /**
-     * Final AI prompt
-     */
-    return `
-You are an elite AI social media strategist and analytics expert.
-
---------------------------------------------------
-ANALYTICS CONTEXT
---------------------------------------------------
-
-${analyticsContext}
-
---------------------------------------------------
-PREVIOUS CONVERSATION
---------------------------------------------------
-
-${history || "No previous conversation"}
-
---------------------------------------------------
-LATEST USER MESSAGE
---------------------------------------------------
-
-${latestUserMessage}
-
---------------------------------------------------
-IMPORTANT INSTRUCTIONS
---------------------------------------------------
-
-- Be strategic
-- Give intelligent insights
-- Avoid generic advice
-- Explain growth deeply
-- Suggest actionable improvements
-- Be concise but valuable
-- Respond professionally
-`;
-  };
-
-/**
- * ---------------------------------------------------
- * Generate Standard AI Response
- * ---------------------------------------------------
- */
-
-export const generateAnalyticsResponse =
-  async ({
-
-    analyticsContext,
-
-    historyMessages = [],
-
-    latestUserMessage,
-  }) => {
-
-    const startedAt =
+    const startTime =
       Date.now();
 
     try {
 
       /**
-       * ---------------------------------------------------
-       * Optimize conversation memory
-       * ---------------------------------------------------
-       */
-
-      const optimizedHistory =
-        optimizeConversationHistory(
-
-          historyMessages
-        );
-
-      /**
-       * ---------------------------------------------------
        * Build AI prompt
-       * ---------------------------------------------------
        */
 
-      const prompt =
-        buildPrompt({
+      const finalPrompt =
+        buildFinalPrompt({
 
           analyticsContext,
 
-          historyMessages:
-            optimizedHistory,
+          historyMessages,
 
           latestUserMessage,
         });
 
       logger.ai(
-        "Starting AI orchestration"
+        "Generating AI response"
       );
 
       /**
-       * ---------------------------------------------------
-       * Generate AI response
-       * through orchestrator
-       * ---------------------------------------------------
+       * Execute AI orchestration
        */
 
-      const aiResponse =
+      const aiResult =
         await generateAIResponse({
 
-          prompt,
+          prompt:
+            finalPrompt,
         });
 
       /**
-       * ---------------------------------------------------
-       * Sanitize AI reply
-       * ---------------------------------------------------
-       */
-
-      const cleanedReply =
-        sanitizeAIResponse(
-
-          aiResponse.reply
-        );
-
-      /**
-       * ---------------------------------------------------
-       * Calculate latency
-       * ---------------------------------------------------
+       * Track latency
        */
 
       const latencyMs =
         Date.now() -
-        startedAt;
+        startTime;
 
       logger.success(
-        "AI response generated successfully",
+
+        "AI response generated",
 
         {
+
           provider:
-            aiResponse.provider,
+            aiResult.provider,
 
           model:
-            aiResponse.modelUsed,
+            aiResult.modelUsed,
 
           latencyMs,
         }
       );
 
       /**
-       * ---------------------------------------------------
-       * Unified AI response
-       * ---------------------------------------------------
+       * Normalized AI contract
        */
 
-      return {
+      return normalizeAIResponse(
 
-        reply:
-          cleanedReply,
+        aiResult,
 
-        provider:
-          aiResponse.provider,
-
-        modelUsed:
-          aiResponse.modelUsed,
-
-        latencyMs,
-
-        generatedAt:
-          new Date().toISOString(),
-      };
+        latencyMs
+      );
 
     } catch (error) {
 
       logger.error(
+
         "AI generation failed",
 
         {
+
           message:
             error.message,
-
-          stack:
-            process.env.NODE_ENV ===
-            "development"
-
-              ? error.stack
-
-              : undefined,
         }
       );
 
-      /**
-       * ---------------------------------------------------
-       * AI quota exceeded
-       * ---------------------------------------------------
-       */
-
-      if (
-        error.message?.includes(
-          "quota"
-        )
-      ) {
-
-        throw new AppError(
-          "AI quota exceeded",
-          429
-        );
-      }
-
-      /**
-       * ---------------------------------------------------
-       * Timeout error
-       * ---------------------------------------------------
-       */
-
-      if (
-        error.message?.includes(
-          "timeout"
-        )
-      ) {
-
-        throw new AppError(
-          "AI request timed out",
-          408
-        );
-      }
-
-      /**
-       * ---------------------------------------------------
-       * Generic AI failure
-       * ---------------------------------------------------
-       */
-
-      throw new AppError(
-        "Failed to generate AI response",
-        500
-      );
+      throw error;
     }
   };
 
 /**
  * ---------------------------------------------------
- * Generate Streaming AI Response
+ * Generate Streaming Analytics Response
  * ---------------------------------------------------
+ *
+ * SSE streaming execution flow.
  */
 
 export const generateStreamingAnalyticsResponse =
@@ -350,48 +251,54 @@ export const generateStreamingAnalyticsResponse =
 
     analyticsContext,
 
-    historyMessages = [],
+    historyMessages,
 
     latestUserMessage,
   }) => {
 
-    /**
-     * ---------------------------------------------------
-     * Optimize memory for streaming
-     * ---------------------------------------------------
-     */
+    try {
 
-    const optimizedHistory =
-      optimizeConversationHistory(
+      /**
+       * Build AI prompt
+       */
 
-        historyMessages
+      const finalPrompt =
+        buildFinalPrompt({
+
+          analyticsContext,
+
+          historyMessages,
+
+          latestUserMessage,
+        });
+
+      logger.ai(
+        "Starting streaming AI response"
       );
 
-    /**
-     * ---------------------------------------------------
-     * Build AI prompt
-     * ---------------------------------------------------
-     */
+      /**
+       * Start provider stream
+       */
 
-    const prompt =
-      buildPrompt({
+      return await generateStreamingAIResponse({
 
-        analyticsContext,
-
-        historyMessages:
-          optimizedHistory,
-
-        latestUserMessage,
+        prompt:
+          finalPrompt,
       });
 
-    /**
-     * ---------------------------------------------------
-     * Start streaming AI generation
-     * ---------------------------------------------------
-     */
+    } catch (error) {
 
-    return await generateStreamingAIResponse({
+      logger.error(
 
-      prompt,
-    });
+        "Streaming AI failed",
+
+        {
+
+          message:
+            error.message,
+        }
+      );
+
+      throw error;
+    }
   };

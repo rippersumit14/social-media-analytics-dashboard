@@ -1,10 +1,11 @@
 // config/validateEnv.js
 
-import logger from "../utils/logger.js";
+import logger
+  from "../utils/logger.js";
 
 /**
  * ---------------------------------------------------
- * Required Environment Variables
+ * Required Core Environment Variables
  * ---------------------------------------------------
  */
 
@@ -16,8 +17,6 @@ const REQUIRED_ENV_VARS = [
 
   "JWT_SECRET",
 
-  "GEMINI_API_KEY",
-
   "CLOUDINARY_CLOUD_NAME",
 
   "CLOUDINARY_API_KEY",
@@ -27,53 +26,124 @@ const REQUIRED_ENV_VARS = [
 
 /**
  * ---------------------------------------------------
+ * AI Provider Environment Variables
+ * ---------------------------------------------------
+ *
+ * At least ONE provider required
+ */
+
+const AI_PROVIDER_ENV_VARS = [
+
+  "GROQ_API_KEY",
+
+  "GEMINI_API_KEY",
+
+  "OPENROUTER_API_KEY",
+
+  "TOGETHER_API_KEY",
+];
+
+/**
+ * ---------------------------------------------------
  * Validate Environment Variables
  * ---------------------------------------------------
  */
 
-const validateEnv = () => {
+const validateEnv =
+  () => {
 
-  const missingEnvVars = [];
+    const missingEnvVars = [];
 
-  /**
-   * Detect missing variables
-   */
-  for (const envVar of REQUIRED_ENV_VARS) {
+    /**
+     * ---------------------------------------------------
+     * Validate Required Core Variables
+     * ---------------------------------------------------
+     */
+
+    for (
+      const envVar
+      of REQUIRED_ENV_VARS
+    ) {
+
+      if (
+        !process.env[envVar]
+      ) {
+
+        missingEnvVars.push(
+          envVar
+        );
+      }
+    }
+
+    /**
+     * ---------------------------------------------------
+     * Validate AI Providers
+     * ---------------------------------------------------
+     */
+
+    const availableAIProviders =
+
+      AI_PROVIDER_ENV_VARS.filter(
+
+        (envVar) =>
+
+          Boolean(
+            process.env[envVar]
+          )
+      );
+
+    /**
+     * Require at least ONE AI provider
+     */
 
     if (
-      !process.env[envVar]
+      availableAIProviders.length === 0
     ) {
 
       missingEnvVars.push(
-        envVar
+        "At least one AI provider API key is required"
       );
     }
-  }
 
-  /**
-   * Stop startup if missing vars exist
-   */
-  if (
-    missingEnvVars.length > 0
-  ) {
+    /**
+     * ---------------------------------------------------
+     * Startup Failure
+     * ---------------------------------------------------
+     */
 
-    logger.error(
-      "Missing required environment variables",
+    if (
+      missingEnvVars.length > 0
+    ) {
+
+      logger.error(
+
+        "Missing required environment variables",
+
+        {
+
+          missingEnvVars,
+        }
+      );
+
+      process.exit(1);
+    }
+
+    /**
+     * ---------------------------------------------------
+     * Successful Validation
+     * ---------------------------------------------------
+     */
+
+    logger.success(
+
+      "Environment variables validated successfully",
 
       {
-        missingEnvVars,
+
+        availableAIProviders:
+          availableAIProviders.length,
       }
     );
-
-    process.exit(1);
-  }
-
-  /**
-   * Successful validation
-   */
-  logger.info(
-    "Environment variables validated successfully"
-  );
-};
+  };
 
 export default validateEnv;

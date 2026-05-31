@@ -11,107 +11,234 @@ import AppError from "../utils/AppError.js";
  *
  * Why memory storage?
  *
- * - images immediately processed
  * - direct Cloudinary uploads
- * - no local disk persistence
- * - cleaner deployment architecture
+ * - OCR processing
+ * - image optimization
+ * - no disk persistence
+ * - deployment-safe architecture
  */
 
-const storage = multer.memoryStorage();
+const storage =
+  multer.memoryStorage();
 
 /**
  * ---------------------------------------------------
- * Allowed Image MIME Types
+ * Allowed MIME Types
  * ---------------------------------------------------
- *
- * Prevents:
- * - malicious uploads
- * - unsupported formats
- * - executable files
  */
 
 const ALLOWED_IMAGE_TYPES = [
-    "image/jpeg",
-    "image/png",
-    "image/webp",
+
+  "image/jpeg",
+
+  "image/png",
+
+  "image/webp",
+
+  "image/jpg",
 ];
 
 /**
  * ---------------------------------------------------
- * Validate Uploaded Image Files
+ * Upload Limits
  * ---------------------------------------------------
  */
 
-const imageFileFilter = (
+const MAX_IMAGE_SIZE =
+  5 * 1024 * 1024;
+
+const MAX_IMAGE_COUNT =
+  5;
+
+/**
+ * ---------------------------------------------------
+ * Validate Uploaded Files
+ * ---------------------------------------------------
+ */
+
+const imageFileFilter =
+  (
     req,
     file,
     cb
-) => {
+  ) => {
 
     /**
-     * Reject unsupported image types
+     * Validate MIME type
      */
+
     if (
-        !ALLOWED_IMAGE_TYPES.includes(
-            file.mimetype
-        )
+
+      !ALLOWED_IMAGE_TYPES.includes(
+
+        file.mimetype
+      )
     ) {
 
-        return cb(
+      return cb(
 
-            new AppError(
-                "Invalid image type. Only JPG, PNG and WEBP are allowed.",
-                400
-            ),
+        new AppError(
 
-            false
-        );
+          "Invalid image type. Only JPG, PNG and WEBP are allowed.",
+
+          400
+        ),
+
+        false
+      );
     }
 
     /**
      * Accept valid image
      */
-    cb(null, true);
-};
+
+    cb(
+      null,
+      true
+    );
+  };
+
+/**
+ * ---------------------------------------------------
+ * Multer Upload Instance
+ * ---------------------------------------------------
+ */
+
+const multerUpload =
+  multer({
+
+    storage,
+
+    fileFilter:
+      imageFileFilter,
+
+    limits: {
+
+      /**
+       * Max single image size
+       */
+
+      fileSize:
+        MAX_IMAGE_SIZE,
+
+      /**
+       * Max images per request
+       */
+
+      files:
+        MAX_IMAGE_COUNT,
+    },
+  });
 
 /**
  * ---------------------------------------------------
  * Production Upload Middleware
  * ---------------------------------------------------
  *
- * Supports:
- * - multiple image uploads
- * - file validation
- * - upload limits
- * - multipart/form-data
+ * IMPORTANT:
+ * Frontend now depends on:
+ *
+ * formData.append("images", file)
+ *
+ * Therefore:
+ * upload field MUST remain:
+ * "images"
  */
 
-export const uploadImages = multer({
+export const uploadImages =
+  multerUpload.array(
 
-    storage,
+    "images",
+
+    MAX_IMAGE_COUNT
+  );
+
+/**
+ * ---------------------------------------------------
+ * Multer Error Handler
+ * ---------------------------------------------------
+ */
+
+export const handleUploadErrors =
+  (
+    error,
+    req,
+    res,
+    next
+  ) => {
 
     /**
-     * File type validation
+     * Multer-specific errors
      */
-    fileFilter:
-        imageFileFilter,
+
+    if (
+
+      error instanceof multer.MulterError
+    ) {
+
+      /**
+       * File size exceeded
+       */
+
+      if (
+        error.code ===
+        "LIMIT_FILE_SIZE"
+      ) {
+
+        return next(
+
+          new AppError(
+
+            "Image size exceeds 5MB limit.",
+
+            400
+          )
+        );
+      }
+
+      /**
+       * Too many files
+       */
+
+      if (
+        error.code ===
+        "LIMIT_FILE_COUNT"
+      ) {
+
+        return next(
+
+          new AppError(
+
+            "Maximum 5 images allowed per request.",
+
+            400
+          )
+        );
+      }
+
+      /**
+       * Generic upload error
+       */
+
+      return next(
+
+        new AppError(
+
+          error.message,
+
+          400
+        )
+      );
+    }
 
     /**
-     * Upload limits
+     * Custom validation errors
      */
-    limits: {
 
-        /**
-         * Max single image size
-         *
-         * 5MB
-         */
-        fileSize:
-            5 * 1024 * 1024,
+    if (error) {
 
-        /**
-         * Max images per request
-         */
-        files: 5,
-    },
-});
+      return next(error);
+    }
+
+    next();
+  };

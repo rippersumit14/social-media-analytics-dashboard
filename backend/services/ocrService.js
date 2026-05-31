@@ -11,16 +11,23 @@ import logger
  */
 
 /**
- * Maximum extracted text length
+ * Maximum OCR text length
  *
  * Prevents:
  * - token explosion
  * - noisy OCR overload
- * - massive prompts
+ * - huge prompts
  */
 
 const MAX_OCR_TEXT_LENGTH =
   4000;
+
+/**
+ * OCR timeout protection
+ */
+
+const OCR_TIMEOUT_MS =
+  45000;
 
 /**
  * ---------------------------------------------------
@@ -36,30 +43,74 @@ const cleanOCRText =
     return text
 
       /**
-       * Normalize spaces
+       * Normalize whitespace
        */
+
       .replace(/\s+/g, " ")
 
       /**
        * Remove invisible unicode chars
        */
+
       .replace(
+
         /[\u200B-\u200D\uFEFF]/g,
+
         ""
       )
 
       /**
        * Trim whitespace
        */
+
       .trim()
 
       /**
-       * Limit OCR output size
+       * Limit OCR length
        */
+
       .slice(
+
         0,
+
         MAX_OCR_TEXT_LENGTH
       );
+  };
+
+/**
+ * ---------------------------------------------------
+ * OCR Timeout Wrapper
+ * ---------------------------------------------------
+ */
+
+const withTimeout =
+  (
+    promise,
+    timeoutMs
+  ) => {
+
+    return Promise.race([
+
+      promise,
+
+      new Promise(
+        (_, reject) =>
+
+          setTimeout(
+
+            () =>
+
+              reject(
+
+                new Error(
+                  "OCR extraction timeout exceeded"
+                )
+              ),
+
+            timeoutMs
+          )
+      ),
+    ]);
   };
 
 /**
@@ -69,9 +120,10 @@ const cleanOCRText =
  *
  * Features:
  * - OCR extraction
- * - analytics screenshot parsing
- * - cleaned text output
- * - optimized AI-ready text
+ * - analytics parsing
+ * - AI-ready text cleanup
+ * - timeout safety
+ * - multimodal enhancement
  */
 
 export const extractTextFromImage =
@@ -84,6 +136,7 @@ export const extractTextFromImage =
       /**
        * Validate image buffer
        */
+
       if (!imageBuffer) {
 
         throw new Error(
@@ -98,65 +151,73 @@ export const extractTextFromImage =
       /**
        * Run OCR recognition
        */
+
       const result =
-        await Tesseract.recognize(
+        await withTimeout(
 
-          imageBuffer,
+          Tesseract.recognize(
 
-          "eng",
+            imageBuffer,
 
-          {
+            "eng",
 
-            /**
-             * OCR progress logger
-             *
-             * Tesseract requires:
-             * logger MUST be function
-             */
+            {
 
-            logger: (
-              message
-            ) => {
+              /**
+               * Tesseract progress logger
+               */
 
-              if (
+              logger:
+                (
+                  message
+                ) => {
 
-                process.env.NODE_ENV ===
-                "development"
+                  if (
 
-              ) {
+                    process.env.NODE_ENV ===
+                    "development"
 
-                if (
-                  message?.status
-                ) {
+                  ) {
 
-                  console.log(
+                    if (
+                      message?.status
+                    ) {
 
-                    `[OCR] ${message.status}`
-                  );
-                }
-              }
-            },
-          }
+                      console.log(
+
+                        `[OCR] ${message.status}`
+                      );
+                    }
+                  }
+                },
+            }
+          ),
+
+          OCR_TIMEOUT_MS
         );
 
       /**
-       * Raw OCR output
+       * Extract raw OCR text
        */
+
       const rawText =
         result?.data?.text || "";
 
       /**
-       * Clean OCR text
+       * Clean OCR output
        */
+
       const cleanedText =
         cleanOCRText(
           rawText
         );
 
       logger.success(
+
         "OCR extraction completed",
 
         {
+
           extractedLength:
             cleanedText.length,
         }
@@ -165,6 +226,7 @@ export const extractTextFromImage =
       /**
        * Structured OCR response
        */
+
       return {
 
         extractedText:
@@ -177,14 +239,28 @@ export const extractTextFromImage =
     } catch (error) {
 
       logger.error(
+
         "OCR extraction failed",
 
         {
+
           message:
             error.message,
         }
       );
 
-      throw error;
+      /**
+       * Never break AI chat flow
+       * because OCR failed
+       */
+
+      return {
+
+        extractedText:
+          "",
+
+        hasText:
+          false,
+      };
     }
   };

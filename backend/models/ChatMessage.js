@@ -1,259 +1,406 @@
 import mongoose from "mongoose";
 
 /**
- * Individual uploaded image metadata.
+ * ---------------------------------------------------
+ * Uploaded Image Metadata Schema
+ * ---------------------------------------------------
  *
- * Why separate sub-schema?
- * - reusable structure
- * - cleaner validation
- * - future CDN/provider support
- * - easier frontend rendering
+ * Stores:
+ * - optimized image
+ * - CDN metadata
+ * - storage references
  */
-const imageSchema = new mongoose.Schema(
-  {
-    /**
-     * Public CDN URL.
-     * Frontend renders this directly.
-     */
-    imageUrl: {
-      type: String,
-      required: true,
-      trim: true,
+
+const imageSchema =
+  new mongoose.Schema(
+
+    {
+
+      /**
+       * Public CDN URL
+       */
+
+      imageUrl: {
+
+        type:
+          String,
+
+        required:
+          true,
+
+        trim:
+          true,
+      },
+
+      /**
+       * Cloudinary asset id
+       */
+
+      publicId: {
+
+        type:
+          String,
+
+        required:
+          true,
+
+        trim:
+          true,
+      },
+
+      /**
+       * Storage provider
+       */
+
+      provider: {
+
+        type:
+          String,
+
+        enum:
+          ["cloudinary"],
+
+        default:
+          "cloudinary",
+      },
+
+      /**
+       * Original MIME type
+       */
+
+      mimeType: {
+
+        type:
+          String,
+
+        default:
+          null,
+      },
+
+      /**
+       * Optimized image size
+       */
+
+      size: {
+
+        type:
+          Number,
+
+        default:
+          null,
+      },
+
+      /**
+       * Image width
+       */
+
+      width: {
+
+        type:
+          Number,
+
+        default:
+          null,
+      },
+
+      /**
+       * Image height
+       */
+
+      height: {
+
+        type:
+          Number,
+
+        default:
+          null,
+      },
+
+      /**
+       * Final optimized format
+       */
+
+      format: {
+
+        type:
+          String,
+
+        default:
+          null,
+      },
     },
 
-    /**
-     * Cloudinary asset identifier.
-     * Used for safe deletion/cleanup.
-     */
-    publicId: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    {
 
-    /**
-     * Storage provider.
-     * Future scalable provider support.
-     */
-    provider: {
-      type: String,
-      enum: ["cloudinary"],
-      default: "cloudinary",
-    },
-
-    /**
-     * Original uploaded MIME type.
-     */
-    mimeType: {
-      type: String,
-      default: null,
-    },
-
-    /**
-     * Optimized image size in bytes.
-     */
-    size: {
-      type: Number,
-      default: null,
-    },
-
-    /**
-     * Optimized image width.
-     */
-    width: {
-      type: Number,
-      default: null,
-    },
-
-    /**
-     * Optimized image height.
-     */
-    height: {
-      type: Number,
-      default: null,
-    },
-
-    /**
-     * Final optimized image format.
-     * Example:
-     * - webp
-     * - jpg
-     * - png
-     */
-    format: {
-      type: String,
-      default: null,
-    },
-  },
-  {
-    _id: false,
-  }
-);
+      _id:
+        false,
+    }
+  );
 
 /**
- * Chat message schema.
+ * ---------------------------------------------------
+ * Chat Message Schema
+ * ---------------------------------------------------
  *
  * Supports:
- * - user messages
- * - assistant messages
+ * - user prompts
+ * - assistant replies
  * - multimodal images
+ * - OCR persistence
  * - AI metadata
- * - future streaming support
+ * - streaming persistence
  */
-const chatMessageSchema = new mongoose.Schema(
-  {
-    /**
-     * Parent chat session.
-     */
-    session: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "ChatSession",
-      required: true,
-      index: true,
+
+const chatMessageSchema =
+  new mongoose.Schema(
+
+    {
+
+      /**
+       * Parent chat session
+       */
+
+      session: {
+
+        type:
+          mongoose.Schema.Types.ObjectId,
+
+        ref:
+          "ChatSession",
+
+        required:
+          true,
+
+        index:
+          true,
+      },
+
+      /**
+       * Message owner
+       */
+
+      user: {
+
+        type:
+          mongoose.Schema.Types.ObjectId,
+
+        ref:
+          "User",
+
+        required:
+          true,
+
+        index:
+          true,
+      },
+
+      /**
+       * Connected social account
+       */
+
+      socialAccount: {
+
+        type:
+          mongoose.Schema.Types.ObjectId,
+
+        ref:
+          "SocialAccount",
+
+        required:
+          true,
+
+        index:
+          true,
+      },
+
+      /**
+       * Message role
+       */
+
+      role: {
+
+        type:
+          String,
+
+        enum:
+          ["user", "assistant"],
+
+        required:
+          true,
+
+        index:
+          true,
+      },
+
+      /**
+       * Main text content
+       */
+
+      content: {
+
+        type:
+          String,
+
+        required:
+          true,
+
+        trim:
+          true,
+      },
+
+      /**
+       * Uploaded images
+       *
+       * ALWAYS array
+       * for frontend consistency
+       */
+
+      images: {
+
+        type:
+          [imageSchema],
+
+        default:
+          [],
+      },
+
+      /**
+       * Future voice support
+       */
+
+      audioUrl: {
+
+        type:
+          String,
+
+        default:
+          null,
+      },
+
+      /**
+       * AI model identifier
+       */
+
+      model: {
+
+        type:
+          String,
+
+        default:
+          null,
+      },
+
+      /**
+       * Human-readable model name
+       */
+
+      modelName: {
+
+        type:
+          String,
+
+        default:
+          null,
+      },
+
+      /**
+       * AI latency tracking
+       */
+
+      latencyMs: {
+
+        type:
+          Number,
+
+        default:
+          null,
+      },
     },
 
-    /**
-     * Message owner.
-     */
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      index: true,
-    },
+    {
 
-    /**
-     * Connected social account.
-     */
-    socialAccount: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "SocialAccount",
-      required: true,
-      index: true,
-    },
-
-    /**
-     * Message role.
-     *
-     * user:
-     * human prompt
-     *
-     * assistant:
-     * AI response
-     */
-    role: {
-      type: String,
-      enum: ["user", "assistant"],
-      required: true,
-      index: true,
-    },
-
-    /**
-     * Main message text content.
-     *
-     * Can be:
-     * - user prompt
-     * - assistant reply
-     * - image-only fallback text
-     */
-    content: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-
-    /**
-     * Multiple uploaded images.
-     *
-     * IMPORTANT:
-     * Always an array for frontend consistency.
-     */
-    images: {
-      type: [imageSchema],
-      default: [],
-    },
-
-    /**
-     * Optional audio support.
-     *
-     * Future:
-     * voice uploads / TTS support.
-     */
-    audioUrl: {
-      type: String,
-      default: null,
-    },
-
-    /**
-     * AI model used for assistant response.
-     *
-     * Example:
-     * - openai/gpt-4o
-     * - claude-3
-     * - gemini
-     */
-    model: {
-      type: String,
-      default: null,
-    },
-
-    /**
-     * Human-readable model name.
-     */
-    modelName: {
-      type: String,
-      default: null,
-    },
-
-    /**
-     * AI response latency.
-     *
-     * Useful for:
-     * - frontend display
-     * - analytics
-     * - model monitoring
-     */
-    latencyMs: {
-      type: Number,
-      default: null,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
+      timestamps:
+        true,
+    }
+  );
 
 /**
- * Fast session message loading.
+ * ---------------------------------------------------
+ * Fast Session Message Loading
+ * ---------------------------------------------------
  */
+
 chatMessageSchema.index({
+
   session: 1,
+
   createdAt: 1,
 });
 
 /**
- * Fast user/session filtering.
+ * ---------------------------------------------------
+ * Fast User Filtering
+ * ---------------------------------------------------
  */
+
 chatMessageSchema.index({
+
   user: 1,
+
   socialAccount: 1,
+
   createdAt: -1,
 });
 
 /**
- * Ensure frontend always receives:
- * images: []
+ * ---------------------------------------------------
+ * Fast Session Ownership Validation
+ * ---------------------------------------------------
  */
-chatMessageSchema.set("toJSON", {
-  transform: (_, ret) => {
-    ret.images = ret.images || [];
-    return ret;
-  },
+
+chatMessageSchema.index({
+
+  session: 1,
+
+  user: 1,
 });
 
-const ChatMessage = mongoose.model(
-  "ChatMessage",
-  chatMessageSchema
+/**
+ * ---------------------------------------------------
+ * Frontend-Compatible JSON
+ * ---------------------------------------------------
+ *
+ * IMPORTANT:
+ * Always return:
+ * images: []
+ */
+
+chatMessageSchema.set(
+
+  "toJSON",
+
+  {
+
+    versionKey:
+      false,
+
+    transform:
+      (_, ret) => {
+
+        ret.images =
+          ret.images || [];
+
+        return ret;
+      },
+  }
 );
+
+const ChatMessage =
+  mongoose.model(
+
+    "ChatMessage",
+
+    chatMessageSchema
+  );
 
 export default ChatMessage;

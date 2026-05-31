@@ -1,12 +1,16 @@
 // services/cloudinaryStorageService.js
 
-import streamifier from "streamifier";
+import streamifier
+  from "streamifier";
 
 import cloudinary, {
+
   getMissingCloudinaryEnvVars,
+
 } from "../config/cloudinary.js";
 
-import AppError from "../utils/AppError.js";
+import AppError
+  from "../utils/AppError.js";
 
 import {
   optimizeImage,
@@ -18,42 +22,33 @@ import {
  * ---------------------------------------------------
  */
 
-/**
- * Default Cloudinary upload folder
- */
 const DEFAULT_FOLDER =
+
   process.env
     .CLOUDINARY_AI_CHAT_FOLDER ||
+
   "mern-ai-social-saas/ai-chat";
 
-/**
- * Upload timeout
- *
- * Prevents hanging uploads
- */
 const UPLOAD_TIMEOUT_MS =
   30000;
 
-/**
- * Maximum upload size
- *
- * Safety layer before upload
- */
 const MAX_FILE_SIZE =
   5 * 1024 * 1024;
 
-/**
- * Supported MIME types
- */
 const ALLOWED_IMAGE_TYPES = [
+
   "image/jpeg",
+
   "image/png",
+
   "image/webp",
+
+  "image/jpg",
 ];
 
 /**
  * ---------------------------------------------------
- * Ensure Cloudinary Config Exists
+ * Validate Cloudinary Config
  * ---------------------------------------------------
  */
 
@@ -61,6 +56,7 @@ const assertCloudinaryConfigured =
   () => {
 
     const missingEnvVars =
+
       getMissingCloudinaryEnvVars();
 
     if (
@@ -69,7 +65,9 @@ const assertCloudinaryConfigured =
 
       const error =
         new AppError(
+
           "Cloudinary image storage is not configured",
+
           503
         );
 
@@ -82,16 +80,15 @@ const assertCloudinaryConfigured =
 
 /**
  * ---------------------------------------------------
- * Validate Uploaded File
+ * Validate Uploaded Image
  * ---------------------------------------------------
  */
 
 const validateImageFile =
-  (file) => {
+  (
+    file
+  ) => {
 
-    /**
-     * Missing file protection
-     */
     if (!file) {
 
       throw new AppError(
@@ -100,9 +97,6 @@ const validateImageFile =
       );
     }
 
-    /**
-     * Missing buffer protection
-     */
     if (!file.buffer) {
 
       throw new AppError(
@@ -111,11 +105,10 @@ const validateImageFile =
       );
     }
 
-    /**
-     * Invalid MIME type protection
-     */
     if (
+
       !ALLOWED_IMAGE_TYPES.includes(
+
         file.mimetype
       )
     ) {
@@ -126,9 +119,6 @@ const validateImageFile =
       );
     }
 
-    /**
-     * Large upload protection
-     */
     if (
       file.size >
       MAX_FILE_SIZE
@@ -147,33 +137,38 @@ const validateImageFile =
  * ---------------------------------------------------
  */
 
-const withTimeout = (
-  promise,
-  timeoutMs
-) => {
-
-  return Promise.race([
-
+const withTimeout =
+  (
     promise,
+    timeoutMs
+  ) => {
 
-    new Promise(
-      (_, reject) =>
+    return Promise.race([
 
-        setTimeout(
-          () =>
+      promise,
 
-            reject(
-              new AppError(
-                "Cloudinary upload timeout exceeded",
-                408
-              )
-            ),
+      new Promise(
+        (_, reject) =>
 
-          timeoutMs
-        )
-    ),
-  ]);
-};
+          setTimeout(
+
+            () =>
+
+              reject(
+
+                new AppError(
+
+                  "Cloudinary upload timeout exceeded",
+
+                  408
+                )
+              ),
+
+            timeoutMs
+          )
+      ),
+    ]);
+  };
 
 /**
  * ---------------------------------------------------
@@ -183,51 +178,45 @@ const withTimeout = (
 
 const uploadBufferToCloudinary =
   async ({
+
     file,
+
     folder,
   }) => {
 
     return new Promise(
+
       (
         resolve,
         reject
       ) => {
 
         const uploadStream =
+
           cloudinary.uploader.upload_stream(
 
             {
+
               folder,
 
               resource_type:
                 "image",
 
-              /**
-               * Production optimizations
-               */
               transformation: [
 
-                /**
-                 * Automatic quality optimization
-                 */
                 {
                   quality:
                     "auto",
                 },
 
-                /**
-                 * Modern optimized format
-                 */
                 {
                   fetch_format:
                     "auto",
                 },
 
-                /**
-                 * Prevent extremely large uploads
-                 */
                 {
-                  width: 1600,
+                  width:
+                    1600,
 
                   crop:
                     "limit",
@@ -243,32 +232,41 @@ const uploadBufferToCloudinary =
               /**
                * Upload failed
                */
+
               if (error) {
 
                 return reject(
+
                   new AppError(
+
                     "Cloudinary upload failed",
+
                     500
                   )
                 );
               }
 
               /**
-               * Missing upload result
+               * Empty response protection
                */
+
               if (!result) {
 
                 return reject(
+
                   new AppError(
+
                     "Cloudinary upload returned empty response",
+
                     500
                   )
                 );
               }
 
               /**
-               * Structured upload response
+               * Standardized upload response
                */
+
               resolve({
 
                 imageUrl:
@@ -305,12 +303,16 @@ const uploadBufferToCloudinary =
           );
 
         /**
-         * Convert image buffer into stream
+         * Convert buffer to stream
          */
+
         streamifier
+
           .createReadStream(
-            optimizedFile.buffer
-  )
+
+            file.buffer
+          )
+
           .pipe(uploadStream);
       }
     );
@@ -320,48 +322,48 @@ const uploadBufferToCloudinary =
  * ---------------------------------------------------
  * Upload Image To Cloudinary
  * ---------------------------------------------------
- *
- * Main upload orchestration
- */
-
-/**
- * Optimize uploaded image
  */
 
 export const uploadImageToCloudinary =
-
-  
   async (
+
     file,
+
     folder = DEFAULT_FOLDER
   ) => {
 
     try {
 
       /**
-       * Validate Cloudinary config
+       * Validate config
        */
+
       assertCloudinaryConfigured();
 
       /**
        * Validate upload
        */
+
       validateImageFile(
         file
       );
 
+      /**
+       * Optimize image
+       */
 
-      //optimize uploaded image
       const optimizedFile =
+
         await optimizeImage(
           file
-      );
-
+        );
 
       /**
-       * Upload with timeout protection
+       * Upload optimized image
        */
+
       const uploadedImage =
+
         await withTimeout(
 
           uploadBufferToCloudinary({
@@ -380,8 +382,11 @@ export const uploadImageToCloudinary =
     } catch (error) {
 
       console.error(
+
         "[CLOUDINARY_UPLOAD_ERROR]",
+
         {
+
           message:
             error.message,
 
@@ -392,9 +397,12 @@ export const uploadImageToCloudinary =
             file?.mimetype,
 
           stack:
+
             process.env.NODE_ENV ===
             "development"
+
               ? error.stack
+
               : undefined,
         }
       );
@@ -402,17 +410,18 @@ export const uploadImageToCloudinary =
       /**
        * Preserve AppError
        */
+
       if (
         error instanceof AppError
       ) {
+
         throw error;
       }
 
-      /**
-       * Generic upload failure
-       */
       throw new AppError(
+
         "Failed to upload image",
+
         500
       );
     }
@@ -432,21 +441,25 @@ export const deleteImageFromCloudinary =
     try {
 
       /**
-       * Ignore empty public ids
+       * Ignore empty ids
        */
+
       if (!publicId) {
         return null;
       }
 
       /**
-       * Validate Cloudinary config
+       * Validate config
        */
+
       assertCloudinaryConfigured();
 
       /**
        * Delete asset
        */
+
       const result =
+
         await withTimeout(
 
           cloudinary.uploader.destroy(
@@ -461,27 +474,32 @@ export const deleteImageFromCloudinary =
     } catch (error) {
 
       console.error(
+
         "[CLOUDINARY_DELETE_ERROR]",
+
         {
+
           publicId,
 
           message:
             error.message,
 
           stack:
+
             process.env.NODE_ENV ===
             "development"
+
               ? error.stack
+
               : undefined,
         }
       );
 
       /**
-       * Do not crash orchestration
-       *
-       * Cleanup failures should not
-       * break chat lifecycle.
+       * Never break chat flow
+       * because cleanup failed
        */
+
       return null;
     }
   };
