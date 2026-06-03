@@ -1,156 +1,141 @@
-import mongoose from "mongoose";
+import mongoose, { Mongoose } from "mongoose";
 import bcrypt from "bcryptjs";
+import { lowercase, minLength } from "zod";
 
-/**
- * Available SaaS plans.
- *
- * FREE:
- * - Default plan for all users
- * - Limited daily AI usage
- *
- * PRO:
- * - Higher daily AI usage limit
- * - Can be connected to payment system later
- */
-const USER_PLANS = {
-  FREE: "FREE",
-  PRO: "PRO",
+//User plans 
+export const USER_PLANS = {
+    FREE: "FREE",
+    PRO: "PRO",
 };
 
-/**
- * Daily AI usage limits for each plan.
- *
- * Keeping limits in one object makes it easy to update later
- * without changing logic in multiple places.
- */
-const PLAN_AI_LIMITS = {
-  FREE: 20,
-  PRO: 200,
-};
+//User schema
 
-/**
- * User Schema
- *
- * Handles:
- * - authentication data
- * - password hashing
- * - SaaS plan information
- * - daily AI usage tracking
- */
 const userSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: [true, "Name is required"],
-      trim: true,
-      minlength: [2, "Name must be at least 2 characters"],
-      maxlength: [50, "Name cannot exceed 50 characters"],
-    },
+    {
+        //Full name 
+        name:{
+            type: String,
+            required: [true, "Name is required"],
+            trim: true,
+            minLength: 2,
+            maxLength: 50,
+        },
 
-    email: {
-      type: String,
-      required: [true, "Email is required"],
-      unique: true,
-      trim: true,
-      lowercase: true,
-      index: true,
-    },
+        //Email address
+        email: {
+            type: String,
+            required: [true, "Email is required"],
+            unique: true,
+            lowercase: true,
+             match: [
+        /^\S+@\S+\.\S+$/,
+        "Please provide a valid email address",
+      ],
+        },
 
-    password: {
-      type: String,
-      required: [true, "Password is required"],
-      minlength: [6, "Password must be at least 6 characters"],
-      select: false,
-    },
 
-    /**
-     * User subscription plan.
-     * Default is FREE for every new user.
-     */
-    plan: {
-      type: String,
-      enum: Object.values(USER_PLANS),
-      default: USER_PLANS.FREE,
-    },
+        //Hashed password
+        password: {
+            type: String,
+            required: [true, "Password is required"],
+            minLength: 6,
+            select: false,
+        },
 
-    /**
-     * Number of AI requests used in the current daily usage window.
-     */
-    aiUsageCount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
+        //User Profile Image
+        avatar: {
+            type: String,
+            default: "",
+            trim: true,
+        },
 
-    /**
-     * Maximum AI requests allowed per day.
-     * Default is based on FREE plan.
-     */
-    aiUsageLimit: {
-      type: Number,
-      default: PLAN_AI_LIMITS.FREE,
-      min: 0,
-    },
+        //Subscription plan
+        plan: {
+            type: String,
+            enum: Object.values(USER_PLANS),
+            default: USER_PLANS.FREE,
+        },
 
-    /**
-     * Date when AI usage should reset.
-     *
-     * For new users, this starts as current date.
-     * Controller logic will reset usage when this date becomes old.
-     */
-    aiUsageResetDate: {
-      type: Date,
-      default: Date.now,
+        //Daily ai usage count 
+        aiUsageCount: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
+        //Daily Usage Reset Date
+        aiUsageResetDate: {
+            type: Date,
+            default: Date.now,
+
+        },
+
+        //Soft delete support 
+        isActive:{
+            type: Boolean,
+            default: true,
+        },
+
+        //Last logi tracking
+        lastLoginAt: {
+            type: Date,
+            default: null,
+        },
     },
-  },
-  {
-    timestamps: true,
-  }
+    {
+        timestamps: true,
+
+    }
 );
 
-/**
- * Hash password before saving user.
- *
- * Modern Mongoose style:
- * - async middleware returns a promise
- * - no need to use next()
- */
-userSchema.pre("save", async function () {
-  if (!this.isModified("password")) {
-    return;
-  }
 
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+//adding the password hashing middleware
+userSchema.pre("save", async function (params) {
+    if(!this.isModified("password")) return;
+
+    const salt = await bcrypt.genSalt(12);
+    //the more higher the value, the larger the time get to be salted and more cpu operations performed
+
+    this.password = await bcrypt.hash(
+        this.password,
+        salt
+    );
 });
-/**
- * Compare entered password with hashed password.
- *
- * Important:
- * Since password has select: false,
- * login controller must use .select("+password").
- *
- * @param {string} enteredPassword
- * @returns {Promise<boolean>}
- */
-userSchema.methods.matchPassword = async function (enteredPassword) {
-  return bcrypt.compare(enteredPassword, this.password);
-};
 
-/**
- * Keep AI usage limit synced with current plan.
- *
- * Useful when upgrading/downgrading plan later.
- */
-userSchema.methods.syncAIUsageLimitWithPlan = function () {
-  this.aiUsageLimit = PLAN_AI_LIMITS[this.plan] || PLAN_AI_LIMITS.FREE;
-};
+//Compare passwords 
+userSchema.methods.comparePassword = 
+   async function (enteredPassword) {
+    return bcrypt.compare(
+        enteredPassword,
+        this.password
+    );
+  };
 
-/**
- * Export plan constants so controllers can reuse them safely.
- */
-export { USER_PLANS, PLAN_AI_LIMITS };
+//Reset AI Usage
+userSchema.method.resetAIUsage = 
+   function() {
+    this.aiUsageCount = 0,
+    this.aiUsageResetDate = new Date();
+   }
 
-const User = mongoose.model("User", userSchema);
+//Hide internal fields 
+userSchema.set("toJSON", {
+    transform: (_, ret) => {
+        delete ret.password;
+        delete ret.__v;
+
+        return ret;
+    },
+});
+
+//Model export 
+
+const User = mongoose.model(
+    "User",
+    userSchema
+);
 
 export default User;
+
+
+
