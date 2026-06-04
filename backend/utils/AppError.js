@@ -1,32 +1,46 @@
-// utils/AppError.js
+/**
+ * --------------------------------------------------
+ * Application Error Class
+ * --------------------------------------------------
+ *
+ * Purpose:
+ * Standardized operational errors
+ * throughout the backend.
+ *
+ * Example:
+ *
+ * throw new AppError(
+ *   "User not found",
+ *   404
+ * );
+ */
 
-// Create custom production-safe error class
-// Extends built-in JavaScript Error class
 class AppError extends Error {
+  constructor(
+    message,
+    statusCode = 500
+  ) {
+    super(message);
 
-    // Constructor runs whenever:
-    // new AppError(...) is called
-    constructor(message, statusCode = 500){
+    this.name = "AppError";
 
-        // Call parent Error constructor
-        // Properly sets:
-        // - error message
-        // - stack trace
-        super(message);
+    this.statusCode = statusCode;
 
-        // Store custom HTTP status code
-        // Example:
-        // 400 -> Bad Request
-        // 404 -> Not Found
-        // 500 -> Internal Server Error
-        this.statusCode = statusCode;
+    this.success = false;
 
-        // Standardized API response structure
-        this.success = false;
+    /**
+     * Operational Error
+     *
+     * Indicates an expected application error,
+     * not a programming bug.
+     */
+    this.isOperational = true;
 
-        // Cleaner stack traces for debugging
-        Error.captureStackTrace(this, this.constructor);
-    }
+    Error.captureStackTrace(
+      this,
+      this.constructor
+    );
+  }
 }
 
 export default AppError;

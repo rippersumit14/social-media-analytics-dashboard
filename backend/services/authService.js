@@ -1,10 +1,21 @@
 import User from "../models/User.js";
+import EmailVerificationOTP from "../models/EmailVerificationOTP.js";
+
 import AppError from "../utils/AppError.js";
+import { generateOTP } from "../utils/generateOTP.js";
+
+import { sendVerificationEmail } from "./emailService.js";
 
 /**
  * --------------------------------------------------
  * Register User
  * --------------------------------------------------
+ *
+ * Flow:
+ * Create User
+ * → Generate OTP
+ * → Store OTP
+ * → Send Verification Email
  */
 
 export const registerUser = async ({
@@ -29,13 +40,164 @@ export const registerUser = async ({
     password,
   });
 
-  return user;  
+  /**
+   * Remove any stale OTP records
+   */
+  await EmailVerificationOTP.deleteMany({
+    email,
+  });
+
+  const otp = generateOTP();
+
+  const expiresAt = new Date(
+    Date.now() + 10 * 60 * 1000
+  );
+
+  await EmailVerificationOTP.create({
+    user: user._id,
+    email: user.email,
+    otp,
+    expiresAt,
+  });
+
+  await sendVerificationEmail({
+    email: user.email,
+    name: user.name,
+    otp,
+  });
+
+  return {
+    user,
+    message:
+      "Account created successfully. Please verify your email.",
+  };
+};
+
+/**
+ * --------------------------------------------------
+ * Verify Email
+ * --------------------------------------------------
+ *
+ * Flow:
+ * Validate OTP
+ * → Mark User Verified
+ * → Remove OTP Records
+ */
+
+export const verifyEmail = async ({
+  email,
+  otp,
+}) => {
+  const otpRecord =
+    await EmailVerificationOTP.findOne({
+      email,
+      otp,
+    });
+
+  if (!otpRecord) {
+    throw new AppError(
+      "Invalid or expired OTP",
+      400
+    );
+  }
+
+  const user = await User.findById(
+    otpRecord.user
+  );
+
+  if (!user) {
+    throw new AppError(
+      "User not found",
+      404
+    );
+  }
+
+  if (user.isEmailVerified) {
+    throw new AppError(
+      "Email already verified",
+      400
+    );
+  }
+
+  user.isEmailVerified = true;
+
+  await user.save();
+
+  await EmailVerificationOTP.deleteMany({
+    email,
+  });
+
+  return {
+    message:
+      "Email verified successfully",
+  };
+};
+
+/**
+ * --------------------------------------------------
+ * Resend Verification OTP
+ * --------------------------------------------------
+ */
+
+export const resendOTP = async (
+  email
+) => {
+  const user = await User.findOne({
+    email,
+  });
+
+  if (!user) {
+    throw new AppError(
+      "User not found",
+      404
+    );
+  }
+
+  if (user.isEmailVerified) {
+    throw new AppError(
+      "Email already verified",
+      400
+    );
+  }
+
+  await EmailVerificationOTP.deleteMany({
+    email,
+  });
+
+  const otp = generateOTP();
+
+  const expiresAt = new Date(
+    Date.now() + 10 * 60 * 1000
+  );
+
+  await EmailVerificationOTP.create({
+    user: user._id,
+    email,
+    otp,
+    expiresAt,
+  });
+
+  await sendVerificationEmail({
+    email,
+    name: user.name,
+    otp,
+  });
+
+  return {
+    message:
+      "Verification OTP sent successfully",
+  };
 };
 
 /**
  * --------------------------------------------------
  * Login User
  * --------------------------------------------------
+ *
+ * Rules:
+ * - Email must exist
+ * - Password must match
+ * - Email must be verified
  */
 
 export const loginUser = async ({
@@ -54,7 +216,9 @@ export const loginUser = async ({
   }
 
   const isPasswordCorrect =
-    await user.matchPassword(password);
+    await user.comparePassword(
+      password
+    );
 
   if (!isPasswordCorrect) {
     throw new AppError(
@@ -62,6 +226,17 @@ export const loginUser = async ({
       401
     );
   }
+
+  if (!user.isEmailVerified) {
+    throw new AppError(
+      "Please verify your email before logging in",
+      403
+    );
+  }
+
+  user.lastLoginAt = new Date();
+
+  await user.save();
 
   return user;
 };
@@ -75,7 +250,9 @@ export const loginUser = async ({
 export const getCurrentUser = async (
   userId
 ) => {
-  const user = await User.findById(userId);
+  const user = await User.findById(
+    userId
+  );
 
   if (!user) {
     throw new AppError(
@@ -110,7 +287,7 @@ export const updatePassword = async ({
   }
 
   const isPasswordCorrect =
-    await user.matchPassword(
+    await user.comparePassword(
       currentPassword
     );
 
@@ -125,5 +302,8 @@ export const updatePassword = async ({
 
   await user.save();
 
-  return user;
+  return {
+    message:
+      "Password updated successfully",
+  };
 };

@@ -1,13 +1,13 @@
 /**
- * ---------------------------------------------------
- * Load Environment Variables FIRST
- * ---------------------------------------------------
+ * --------------------------------------------------
+ * Load Environment Variables First
+ * --------------------------------------------------
  */
 
 import "./config/env.js";
 
 /**
- * Express App
+ * Application
  */
 import app from "./app.js";
 
@@ -20,6 +20,13 @@ import connectDB from "./config/db.js";
  * Environment Validation
  */
 import validateEnv from "./config/validateEnv.js";
+
+/**
+ * Mail Verification
+ */
+import {
+  verifyMailConnection,
+} from "./config/mail.js";
 
 /**
  * Logger
@@ -38,42 +45,46 @@ const PORT =
 let server;
 
 /**
- * ---------------------------------------------------
- * Start Backend Server
- * ---------------------------------------------------
+ * --------------------------------------------------
+ * Start Server
+ * --------------------------------------------------
  */
 
 const startServer =
   async () => {
-
     try {
-
       const startedAt =
         Date.now();
 
       /**
-       * Validate env variables
+       * Validate Environment Variables
        */
+
       validateEnv();
 
       /**
-       * Connect MongoDB
+       * Connect Database
        */
+
       await connectDB();
 
       /**
-       * Start Express server
+       * Verify SMTP Connection
        */
+
+      await verifyMailConnection();
+
+      /**
+       * Start Express Server
+       */
+
       server =
         app.listen(
           PORT,
           () => {
-
             logger.info(
               "Backend server started successfully",
-
               {
-
                 port: PORT,
 
                 environment:
@@ -89,12 +100,9 @@ const startServer =
             );
           }
         );
-
     } catch (error) {
-
       logger.error(
         "Server startup failed",
-
         {
           message:
             error.message,
@@ -109,48 +117,35 @@ const startServer =
   };
 
 /**
- * ---------------------------------------------------
+ * --------------------------------------------------
  * Graceful Shutdown
- * ---------------------------------------------------
+ * --------------------------------------------------
  */
 
 const gracefulShutdown =
   async (
     signal
   ) => {
-
     logger.warn(
       "Graceful shutdown initiated",
-
       {
         signal,
       }
     );
 
     try {
-
-      /**
-       * Stop accepting new requests
-       */
       if (server) {
+        server.close(() => {
+          logger.info(
+            "HTTP server closed successfully"
+          );
 
-        server.close(
-          () => {
-
-            logger.info(
-              "HTTP server closed successfully"
-            );
-
-            process.exit(0);
-          }
-        );
+          process.exit(0);
+        });
       }
-
     } catch (error) {
-
       logger.error(
         "Graceful shutdown failed",
-
         {
           message:
             error.message,
@@ -162,22 +157,16 @@ const gracefulShutdown =
   };
 
 /**
- * ---------------------------------------------------
- * Process Event Handlers
- * ---------------------------------------------------
+ * --------------------------------------------------
+ * Process Events
+ * --------------------------------------------------
  */
 
-/**
- * Handle unhandled promise rejections
- */
 process.on(
   "unhandledRejection",
-
   (reason) => {
-
     logger.error(
       "Unhandled Promise Rejection",
-
       {
         reason:
           reason?.message ||
@@ -187,17 +176,11 @@ process.on(
   }
 );
 
-/**
- * Handle uncaught exceptions
- */
 process.on(
   "uncaughtException",
-
   (error) => {
-
     logger.error(
       "Uncaught Exception",
-
       {
         message:
           error.message,
@@ -211,12 +194,8 @@ process.on(
   }
 );
 
-/**
- * Shutdown signals
- */
 process.on(
   "SIGINT",
-
   () =>
     gracefulShutdown(
       "SIGINT"
@@ -225,7 +204,6 @@ process.on(
 
 process.on(
   "SIGTERM",
-
   () =>
     gracefulShutdown(
       "SIGTERM"
@@ -233,6 +211,9 @@ process.on(
 );
 
 /**
- * Start server
+ * --------------------------------------------------
+ * Start Server
+ * --------------------------------------------------
  */
+
 startServer();

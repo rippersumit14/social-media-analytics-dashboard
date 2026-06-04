@@ -1,38 +1,32 @@
 /**
- * ---------------------------------------------------
- * Global Async Handler
- * ---------------------------------------------------
+ * --------------------------------------------------
+ * Async Handler Middleware
+ * --------------------------------------------------
  *
- * Prevents repetitive try/catch
- * blocks in controllers.
+ * Purpose:
+ * Eliminates repetitive try/catch
+ * blocks inside controllers.
  *
- * Automatically forwards
- * async errors to global
- * error middleware.
+ * Any thrown error is automatically
+ * forwarded to Express error middleware.
  */
 
 const asyncHandler =
-  (controller) => {
-
-    return async (
-      req,
-      res,
-      next
-    ) => {
-
-      try {
-
-        await controller(
-          req,
-          res,
-          next
-        );
-
-      } catch (error) {
-
-        next(error);
-      }
-    };
+  (controller) =>
+  async (
+    req,
+    res,
+    next
+  ) => {
+    try {
+      await controller(
+        req,
+        res,
+        next
+      );
+    } catch (error) {
+      next(error);
+    }
   };
 
 export default asyncHandler;

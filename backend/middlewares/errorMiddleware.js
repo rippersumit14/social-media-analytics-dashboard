@@ -1,252 +1,222 @@
-// middlewares/errorMiddleware.js
+import multer from "multer";
 
-import multer
-  from "multer";
-
-import AppError
-  from "../utils/AppError.js";
+import AppError from "../utils/AppError.js";
+import ApiResponse from "../utils/ApiResponse.js";
 
 /**
- * ---------------------------------------------------
+ * --------------------------------------------------
  * Global Error Middleware
- * ---------------------------------------------------
+ * --------------------------------------------------
  *
  * Handles:
  * - AppError
- * - multer errors
- * - mongoose errors
- * - JWT errors
- * - validation errors
- * - unknown server errors
+ * - Multer Errors
+ * - JWT Errors
+ * - Mongoose Errors
+ * - Duplicate Key Errors
+ * - Unknown Server Errors
  */
 
-const errorMiddleware =
-  (
-    error,
-    req,
-    res,
-    next
-  ) => {
+const errorMiddleware = (
+  error,
+  req,
+  res,
+  next
+) => {
+  let statusCode =
+    error.statusCode || 500;
 
-    /**
-     * Default error state
-     */
+  let message =
+    error.message ||
+    "Internal server error";
 
-    let statusCode =
-      error.statusCode || 500;
+  /**
+   * --------------------------------------------------
+   * Multer Errors
+   * --------------------------------------------------
+   */
 
-    let message =
-      error.message ||
+  if (
+    error instanceof multer.MulterError
+  ) {
+    if (
+      error.code ===
+      "LIMIT_FILE_SIZE"
+    ) {
+      statusCode = 400;
 
+      message =
+        "Image size exceeds 5MB limit.";
+    } else if (
+      error.code ===
+      "LIMIT_FILE_COUNT"
+    ) {
+      statusCode = 400;
+
+      message =
+        "Maximum 5 images allowed.";
+    } else {
+      statusCode = 400;
+
+      message =
+        error.message;
+    }
+  }
+
+  /**
+   * --------------------------------------------------
+   * JWT Errors
+   * --------------------------------------------------
+   */
+
+  if (
+    error.name ===
+    "JsonWebTokenError"
+  ) {
+    statusCode = 401;
+
+    message =
+      "Invalid authentication token.";
+  }
+
+  if (
+    error.name ===
+    "TokenExpiredError"
+  ) {
+    statusCode = 401;
+
+    message =
+      "Authentication token expired.";
+  }
+
+  /**
+   * --------------------------------------------------
+   * MongoDB Cast Error
+   * --------------------------------------------------
+   */
+
+  if (
+    error.name ===
+    "CastError"
+  ) {
+    statusCode = 400;
+
+    message =
+      "Invalid resource ID.";
+  }
+
+  /**
+   * --------------------------------------------------
+   * MongoDB Validation Error
+   * --------------------------------------------------
+   */
+
+  if (
+    error.name ===
+    "ValidationError"
+  ) {
+    statusCode = 400;
+
+    message = Object.values(
+      error.errors
+    )
+      .map(
+        (value) =>
+          value.message
+      )
+      .join(", ");
+  }
+
+  /**
+   * --------------------------------------------------
+   * Duplicate Key Error
+   * --------------------------------------------------
+   */
+
+  if (
+    error.code === 11000
+  ) {
+    statusCode = 409;
+
+    const duplicateField =
+      Object.keys(
+        error.keyValue || {}
+      )[0];
+
+    message =
+      `${duplicateField} already exists`;
+  }
+
+  /**
+   * --------------------------------------------------
+   * Hide Unexpected Errors
+   * In Production
+   * --------------------------------------------------
+   */
+
+  if (
+    !(error instanceof AppError) &&
+    process.env.NODE_ENV ===
+      "production"
+  ) {
+    message =
       "Internal server error";
+  }
 
-    /**
-     * ---------------------------------------------------
-     * Multer Errors
-     * ---------------------------------------------------
-     */
+  /**
+   * --------------------------------------------------
+   * Error Logging
+   * --------------------------------------------------
+   */
 
-    if (
-      error instanceof multer.MulterError
-    ) {
+  console.error(
+    "[GLOBAL_ERROR]",
+    {
+      route:
+        req.originalUrl,
 
-      /**
-       * File too large
-       */
+      method:
+        req.method,
 
-      if (
-        error.code ===
-        "LIMIT_FILE_SIZE"
-      ) {
+      statusCode,
 
-        statusCode = 400;
+      message,
 
-        message =
-          "Image size exceeds 5MB limit.";
-      }
-
-      /**
-       * Too many files
-       */
-
-      else if (
-        error.code ===
-        "LIMIT_FILE_COUNT"
-      ) {
-
-        statusCode = 400;
-
-        message =
-          "Maximum 5 images allowed.";
-      }
-
-      /**
-       * Generic multer error
-       */
-
-      else {
-
-        statusCode = 400;
-
-        message =
-          error.message;
-      }
+      stack:
+        process.env.NODE_ENV ===
+        "development"
+          ? error.stack
+          : undefined,
     }
+  );
 
-    /**
-     * ---------------------------------------------------
-     * JWT Errors
-     * ---------------------------------------------------
-     */
+  /**
+   * --------------------------------------------------
+   * Standardized Error Response
+   * --------------------------------------------------
+   */
 
-    if (
-      error.name ===
-      "JsonWebTokenError"
-    ) {
+  return res.status(
+    statusCode
+  ).json(
+    new ApiResponse({
+      success: false,
 
-      statusCode = 401;
-
-      message =
-        "Invalid authentication token.";
-    }
-
-    /**
-     * Expired JWT
-     */
-
-    if (
-      error.name ===
-      "TokenExpiredError"
-    ) {
-
-      statusCode = 401;
-
-      message =
-        "Authentication token expired.";
-    }
-
-    /**
-     * ---------------------------------------------------
-     * Mongo Cast Errors
-     * ---------------------------------------------------
-     */
-
-    if (
-      error.name ===
-      "CastError"
-    ) {
-
-      statusCode = 400;
-
-      message =
-        "Invalid resource ID.";
-    }
-
-    /**
-     * ---------------------------------------------------
-     * Mongo Validation Errors
-     * ---------------------------------------------------
-     */
-
-    if (
-      error.name ===
-      "ValidationError"
-    ) {
-
-      statusCode = 400;
-
-      message =
-
-        Object.values(
-          error.errors
-        )
-
-          .map(
-            (value) =>
-              value.message
-          )
-
-          .join(", ");
-    }
-
-    /**
-     * ---------------------------------------------------
-     * Duplicate Key Errors
-     * ---------------------------------------------------
-     */
-
-    if (
-      error.code === 11000
-    ) {
-
-      statusCode = 400;
-
-      const duplicateField =
-
-        Object.keys(
-          error.keyValue || {}
-        )[0];
-
-      message =
-        `${duplicateField} already exists`;
-    }
-
-    /**
-     * ---------------------------------------------------
-     * Production Error Logging
-     * ---------------------------------------------------
-     */
-
-    console.error(
-
-      "[GLOBAL_ERROR]",
-
-      {
-
-        route:
-          req.originalUrl,
-
-        method:
-          req.method,
-
-        message,
-
-        stack:
-
-          process.env.NODE_ENV ===
-          "development"
-
-            ? error.stack
-
-            : undefined,
-      }
-    );
-
-    /**
-     * ---------------------------------------------------
-     * Standardized Error Response
-     * ---------------------------------------------------
-     */
-
-    return res.status(
-      statusCode
-    ).json({
-
-      success:
-        false,
+      statusCode,
 
       message,
 
       ...(process.env.NODE_ENV ===
       "development"
-
         ? {
-            stack:
-              error.stack,
+            meta: {
+              stack:
+                error.stack,
+            },
           }
-
         : {}),
-    });
-  };
+    })
+  );
+};
 
 export default errorMiddleware;

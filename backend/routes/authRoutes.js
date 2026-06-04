@@ -1,102 +1,131 @@
-// routes/authRoutes.js
-
 import express from "express";
 
 /**
  * Controllers
  */
+
 import {
-    registerUser,
-    loginUser,
-    getCurrentUser,
-} from "../controllers/authContoller.js";
+  registerUser,
+  verifyEmail,
+  resendOTP,
+  loginUser,
+  getCurrentUser,
+  updatePassword,
+} from "../controllers/authController.js";
 
 /**
  * Middlewares
  */
-import protect
-    from "../middlewares/authMiddleware.js";
 
-import validateRequest
-    from "../middlewares/validateRequest.js";
+import protect from "../middlewares/authMiddleware.js";
+
+import validateRequest from "../middlewares/validateRequest.js";
 
 /**
  * Validation Schemas
  */
+
 import {
-    registerSchema,
-    loginSchema,
+  registerSchema,
+  verifyEmailSchema,
+  resendOTPSchema,
+  loginSchema,
+  updatePasswordSchema,
 } from "../validators/authValidators.js";
 
 /**
- * Create Express router instance
+ * Router
  */
+
 const router = express.Router();
 
 /**
- * ---------------------------------------------------
- * @route   POST /api/auth/register
- * @desc    Register new user
- * @access  Public
- * ---------------------------------------------------
- *
- * Flow:
- * 1. validateRequest validates incoming body
- * 2. controller receives validated data
- * 3. authService handles business logic
+ * --------------------------------------------------
+ * Register User
+ * --------------------------------------------------
+ * POST /api/auth/register
+ * Public
  */
 
 router.post(
-    "/register",
-
-    validateRequest(registerSchema),
-
-    registerUser
+  "/register",
+  validateRequest(registerSchema),
+  registerUser
 );
 
 /**
- * ---------------------------------------------------
- * @route   POST /api/auth/login
- * @desc    Login existing user
- * @access  Public
- * ---------------------------------------------------
- *
- * Flow:
- * 1. validateRequest validates request body
- * 2. controller delegates login logic
- * 3. authService authenticates user
+ * --------------------------------------------------
+ * Verify Email OTP
+ * --------------------------------------------------
+ * POST /api/auth/verify-email
+ * Public
  */
 
 router.post(
-    "/login",
-
-    validateRequest(loginSchema),
-
-    loginUser
+  "/verify-email",
+  validateRequest(verifyEmailSchema),
+  verifyEmail
 );
 
 /**
- * ---------------------------------------------------
- * @route   GET /api/auth/me
- * @desc    Get current authenticated user
- * @access  Private
- * ---------------------------------------------------
- *
- * Flow:
- * 1. protect middleware verifies JWT
- * 2. authenticated user attached to req.user
- * 3. controller returns safe user response
+ * --------------------------------------------------
+ * Resend OTP
+ * --------------------------------------------------
+ * POST /api/auth/resend-otp
+ * Public
+ */
+
+router.post(
+  "/resend-otp",
+  validateRequest(resendOTPSchema),
+  resendOTP
+);
+
+/**
+ * --------------------------------------------------
+ * Login User
+ * --------------------------------------------------
+ * POST /api/auth/login
+ * Public
+ */
+
+router.post(
+  "/login",
+  validateRequest(loginSchema),
+  loginUser
+);
+
+/**
+ * --------------------------------------------------
+ * Get Current User
+ * --------------------------------------------------
+ * GET /api/auth/me
+ * Private
  */
 
 router.get(
-    "/me",
-
-    protect,
-
-    getCurrentUser
+  "/me",
+  protect,
+  getCurrentUser
 );
 
 /**
- * Export auth router
+ * --------------------------------------------------
+ * Update Password
+ * --------------------------------------------------
+ * PATCH /api/auth/password
+ * Private
  */
+
+router.patch(
+  "/password",
+  protect,
+  validateRequest(updatePasswordSchema),
+  updatePassword
+);
+
+/**
+ * Export Router
+ */
+
 export default router;

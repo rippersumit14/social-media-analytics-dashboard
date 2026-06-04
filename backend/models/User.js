@@ -2,9 +2,9 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
 /**
- * ----------------------------------------
- * User Subscription Plans
- * ----------------------------------------
+ * --------------------------------------------------
+ * User Plans
+ * --------------------------------------------------
  */
 
 export const USER_PLANS = {
@@ -13,9 +13,9 @@ export const USER_PLANS = {
 };
 
 /**
- * ----------------------------------------
+ * --------------------------------------------------
  * User Schema
- * ----------------------------------------
+ * --------------------------------------------------
  */
 
 const userSchema = new mongoose.Schema(
@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema(
     /**
      * Full Name
      */
+
     name: {
       type: String,
       required: [true, "Name is required"],
@@ -34,6 +35,7 @@ const userSchema = new mongoose.Schema(
     /**
      * Email Address
      */
+
     email: {
       type: String,
       required: [true, "Email is required"],
@@ -47,29 +49,22 @@ const userSchema = new mongoose.Schema(
     },
 
     /**
-     * Mandatory Email Verification
+     * Password
      *
-     * User cannot login until
-     * email is verified.
+     * Hidden by default
      */
-    isEmailVerified: {
-      type: Boolean,
-      default: false,
-    },
 
-    /**
-     * Hashed Password
-     */
     password: {
       type: String,
       required: [true, "Password is required"],
-      minlength: 8,
+      minlength: 6,
       select: false,
     },
 
     /**
-     * Profile Image
+     * Profile Avatar
      */
+
     avatar: {
       type: String,
       default: "",
@@ -77,8 +72,23 @@ const userSchema = new mongoose.Schema(
     },
 
     /**
+     * Email Verification
+     */
+
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    emailVerifiedAt: {
+      type: Date,
+      default: null,
+    },
+
+    /**
      * Subscription Plan
      */
+
     plan: {
       type: String,
       enum: Object.values(USER_PLANS),
@@ -86,38 +96,33 @@ const userSchema = new mongoose.Schema(
     },
 
     /**
-     * Daily AI Usage Counter
+     * AI Usage Tracking
      */
+
     aiUsageCount: {
       type: Number,
       default: 0,
       min: 0,
     },
 
-    /**
-     * AI Usage Reset Date
-     */
     aiUsageResetDate: {
       type: Date,
       default: Date.now,
     },
 
     /**
-     * Soft Delete Support
-     *
-     * Future:
-     * - Account Suspension
-     * - Admin Ban
-     * - Account Deactivation
+     * Account Status
      */
+
     isActive: {
       type: Boolean,
       default: true,
     },
 
     /**
-     * Last Successful Login
+     * Login Tracking
      */
+
     lastLoginAt: {
       type: Date,
       default: null,
@@ -129,42 +134,43 @@ const userSchema = new mongoose.Schema(
 );
 
 /**
- * ----------------------------------------
- * Indexes
- * ----------------------------------------
- */
-
-userSchema.index({ email: 1 });
-
-userSchema.index({
-  isEmailVerified: 1,
-});
-
-/**
- * ----------------------------------------
+ * --------------------------------------------------
  * Password Hashing Middleware
- * ----------------------------------------
+ * --------------------------------------------------
  */
 
-userSchema.pre("save", async function () {
-  if (!this.isModified("password")) return;
+userSchema.pre(
+  "save",
+  async function () {
+    if (
+      !this.isModified(
+        "password"
+      )
+    ) {
+      return;
+    }
 
-  const salt = await bcrypt.genSalt(12);
+    const salt =
+      await bcrypt.genSalt(12);
 
-  this.password = await bcrypt.hash(
-    this.password,
-    salt
-  );
-});
+    this.password =
+      await bcrypt.hash(
+        this.password,
+        salt
+      );
+  }
+);
 
 /**
- * ----------------------------------------
+ * --------------------------------------------------
  * Compare Password
- * ----------------------------------------
+ * --------------------------------------------------
  */
 
 userSchema.methods.comparePassword =
-  async function (enteredPassword) {
+  async function (
+    enteredPassword
+  ) {
     return bcrypt.compare(
       enteredPassword,
       this.password
@@ -172,21 +178,23 @@ userSchema.methods.comparePassword =
   };
 
 /**
- * ----------------------------------------
- * Reset Daily AI Usage
- * ----------------------------------------
+ * --------------------------------------------------
+ * Reset AI Usage
+ * --------------------------------------------------
  */
 
 userSchema.methods.resetAIUsage =
   function () {
     this.aiUsageCount = 0;
-    this.aiUsageResetDate = new Date();
+
+    this.aiUsageResetDate =
+      new Date();
   };
 
 /**
- * ----------------------------------------
+ * --------------------------------------------------
  * Hide Internal Fields
- * ----------------------------------------
+ * --------------------------------------------------
  */
 
 userSchema.set("toJSON", {
@@ -199,9 +207,9 @@ userSchema.set("toJSON", {
 });
 
 /**
- * ----------------------------------------
+ * --------------------------------------------------
  * Model Export
- * ----------------------------------------
+ * --------------------------------------------------
  */
 
 const User = mongoose.model(

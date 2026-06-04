@@ -1,31 +1,41 @@
-// Create standardized API success response class
+/**
+ * --------------------------------------------------
+ * Standard API Response
+ * --------------------------------------------------
+ *
+ * Purpose:
+ * Provide a consistent response format
+ * across the entire backend.
+ *
+ * Example:
+ *
+ * {
+ *   success: true,
+ *   statusCode: 200,
+ *   message: "Login successful",
+ *   data: {...},
+ *   meta: {...}
+ * }
+ */
+
 class ApiResponse {
+  constructor({
+    success = true,
+    statusCode = 200,
+    message = "Request successful",
+    data = null,
+    meta = null,
+  } = {}) {
+    this.success = success;
 
-    // Constructor runs whenever:
-    // new ApiResponse(...) is called
-    constructor(
-        success = true,
-        message = "Request successful",
-        data = null
-    ) {
+    this.statusCode = statusCode;
 
-        // Standard success flag
-        // Helps frontend identify request status
-        this.success = success;
+    this.message = message;
 
-        // Response message
-        // Useful for UI notifications and debugging
-        this.message = message;
+    this.data = data;
 
-        // Main response payload
-        // Example:
-        // user data
-        // analytics data
-        // AI insights
-        this.data = data;
-    }
+    this.meta = meta;
+  }
 }
 
-// Export reusable response class
 export default ApiResponse;
-

@@ -1,22 +1,44 @@
-import jwt from "jsonwebtoken";
+import  jwt  from "jsonwebtoken";
 
 /**
- * Generate JWT token for authenticated user.
- *
- * JWT_SECRET is required here because issuing a token without a stable secret
- * would make every protected route impossible to trust.
- *
- * @param {string} id - MongoDB user ID
- * @returns {string} signed JWT token
+ * 
+ * Generate authentication token
+ * 
+ * Purpose:
+ * Creates a signed JWT for authenticated users.
+ * 
+ * Payload:
+ * {
+ *    id: user._id
+ * }
+ * 
+ * security:
+ * Only the user ID is stored inside the token
+ * Sensitive information should never be embeded
  */
-const generateToken = (id) => {
-  if (!process.env.JWT_SECRET) {
-    throw new Error("JWT_SECRET is required to generate auth tokens");
+
+const generateToken = (userId) => {
+  const jwtSecret = process.env.JWT_SECRET;
+
+  const jwtExpiresIn = 
+    process.env.JWT_EXPIRES_IN || "7d";
+
+  if(!jwtSecret) {
+    throw new Error(
+      "JWT_SECRET is required to generate authentication tokens"
+    );
   }
 
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
-  });
+  return jwt.sign(
+    {
+      id: userId,
+    },
+    jwtSecret,
+    {
+      expiresIn: jwtExpiresIn,
+    }
+  );
 };
 
 export default generateToken;
+

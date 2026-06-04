@@ -1,113 +1,187 @@
-// controllers/authController.js
+import asyncHandler from "../middlewares/asyncHandler.js";
 
-import asyncHandler
-    from "../middlewares/asyncHandler.js";
+import ApiResponse from "../utils/ApiResponse.js";
 
-import ApiResponse
-    from "../utils/ApiResponse.js";
+import generateToken from "../utils/generateToken.js";
 
 import {
-    registerNewUser,
-    loginExistingUser,
-    getAuthenticatedUser,
+  registerUser as registerUserService,
+  verifyEmail as verifyEmailService,
+  resendOTP as resendOTPService,
+  loginUser as loginUserService,
+  getCurrentUser as getCurrentUserService,
+  updatePassword as updatePasswordService,
 } from "../services/authService.js";
 
 /**
- * ---------------------------------------------------
- * @desc    Register new user
- * @route   POST /api/auth/register
- * @access  Public
- * ---------------------------------------------------
+ * --------------------------------------------------
+ * Register User
+ * --------------------------------------------------
+ * POST /api/auth/register
+ * Public
  */
 
 export const registerUser = asyncHandler(
+  async (req, res) => {
+    const result =
+      await registerUserService(
+        req.body
+      );
 
-    async (req, res) => {
-
-        /**
-         * Delegate registration logic
-         * to auth service layer
-         */
-        const result =
-            await registerNewUser(req.body);
-
-        /**
-         * Standardized success response
-         */
-        return res.status(201).json(
-
-            new ApiResponse(
-                true,
-                "User registered successfully",
-                result
-            )
-        );
-    }
+    return res.status(201).json(
+      new ApiResponse({
+        statusCode: 201,
+        message:
+          "User registered successfully. Please verify your email.",
+        data: result,
+      })
+    );
+  }
 );
 
 /**
- * ---------------------------------------------------
- * @desc    Login existing user
- * @route   POST /api/auth/login
- * @access  Public
- * ---------------------------------------------------
+ * --------------------------------------------------
+ * Verify Email OTP
+ * --------------------------------------------------
+ * POST /api/auth/verify-email
+ * Public
  */
 
-export const loginUser = asyncHandler(
-
+export const verifyEmail =
+  asyncHandler(
     async (req, res) => {
-
-        /**
-         * Delegate login logic
-         * to auth service layer
-         */
-        const result =
-            await loginExistingUser(req.body);
-
-        /**
-         * Standardized success response
-         */
-        return res.status(200).json(
-
-            new ApiResponse(
-                true,
-                "Login successful",
-                result
-            )
+      const result =
+        await verifyEmailService(
+          req.body
         );
+
+      return res.status(200).json(
+        new ApiResponse({
+          statusCode: 200,
+          message:
+            result.message,
+        })
+      );
     }
-);
+  );
 
 /**
- * ---------------------------------------------------
- * @desc    Get authenticated user
- * @route   GET /api/auth/me
- * @access  Private
- * ---------------------------------------------------
+ * --------------------------------------------------
+ * Resend Verification OTP
+ * --------------------------------------------------
+ * POST /api/auth/resend-otp
+ * Public
  */
 
-export const getCurrentUser = asyncHandler(
-
+export const resendOTP =
+  asyncHandler(
     async (req, res) => {
-
-        /**
-         * Get authenticated user
-         */
-        const user =
-            await getAuthenticatedUser(
-                req.user
-            );
-
-        /**
-         * Standardized success response
-         */
-        return res.status(200).json(
-
-            new ApiResponse(
-                true,
-                "Current user fetched successfully",
-                user
-            )
+      const result =
+        await resendOTPService(
+          req.body.email
         );
+
+      return res.status(200).json(
+        new ApiResponse({
+          statusCode: 200,
+          message:
+            result.message,
+        })
+      );
     }
-);
+  );
+
+/**
+ * --------------------------------------------------
+ * Login User
+ * --------------------------------------------------
+ * POST /api/auth/login
+ * Public
+ */
+
+export const loginUser =
+  asyncHandler(
+    async (req, res) => {
+      const user =
+        await loginUserService(
+          req.body
+        );
+
+      const token =
+        generateToken(
+          user._id
+        );
+
+      return res.status(200).json(
+        new ApiResponse({
+          statusCode: 200,
+          message:
+            "Login successful",
+          data: {
+            user,
+            token,
+          },
+        })
+      );
+    }
+  );
+
+/**
+ * --------------------------------------------------
+ * Get Current User
+ * --------------------------------------------------
+ * GET /api/auth/me
+ * Private
+ */
+
+export const getCurrentUser =
+  asyncHandler(
+    async (req, res) => {
+      const user =
+        await getCurrentUserService(
+          req.user.id
+        );
+
+      return res.status(200).json(
+        new ApiResponse({
+          statusCode: 200,
+          message:
+            "Current user fetched successfully",
+          data: user,
+        })
+      );
+    }
+  );
+
+/**
+ * --------------------------------------------------
+ * Update Password
+ * --------------------------------------------------
+ * PATCH /api/auth/password
+ * Private
+ */
+
+export const updatePassword =
+  asyncHandler(
+    async (req, res) => {
+      const result =
+        await updatePasswordService({
+          userId:
+            req.user.id,
+
+          currentPassword:
+            req.body.currentPassword,
+
+          newPassword:
+            req.body.newPassword,
+        });
+
+      return res.status(200).json(
+        new ApiResponse({
+          statusCode: 200,
+          message:
+            result.message,
+        })
+      );
+    }
+  );
