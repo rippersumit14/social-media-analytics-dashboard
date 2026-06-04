@@ -1,141 +1,212 @@
-import mongoose, { Mongoose } from "mongoose";
+import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import { lowercase, minLength } from "zod";
 
-//User plans 
+/**
+ * ----------------------------------------
+ * User Subscription Plans
+ * ----------------------------------------
+ */
+
 export const USER_PLANS = {
-    FREE: "FREE",
-    PRO: "PRO",
+  FREE: "FREE",
+  PRO: "PRO",
 };
 
-//User schema
+/**
+ * ----------------------------------------
+ * User Schema
+ * ----------------------------------------
+ */
 
 const userSchema = new mongoose.Schema(
-    {
-        //Full name 
-        name:{
-            type: String,
-            required: [true, "Name is required"],
-            trim: true,
-            minLength: 2,
-            maxLength: 50,
-        },
+  {
+    /**
+     * Full Name
+     */
+    name: {
+      type: String,
+      required: [true, "Name is required"],
+      trim: true,
+      minlength: 2,
+      maxlength: 50,
+    },
 
-        //Email address
-        email: {
-            type: String,
-            required: [true, "Email is required"],
-            unique: true,
-            lowercase: true,
-             match: [
+    /**
+     * Email Address
+     */
+    email: {
+      type: String,
+      required: [true, "Email is required"],
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [
         /^\S+@\S+\.\S+$/,
         "Please provide a valid email address",
       ],
-        },
-
-
-        //Hashed password
-        password: {
-            type: String,
-            required: [true, "Password is required"],
-            minLength: 6,
-            select: false,
-        },
-
-        //User Profile Image
-        avatar: {
-            type: String,
-            default: "",
-            trim: true,
-        },
-
-        //Subscription plan
-        plan: {
-            type: String,
-            enum: Object.values(USER_PLANS),
-            default: USER_PLANS.FREE,
-        },
-
-        //Daily ai usage count 
-        aiUsageCount: {
-            type: Number,
-            default: 0,
-            min: 0,
-        },
-
-        //Daily Usage Reset Date
-        aiUsageResetDate: {
-            type: Date,
-            default: Date.now,
-
-        },
-
-        //Soft delete support 
-        isActive:{
-            type: Boolean,
-            default: true,
-        },
-
-        //Last logi tracking
-        lastLoginAt: {
-            type: Date,
-            default: null,
-        },
     },
-    {
-        timestamps: true,
 
-    }
+    /**
+     * Mandatory Email Verification
+     *
+     * User cannot login until
+     * email is verified.
+     */
+    isEmailVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    /**
+     * Hashed Password
+     */
+    password: {
+      type: String,
+      required: [true, "Password is required"],
+      minlength: 8,
+      select: false,
+    },
+
+    /**
+     * Profile Image
+     */
+    avatar: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    /**
+     * Subscription Plan
+     */
+    plan: {
+      type: String,
+      enum: Object.values(USER_PLANS),
+      default: USER_PLANS.FREE,
+    },
+
+    /**
+     * Daily AI Usage Counter
+     */
+    aiUsageCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    /**
+     * AI Usage Reset Date
+     */
+    aiUsageResetDate: {
+      type: Date,
+      default: Date.now,
+    },
+
+    /**
+     * Soft Delete Support
+     *
+     * Future:
+     * - Account Suspension
+     * - Admin Ban
+     * - Account Deactivation
+     */
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+
+    /**
+     * Last Successful Login
+     */
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  {
+    timestamps: true,
+  }
 );
 
+/**
+ * ----------------------------------------
+ * Indexes
+ * ----------------------------------------
+ */
 
-//adding the password hashing middleware
-userSchema.pre("save", async function (params) {
-    if(!this.isModified("password")) return;
+userSchema.index({ email: 1 });
 
-    const salt = await bcrypt.genSalt(12);
-    //the more higher the value, the larger the time get to be salted and more cpu operations performed
-
-    this.password = await bcrypt.hash(
-        this.password,
-        salt
-    );
+userSchema.index({
+  isEmailVerified: 1,
 });
 
-//Compare passwords 
-userSchema.methods.comparePassword = 
-   async function (enteredPassword) {
+/**
+ * ----------------------------------------
+ * Password Hashing Middleware
+ * ----------------------------------------
+ */
+
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
+
+  const salt = await bcrypt.genSalt(12);
+
+  this.password = await bcrypt.hash(
+    this.password,
+    salt
+  );
+});
+
+/**
+ * ----------------------------------------
+ * Compare Password
+ * ----------------------------------------
+ */
+
+userSchema.methods.comparePassword =
+  async function (enteredPassword) {
     return bcrypt.compare(
-        enteredPassword,
-        this.password
+      enteredPassword,
+      this.password
     );
   };
 
-//Reset AI Usage
-userSchema.method.resetAIUsage = 
-   function() {
-    this.aiUsageCount = 0,
+/**
+ * ----------------------------------------
+ * Reset Daily AI Usage
+ * ----------------------------------------
+ */
+
+userSchema.methods.resetAIUsage =
+  function () {
+    this.aiUsageCount = 0;
     this.aiUsageResetDate = new Date();
-   }
+  };
 
-//Hide internal fields 
+/**
+ * ----------------------------------------
+ * Hide Internal Fields
+ * ----------------------------------------
+ */
+
 userSchema.set("toJSON", {
-    transform: (_, ret) => {
-        delete ret.password;
-        delete ret.__v;
+  transform: (_, ret) => {
+    delete ret.password;
+    delete ret.__v;
 
-        return ret;
-    },
+    return ret;
+  },
 });
 
-//Model export 
+/**
+ * ----------------------------------------
+ * Model Export
+ * ----------------------------------------
+ */
 
 const User = mongoose.model(
-    "User",
-    userSchema
+  "User",
+  userSchema
 );
 
 export default User;
-
-
-

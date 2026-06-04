@@ -1,33 +1,93 @@
 import { z } from "zod";
 
 /**
- * User registration validation schema
+ * --------------------------------------------------
+ * Register Validation
+ * --------------------------------------------------
  */
+
 export const registerSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Name must be at least 2 characters")
+    .max(50, "Name cannot exceed 50 characters"),
 
-    name: z
-        .string()
-        .min(2, "Name must be at least 2 characters"),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Please provide a valid email address"),
 
-    email: z
-        .string()
-        .email("Invalid email address"),
-
-    password: z
-        .string()
-        .min(6, "Password must be at least 6 characters"),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password cannot exceed 128 characters"),
 });
 
 /**
- * User login validation schema
+ * --------------------------------------------------
+ * Verify Email OTP Validation
+ * --------------------------------------------------
  */
+
+export const verifyEmailSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Please provide a valid email address"),
+
+  otp: z
+    .string()
+    .length(6, "OTP must be exactly 6 digits"),
+});
+
+/**
+ * --------------------------------------------------
+ * Resend OTP Validation
+ * --------------------------------------------------
+ */
+
+export const resendOTPSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Please provide a valid email address"),
+});
+
+/**
+ * --------------------------------------------------
+ * Login Validation
+ * --------------------------------------------------
+ */
+
 export const loginSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email("Please provide a valid email address"),
 
-    email: z
-        .string()
-        .email("Invalid email address"),
+  password: z
+    .string()
+    .min(1, "Password is required"),
+});
 
-    password: z
-        .string()
-        .min(6, "Password must be at least 6 characters"),
+/**
+ * --------------------------------------------------
+ * Update Password Validation
+ * --------------------------------------------------
+ */
+
+export const updatePasswordSchema = z.object({
+  currentPassword: z
+    .string()
+    .min(1, "Current password is required"),
+
+  newPassword: z
+    .string()
+    .min(8, "New password must be at least 8 characters")
+    .max(128, "New password cannot exceed 128 characters"),
 });

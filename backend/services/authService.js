@@ -1,155 +1,129 @@
-// services/authService.js
-
 import User from "../models/User.js";
-
 import AppError from "../utils/AppError.js";
 
-import generateToken from "../utils/generateToken.js";
-
 /**
- * Build safe user response
- * Never expose password
+ * --------------------------------------------------
+ * Register User
+ * --------------------------------------------------
  */
-const buildUserResponse = (user) => {
 
-    return {
-        id: user._id,
+export const registerUser = async ({
+  name,
+  email,
+  password,
+}) => {
+  const existingUser = await User.findOne({
+    email,
+  });
 
-        name: user.name,
+  if (existingUser) {
+    throw new AppError(
+      "User already exists with this email",
+      409
+    );
+  }
 
-        email: user.email,
-
-        plan: user.plan,
-
-        aiUsageCount: user.aiUsageCount,
-
-        aiUsageLimit: user.aiUsageLimit,
-
-        aiUsageResetDate: user.aiUsageResetDate,
-    };
-};
-
-/**
- * Register new user
- */
-export const registerNewUser = async ({
+  const user = await User.create({
     name,
     email,
     password,
-}) => {
+  });
 
-    /**
-     * Normalize email
-     */
-    const normalizedEmail =
-        email.trim().toLowerCase();
-
-    /**
-     * Check existing user
-     */
-    const userExists =
-        await User.findOne({
-            email: normalizedEmail,
-        });
-
-    if (userExists) {
-
-        throw new AppError(
-            "User already exists",
-            400
-        );
-    }
-
-    /**
-     * Create user
-     */
-    const user = await User.create({
-
-        name: name.trim(),
-
-        email: normalizedEmail,
-
-        password,
-    });
-
-    /**
-     * Generate JWT token
-     */
-    const token =
-        generateToken(user._id.toString());
-
-    return {
-        user: buildUserResponse(user),
-        token,
-    };
+  return user;  
 };
 
 /**
- * Login existing user
+ * --------------------------------------------------
+ * Login User
+ * --------------------------------------------------
  */
-export const loginExistingUser = async ({
+
+export const loginUser = async ({
+  email,
+  password,
+}) => {
+  const user = await User.findOne({
     email,
-    password,
-}) => {
+  }).select("+password");
 
-    /**
-     * Normalize email
-     */
-    const normalizedEmail =
-        email.trim().toLowerCase();
+  if (!user) {
+    throw new AppError(
+      "Invalid email or password",
+      401
+    );
+  }
 
-    /**
-     * Explicitly include password
-     * for comparison
-     */
-    const user =
-        await User.findOne({
-            email: normalizedEmail,
-        }).select("+password");
+  const isPasswordCorrect =
+    await user.matchPassword(password);
 
-    /**
-     * User not found
-     */
-    if (!user) {
+  if (!isPasswordCorrect) {
+    throw new AppError(
+      "Invalid email or password",
+      401
+    );
+  }
 
-        throw new AppError(
-            "Invalid email or password",
-            401
-        );
-    }
-
-    /**
-     * Compare password
-     */
-    const isPasswordCorrect =
-        await user.matchPassword(password);
-
-    if (!isPasswordCorrect) {
-
-        throw new AppError(
-            "Invalid email or password",
-            401
-        );
-    }
-
-    /**
-     * Generate JWT token
-     */
-    const token =
-        generateToken(user._id.toString());
-
-    return {
-        user: buildUserResponse(user),
-        token,
-    };
+  return user;
 };
 
 /**
- * Get authenticated user
+ * --------------------------------------------------
+ * Get Current User
+ * --------------------------------------------------
  */
-export const getAuthenticatedUser = async (
-    user
-) => {
 
-    return buildUserResponse(user);
+export const getCurrentUser = async (
+  userId
+) => {
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new AppError(
+      "User not found",
+      404
+    );
+  }
+
+  return user;
+};
+
+/**
+ * --------------------------------------------------
+ * Update Password
+ * --------------------------------------------------
+ */
+
+export const updatePassword = async ({
+  userId,
+  currentPassword,
+  newPassword,
+}) => {
+  const user = await User.findById(
+    userId
+  ).select("+password");
+
+  if (!user) {
+    throw new AppError(
+      "User not found",
+      404
+    );
+  }
+
+  const isPasswordCorrect =
+    await user.matchPassword(
+      currentPassword
+    );
+
+  if (!isPasswordCorrect) {
+    throw new AppError(
+      "Current password is incorrect",
+      400
+    );
+  }
+
+  user.password = newPassword;
+
+  await user.save();
+
+  return user;
 };
