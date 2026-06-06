@@ -1,46 +1,46 @@
-import IORedis from "ioredis";
+import Redis from "ioredis";
 
 /**
- * Redis connection
- *
- * Used for:
- * - BullMQ queues
- * - model health tracking
- * - circuit breaker state
- *
- * Important:
- * BullMQ docs warn not to use ioredis keyPrefix option.
- * BullMQ manages its own prefix internally.
+ * Redis client config
+ * 
+ * purpose:
+ * Central Redis connection used across
+ * 
+ * -OAuth state storage
+ * -BullMQ queues
+ * -Caching
+ * -Rate limiting
+ * 
+ * why a single connection ?
+ * 
+ * Instead of creating a new Redis connection
+ * in every service, we create one reusable
+ * client and share it throughout the app.
  */
 
-const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+const redis = new Redis(
+  process.env.REDIS_URL
+);
 
-export const redisConnection = new IORedis(redisUrl, {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
+//Connection Events
+
+//Fired when redis connection
+//is established successfully
+
+redis.on("connect", () => {
+  console.log(
+    "Redis connected successfully"
+  );
 });
 
-/**
- * Separate Redis client for normal app reads/writes.
- * This avoids mixing queue operations and app metadata operations.
- */
-export const redisClient = new IORedis(redisUrl, {
-  maxRetriesPerRequest: 3,
-  enableReadyCheck: true,
+//Fired when Redis encounters
+//A connection error
+redis.on("error", (error) => {
+  console.error(
+    "Redis connection error:",
+    error.message
+  );
 });
 
-redisConnection.on("connect", () => {
-  console.log("Redis queue connection established");
-});
-
-redisClient.on("connect", () => {
-  console.log("Redis app client connected");
-});
-
-redisConnection.on("error", (error) => {
-  console.error("[REDIS_QUEUE_ERROR]", error.message);
-});
-
-redisClient.on("error", (error) => {
-  console.error("[REDIS_CLIENT_ERROR]", error.message);
-});
+//Export reusable client
+export default redis;

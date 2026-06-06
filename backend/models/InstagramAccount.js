@@ -189,12 +189,7 @@ const instagramAccountSchema = new mongoose.Schema(
  * --------------------------------------------------
  */
 
-/**
- * Load all accounts for a user.
- */
-instagramAccountSchema.index({
-  user: 1,
-});
+
 
 /**
  * Dashboard account switching.

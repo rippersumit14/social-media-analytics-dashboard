@@ -34,6 +34,12 @@ import {
 import logger from "./utils/logger.js";
 
 /**
+ * Redis import
+ */
+
+import redis from "./config/redis.js";
+
+/**
  * Server Port
  */
 const PORT =
@@ -73,6 +79,11 @@ const startServer =
        */
 
       await verifyMailConnection();
+
+      /**
+       * Verify Redis connection
+       */
+      await redis.ping();
 
       /**
        * Start Express Server

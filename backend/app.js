@@ -7,6 +7,11 @@ import {
   URL_ENCODED_LIMIT,
 } from "./config/security.js";
 
+
+import instagramRoutes
+  from "./routes/instagramRoutes.js";
+
+
 import requestLogger from "./middlewares/requestLogger.js";
 
 import { globalRateLimiter } from "./middlewares/rateLimiter.js";
@@ -94,6 +99,12 @@ app.use("/api/auth", authRoutes);
  *
  * Enable after implementation
  */
+
+//Insta get route 
+app.use(
+  "/api/instagram",
+  instagramRoutes
+);
 
 // app.use("/api/conversations", conversationRoutes);
 
