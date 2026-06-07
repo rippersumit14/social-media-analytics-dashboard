@@ -24,6 +24,54 @@ import logger from "./utils/logger.js";
 
 const app = express();
 
+import axios from "axios";
+
+app.get(
+  "/meta-test",
+  async (req, res) => {
+    try {
+
+      const response =
+        await axios.get(
+          "https://graph.facebook.com/v23.0/oauth/access_token",
+          {
+            params: {
+              client_id:
+                process.env.META_APP_ID,
+
+              client_secret:
+                process.env.META_APP_SECRET,
+
+              grant_type:
+                "client_credentials",
+            },
+          }
+        );
+
+      return res.json(
+        response.data
+      );
+
+    } catch (error) {
+
+      console.log(
+        "META TEST ERROR:"
+      );
+
+      console.dir(
+        error.response?.data,
+        { depth: null }
+      );
+
+      return res.status(500).json(
+        error.response?.data ||
+        error.message
+      );
+    }
+  }
+);
+
+
 /**
  * Security
  */

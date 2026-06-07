@@ -40,10 +40,8 @@ import {
  *   ↓
  * Return URL to frontend
  */
-
-export const connectInstagram =
-  asyncHandler(async (req, res) => {
-
+export const connectInstagram = asyncHandler(
+  async (req, res) => {
     /**
      * Create temporary OAuth state
      *
@@ -64,15 +62,18 @@ export const connectInstagram =
       );
 
     return res.status(200).json(
-      new ApiResponse(
-        true,
-        "Instagram OAuth URL generated successfully",
-        {
+      new ApiResponse({
+        success: true,
+        statusCode: 200,
+        message:
+          "Instagram OAuth URL generated successfully",
+        data: {
           authURL,
-        }
-      )
+        },
+      })
     );
-  });
+  }
+);
 
 /**
  * --------------------------------------------------
@@ -103,9 +104,36 @@ export const connectInstagram =
  *   ↓
  * Delete OAuth State
  */
-
 export const instagramOAuthCallback =
   asyncHandler(async (req, res) => {
+    console.log(
+      "\n================================="
+    );
+
+    console.log(
+      "INSTAGRAM CALLBACK HIT"
+    );
+
+    console.log(
+      "FULL QUERY:"
+    );
+
+    console.dir(
+      req.query,
+      { depth: null }
+    );
+
+    console.log(
+      "FULL URL:"
+    );
+
+    console.log(
+      req.originalUrl
+    );
+
+    console.log(
+      "=================================\n"
+    );
 
     /**
      * Meta sends:
@@ -219,10 +247,12 @@ export const instagramOAuthCallback =
     );
 
     return res.status(200).json(
-      new ApiResponse(
-        true,
-        "Instagram account connected successfully",
-        account
-      )
+      new ApiResponse({
+        success: true,
+        statusCode: 200,
+        message:
+          "Instagram account connected successfully",
+        data: account,
+      })
     );
   });

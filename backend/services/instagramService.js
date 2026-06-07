@@ -1,5 +1,4 @@
 import AppError from "../utils/AppError.js";
-
 import axios from "axios";
 
 /**
@@ -7,27 +6,19 @@ import axios from "axios";
  * Generate Instagram OAuth URL
  * --------------------------------------------------
  *
- * Includes:
- * OAuth state parameter
- *
- * Used to securely map the
- * callback request back to
- * the authenticated user.
- *
+ * Purpose:
+ * Generates Instagram Business Login URL
+ * with OAuth state protection.
  */
 
-export const generateInstagramAuthURL = (
-  state
-) => {
-
+export const generateInstagramAuthURL = (state) => {
   const {
-    META_APP_ID,
+    INSTAGRAM_APP_ID,
     INSTAGRAM_REDIRECT_URI,
-    META_GRAPH_VERSION,
   } = process.env;
 
   if (
-    !META_APP_ID ||
+    !INSTAGRAM_APP_ID ||
     !INSTAGRAM_REDIRECT_URI
   ) {
     throw new AppError(
@@ -45,14 +36,40 @@ export const generateInstagramAuthURL = (
   ].join(",");
 
   const authURL =
-    `https://www.facebook.com/${META_GRAPH_VERSION}/dialog/oauth` +
-    `?client_id=${META_APP_ID}` +
+    `https://www.instagram.com/oauth/authorize` +
+    `?force_reauth=true` +
+    `&client_id=${INSTAGRAM_APP_ID}` +
     `&redirect_uri=${encodeURIComponent(
       INSTAGRAM_REDIRECT_URI
     )}` +
-    `&scope=${scopes}` +
     `&response_type=code` +
+    `&scope=${encodeURIComponent(scopes)}` +
     `&state=${state}`;
+
+  console.log("\n=================================");
+  console.log("INSTAGRAM AUTH URL GENERATED");
+  console.log("=================================");
+
+  console.log(
+    "INSTAGRAM_APP_ID:",
+    INSTAGRAM_APP_ID
+  );
+
+  console.log(
+    "INSTAGRAM_REDIRECT_URI:",
+    INSTAGRAM_REDIRECT_URI
+  );
+
+  console.log(
+    "STATE:",
+    state
+  );
+
+  console.log("AUTH URL:");
+
+  console.log(authURL);
+
+  console.log("=================================\n");
 
   return authURL;
 };
@@ -63,49 +80,370 @@ export const generateInstagramAuthURL = (
  * --------------------------------------------------
  */
 
-export const exchangeCodeForToken =
-  async (code) => {
+export const exchangeCodeForToken = async (
+  code
+) => {
+  const {
+    INSTAGRAM_APP_ID,
+    INSTAGRAM_APP_SECRET,
+    INSTAGRAM_REDIRECT_URI,
+    META_GRAPH_VERSION,
+  } = process.env;
 
-    const {
-      META_APP_ID,
-      META_APP_SECRET,
-      INSTAGRAM_REDIRECT_URI,
-      META_GRAPH_VERSION,
-    } = process.env;
+  const url =
+    `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token`;
 
-    try {
+  try {
+    console.log(
+      "\n================================================="
+    );
 
-      const url =
-        `https://graph.facebook.com/${META_GRAPH_VERSION}/oauth/access_token`;
+    console.log(
+      "INSTAGRAM TOKEN EXCHANGE START"
+    );
 
-      const { data } =
-        await axios.get(url, {
+    console.log(
+      "================================================="
+    );
+
+    console.log(
+      "INSTAGRAM_APP_ID:",
+      INSTAGRAM_APP_ID
+    );
+
+    console.log(
+      "INSTAGRAM_APP_ID LENGTH:",
+      INSTAGRAM_APP_ID?.length
+    );
+
+    console.log(
+      "INSTAGRAM_APP_SECRET EXISTS:",
+      !!INSTAGRAM_APP_SECRET
+    );
+
+    console.log(
+      "INSTAGRAM_APP_SECRET LENGTH:",
+      INSTAGRAM_APP_SECRET?.length
+    );
+
+    console.log(
+      "INSTAGRAM_APP_SECRET FIRST 8:",
+      INSTAGRAM_APP_SECRET?.slice(0, 8)
+    );
+
+    console.log(
+      "INSTAGRAM_REDIRECT_URI:",
+      INSTAGRAM_REDIRECT_URI
+    );
+
+    console.log(
+      "META_GRAPH_VERSION:",
+      META_GRAPH_VERSION
+    );
+
+    console.log(
+      "TOKEN URL:",
+      url
+    );
+
+    console.log(
+      "CODE LENGTH:",
+      code?.length
+    );
+
+    console.log(
+      "CODE PREVIEW:",
+      code?.substring(0, 80)
+    );
+
+    console.log(
+      "\nREQUEST PARAMS:"
+    );
+
+    console.dir(
+      {
+        client_id:
+          INSTAGRAM_APP_ID,
+
+        redirect_uri:
+          INSTAGRAM_REDIRECT_URI,
+
+        graph_version:
+          META_GRAPH_VERSION,
+
+        code_preview:
+          code?.substring(0, 30) + "...",
+      },
+      {
+        depth: null,
+      }
+    );
+
+    console.log(
+      "\nFULL REQUEST URL:"
+    );
+
+    console.log(
+      `${url}?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${encodeURIComponent(
+        INSTAGRAM_REDIRECT_URI
+      )}&code=${code?.substring(0, 30)}...`
+    );
+
+    console.log(
+      "\nSENDING REQUEST TO META..."
+    );
+
+    const response =
+      await axios.get(
+        url,
+        {
           params: {
             client_id:
-              META_APP_ID,
+              INSTAGRAM_APP_ID,
 
             client_secret:
-              META_APP_SECRET,
+              INSTAGRAM_APP_SECRET,
 
             redirect_uri:
               INSTAGRAM_REDIRECT_URI,
 
             code,
           },
-        });
 
-      return data;
+          timeout: 30000,
+        }
+      );
 
-    } catch (error) {
+    console.log(
+      "\n================================================="
+    );
 
-      throw new AppError(
-        "Failed to exchange code for access token",
-        500
+    console.log(
+      "TOKEN EXCHANGE SUCCESS"
+    );
+
+    console.log(
+      "================================================="
+    );
+
+    console.log(
+      "STATUS:",
+      response.status
+    );
+
+    console.log(
+      "\nHEADERS:"
+    );
+
+    console.dir(
+      response.headers,
+      {
+        depth: null,
+      }
+    );
+
+    console.log(
+      "\nDATA:"
+    );
+
+    console.dir(
+      response.data,
+      {
+        depth: null,
+      }
+    );
+
+    console.log(
+      "\n=================================================\n"
+    );
+
+    return response.data;
+
+  } catch (error) {
+
+    console.log(
+      "\n================================================="
+    );
+
+    console.log(
+      "TOKEN EXCHANGE FAILED"
+    );
+
+    console.log(
+      "================================================="
+    );
+
+    console.log(
+      "\nERROR NAME:"
+    );
+
+    console.log(
+      error.name
+    );
+
+    console.log(
+      "\nERROR MESSAGE:"
+    );
+
+    console.log(
+      error.message
+    );
+
+    console.log(
+      "\nERROR CODE:"
+    );
+
+    console.log(
+      error.code
+    );
+
+    console.log(
+      "\nIS AXIOS ERROR:"
+    );
+
+    console.log(
+      error.isAxiosError
+    );
+
+    console.log(
+      "\nHAS REQUEST:"
+    );
+
+    console.log(
+      !!error.request
+    );
+
+    console.log(
+      "\nHAS RESPONSE:"
+    );
+
+    console.log(
+      !!error.response
+    );
+
+    console.log(
+      "\nINSTAGRAM CONFIG:"
+    );
+
+    console.dir(
+      {
+        INSTAGRAM_APP_ID,
+
+        INSTAGRAM_APP_SECRET_LENGTH:
+          INSTAGRAM_APP_SECRET?.length,
+
+        INSTAGRAM_REDIRECT_URI,
+
+        META_GRAPH_VERSION,
+      },
+      {
+        depth: null,
+      }
+    );
+
+    console.log(
+      "\nAXIOS CONFIG URL:"
+    );
+
+    console.log(
+      error.config?.url
+    );
+
+    console.log(
+      "\nAXIOS CONFIG PARAMS:"
+    );
+
+    console.dir(
+      error.config?.params,
+      {
+        depth: null,
+      }
+    );
+
+    if (
+      error.response
+    ) {
+
+      console.log(
+        "\nRESPONSE STATUS:"
+      );
+
+      console.log(
+        error.response.status
+      );
+
+      console.log(
+        "\nRESPONSE STATUS TEXT:"
+      );
+
+      console.log(
+        error.response.statusText
+      );
+
+      console.log(
+        "\nRESPONSE HEADERS:"
+      );
+
+      console.dir(
+        error.response.headers,
+        {
+          depth: null,
+        }
+      );
+
+      console.log(
+        "\nRESPONSE DATA:"
+      );
+
+      console.dir(
+        error.response.data,
+        {
+          depth: null,
+        }
       );
     }
-  };
 
-  
+    if (
+      error.request
+    ) {
+
+      console.log(
+        "\nREQUEST PATH:"
+      );
+
+      console.log(
+        error.request.path
+      );
+
+      console.log(
+        "\nREQUEST METHOD:"
+      );
+
+      console.log(
+        error.request.method
+      );
+    }
+
+    console.log(
+      "\nFULL ERROR STACK:"
+    );
+
+    console.log(
+      error.stack
+    );
+
+    console.log(
+      "\n=================================================\n"
+    );
+
+    throw new AppError(
+      "Failed to exchange code for access token",
+      500
+    );
+  }
+};
+
+
 /**
  * --------------------------------------------------
  * Get Instagram Business Account Info
@@ -114,24 +452,18 @@ export const exchangeCodeForToken =
 
 export const getInstagramAccountInfo =
   async (accessToken) => {
-
     try {
-
-      /**
-       * Step 1
-       * Get Facebook Pages
-       */
-
-      const { data: pagesData } =
-        await axios.get(
-          "https://graph.facebook.com/me/accounts",
-          {
-            params: {
-              access_token:
-                accessToken,
-            },
-          }
-        );
+      const {
+        data: pagesData,
+      } = await axios.get(
+        "https://graph.facebook.com/me/accounts",
+        {
+          params: {
+            access_token:
+              accessToken,
+          },
+        }
+      );
 
       if (
         !pagesData.data ||
@@ -145,11 +477,6 @@ export const getInstagramAccountInfo =
 
       const page =
         pagesData.data[0];
-
-      /**
-       * Step 2
-       * Get Instagram Business Accoun
-       */
 
       const {
         data: instagramData,
@@ -178,11 +505,6 @@ export const getInstagramAccountInfo =
         );
       }
 
-      /**
-       * Step 3
-       * Get Instagram Profile
-       */
-
       const {
         data: profileData,
       } = await axios.get(
@@ -199,8 +521,7 @@ export const getInstagramAccountInfo =
       );
 
       return {
-        pageId:
-          page.id,
+        pageId: page.id,
 
         instagramUserId:
           profileData.id,
@@ -209,16 +530,39 @@ export const getInstagramAccountInfo =
           profileData.username,
 
         followers:
-          profileData.followers_count || 0,
+          profileData.followers_count ||
+          0,
 
         mediaCount:
           profileData.media_count || 0,
 
         profileImage:
-          profileData.profile_picture_url || "",
+          profileData.profile_picture_url ||
+          "",
       };
-
     } catch (error) {
+      console.error(
+        "\nINSTAGRAM PROFILE FETCH ERROR"
+      );
+
+      console.error(
+        "MESSAGE:",
+        error.message
+      );
+
+      console.error(
+        "STATUS:",
+        error.response?.status
+      );
+
+      console.error("DATA:");
+
+      console.dir(
+        error.response?.data,
+        {
+          depth: null,
+        }
+      );
 
       throw new AppError(
         "Failed to fetch Instagram account information",
@@ -226,5 +570,3 @@ export const getInstagramAccountInfo =
       );
     }
   };
-
-
