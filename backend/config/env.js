@@ -19,4 +19,3 @@ logger.info(
   "Environment variables loaded"
 );
 
-

@@ -57,7 +57,7 @@ const instagramAccountSchema = new mongoose.Schema(
      */
     pageId: {
       type: String,
-      required: true,
+      default: null,
       trim: true,
     },
 
