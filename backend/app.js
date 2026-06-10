@@ -28,6 +28,8 @@ import instagramMediaRoutes from "./routes/instagramMediaRoutes.js";
 
 import instagramAnalyticsRoutes from "./routes/instagramAnalyticsRoutes.js";
 
+import CreatorScoreRoutes from "./routes/creatorScoreRoutes.js";
+
 
 const app = express();
 
@@ -224,6 +226,15 @@ app.use(
 app.use(
   "/api/instagram/media",
   instagramMediaRoutes
+);
+
+/**
+ * Creator score engine
+ */
+
+app.use(
+  "/api/creator-score",
+  CreatorScoreRoutes
 );
 
 /**

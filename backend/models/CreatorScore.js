@@ -6,137 +6,192 @@ import mongoose from "mongoose";
  * --------------------------------------------------
  *
  * Purpose:
- * Store historical creator scores for an
- * Instagram account.
+ * Stores historical creator scores.
  *
- * A new document is created every time
- * the score engine runs.
+ * We NEVER overwrite scores.
+ * Every score calculation creates
+ * a new document.
  *
  * This enables:
  *
  * - Score History
- * - Trend Graphs
- * - Weekly Comparisons
- * - Monthly Comparisons
- * - Creator Growth Tracking
- *
- * IMPORTANT:
- * We store score history.
- * We DO NOT overwrite previous scores.
+ * - Trend Tracking
+ * - Growth Reports
+ * - Dashboard Charts
+ * - AI Insights
  *
  */
 
-const creatorScoreSchema = new mongoose.Schema(
-  {
-    /**
-     * Parent Instagram Account
-     */
-    instagramAccount: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "InstagramAccount",
-      required: true,
-      index: true,
-    },
+const creatorScoreSchema =
+  new mongoose.Schema(
+    {
+      /**
+       * Parent Instagram Account
+       */
 
-    /**
-     * Final Score
-     *
-     * Range:
-     * 0 - 100
-     */
-    totalScore: {
-      type: Number,
-      required: true,
-      min: 0,
-      max: 100,
-    },
+      instagramAccount: {
+        type:
+          mongoose.Schema.Types.ObjectId,
 
-    /**
-     * Engagement Component
-     *
-     * Derived from:
-     * likes
-     * comments
-     * saves
-     * shares
-     * engagement rate
-     */
-    engagementScore: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 40,
-    },
+        ref: "InstagramAccount",
 
-    /**
-     * Growth Component
-     *
-     * Derived from:
-     * follower growth
-     * reach growth
-     * impression growth
-     */
-    growthScore: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 30,
-    },
+        required: true,
 
-    /**
-     * Consistency Component
-     *
-     * Derived from:
-     * posting frequency
-     * reels frequency
-     */
-    consistencyScore: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 20,
-    },
+        index: true,
+      },
 
-    /**
-     * Learning Component
-     *
-     * Derived from:
-     * conversations
-     * notes
-     * content ideas
-     */
-    learningScore: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 10,
-    },
+      /**
+       * Final Creator Score
+       *
+       * Range:
+       * 0 - 100
+       */
 
-    /**
-     * Score Formula Version
-     *
-     * Useful when score algorithm
-     * changes in future releases.
-     */
-    scoreVersion: {
-      type: String,
-      default: "v1",
-      trim: true,
-    },
+      totalScore: {
+        type: Number,
 
-    /**
-     * Score Calculation Timestamp
-     */
-    calculatedAt: {
-      type: Date,
-      default: Date.now,
-      index: true,
+        required: true,
+
+        min: 0,
+
+        max: 100,
+      },
+
+      /**
+       * ------------------------------------------
+       * Score Components
+       * ------------------------------------------
+       */
+
+      engagementScore: {
+        type: Number,
+
+        default: 0,
+
+        min: 0,
+
+        max: 40,
+      },
+
+      growthScore: {
+        type: Number,
+
+        default: 0,
+
+        min: 0,
+
+        max: 20,
+      },
+
+      consistencyScore: {
+        type: Number,
+
+        default: 0,
+
+        min: 0,
+
+        max: 20,
+      },
+
+      activityScore: {
+        type: Number,
+
+        default: 0,
+
+        min: 0,
+
+        max: 20,
+      },
+
+      /**
+       * ------------------------------------------
+       * Raw Metrics Used
+       * ------------------------------------------
+       *
+       * Saved for:
+       * - Auditing
+       * - Debugging
+       * - AI Insights
+       */
+
+      breakdown: {
+        followers: {
+          type: Number,
+          default: 0,
+        },
+
+        mediaCount: {
+          type: Number,
+          default: 0,
+        },
+
+        totalLikes: {
+          type: Number,
+          default: 0,
+        },
+
+        totalComments: {
+          type: Number,
+          default: 0,
+        },
+
+        totalEngagement: {
+          type: Number,
+          default: 0,
+        },
+
+        averageEngagement: {
+          type: Number,
+          default: 0,
+        },
+      },
+
+      /**
+       * ------------------------------------------
+       * Metadata
+       * ------------------------------------------
+       */
+
+      metadata: {
+        username: {
+          type: String,
+          default: "",
+        },
+
+        accountType: {
+          type: String,
+          default: "",
+        },
+      },
+
+      /**
+       * Formula Version
+       */
+
+      scoreVersion: {
+        type: String,
+
+        default: "v1",
+
+        trim: true,
+      },
+
+      /**
+       * Calculation Timestamp
+       */
+
+      calculatedAt: {
+        type: Date,
+
+        default: Date.now,
+
+        index: true,
+      },
     },
-  },
-  {
-    timestamps: true,
-  }
-);
+    {
+      timestamps: true,
+    }
+  );
 
 /**
  * --------------------------------------------------
@@ -145,22 +200,20 @@ const creatorScoreSchema = new mongoose.Schema(
  */
 
 /**
- * Most common query:
- *
- * Get score history
- * for an Instagram account.
+ * Score history queries
  */
+
 creatorScoreSchema.index({
   instagramAccount: 1,
   calculatedAt: -1,
 });
 
 /**
- * Used by dashboard analytics
- * and reporting jobs.
+ * Dashboard ranking queries
  */
+
 creatorScoreSchema.index({
-  calculatedAt: -1,
+  totalScore: -1,
 });
 
 /**
@@ -169,12 +222,16 @@ creatorScoreSchema.index({
  * --------------------------------------------------
  */
 
-creatorScoreSchema.set("toJSON", {
-  transform: (_, ret) => {
-    delete ret.__v;
-    return ret;
-  },
-});
+creatorScoreSchema.set(
+  "toJSON",
+  {
+    transform: (_, ret) => {
+      delete ret.__v;
+
+      return ret;
+    },
+  }
+);
 
 /**
  * --------------------------------------------------
@@ -182,9 +239,10 @@ creatorScoreSchema.set("toJSON", {
  * --------------------------------------------------
  */
 
-const CreatorScore = mongoose.model(
-  "CreatorScore",
-  creatorScoreSchema
-);
+const CreatorScore =
+  mongoose.model(
+    "CreatorScore",
+    creatorScoreSchema
+  );
 
 export default CreatorScore;
