@@ -30,6 +30,8 @@ import instagramAnalyticsRoutes from "./routes/instagramAnalyticsRoutes.js";
 
 import CreatorScoreRoutes from "./routes/creatorScoreRoutes.js";
 
+import creatorInsightsRoutes from "./routes/creatorInsightsRoutes.js";
+
 
 const app = express();
 
@@ -235,6 +237,15 @@ app.use(
 app.use(
   "/api/creator-score",
   CreatorScoreRoutes
+);
+
+/**
+ * Creator Insights Engine
+ */
+
+app.use(
+  "/api/creator-insights",
+  creatorInsightsRoutes
 );
 
 /**
