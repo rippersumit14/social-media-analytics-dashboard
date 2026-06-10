@@ -1,4 +1,5 @@
 import express from "express";
+import axios from "axios";
 
 import {
   helmetConfig,
@@ -7,33 +8,44 @@ import {
   URL_ENCODED_LIMIT,
 } from "./config/security.js";
 
-
-import instagramRoutes
-  from "./routes/instagramRoutes.js";
-
-
 import requestLogger from "./middlewares/requestLogger.js";
-
 import { globalRateLimiter } from "./middlewares/rateLimiter.js";
-
 import errorMiddleware from "./middlewares/errorMiddleware.js";
-
-import authRoutes from "./routes/authRoutes.js";
 
 import logger from "./utils/logger.js";
 
+/**
+ * --------------------------------------------------
+ * Routes
+ * --------------------------------------------------
+ */
+
+import authRoutes from "./routes/authRoutes.js";
+
+import instagramRoutes from "./routes/instagramRoutes.js";
+
+import instagramMediaRoutes from "./routes/instagramMediaRoutes.js";
+
+import instagramAnalyticsRoutes from "./routes/instagramAnalyticsRoutes.js";
+
+
 const app = express();
 
-import axios from "axios";
+/**
+ * --------------------------------------------------
+ * Temporary Meta Connectivity Test
+ * --------------------------------------------------
+ *
+ * Remove after development.
+ */
 
 app.get(
   "/meta-test",
   async (req, res) => {
     try {
-
       const response =
         await axios.get(
-          "https://graph.facebook.com/v23.0/oauth/access_token",
+          "https://graph.facebook.com/v25.0/oauth/access_token",
           {
             params: {
               client_id:
@@ -48,147 +60,205 @@ app.get(
           }
         );
 
-      return res.json(
+      return res.status(200).json(
         response.data
       );
 
     } catch (error) {
 
-      console.log(
-        "META TEST ERROR:"
+      console.error(
+        "\nMETA TEST ERROR"
       );
 
       console.dir(
         error.response?.data,
-        { depth: null }
+        {
+          depth: null,
+        }
       );
 
       return res.status(500).json(
-        error.response?.data ||
-        error.message
+        error.response?.data || {
+          message:
+            error.message,
+        }
       );
     }
   }
 );
 
-
 /**
+ * --------------------------------------------------
  * Security
+ * --------------------------------------------------
  */
 
-app.disable("x-powered-by");
+app.disable(
+  "x-powered-by"
+);
 
-app.use(helmetConfig);
+app.use(
+  helmetConfig
+);
 
-app.use(corsConfig);
+app.use(
+  corsConfig
+);
 
-app.use(globalRateLimiter);
+app.use(
+  globalRateLimiter
+);
 
 /**
- * Body Parsing
+ * --------------------------------------------------
+ * Body Parsers
+ * --------------------------------------------------
  */
 
 app.use(
   express.json({
-    limit: JSON_PAYLOAD_LIMIT,
+    limit:
+      JSON_PAYLOAD_LIMIT,
   })
 );
 
 app.use(
   express.urlencoded({
     extended: true,
-    limit: URL_ENCODED_LIMIT,
+    limit:
+      URL_ENCODED_LIMIT,
   })
 );
 
 /**
- * Logging
+ * --------------------------------------------------
+ * Request Logging
+ * --------------------------------------------------
  */
 
-app.use(requestLogger);
+app.use(
+  requestLogger
+);
 
 /**
+ * --------------------------------------------------
  * Root Route
+ * --------------------------------------------------
  */
 
-app.get("/", (req, res) => {
-  return res.status(200).json({
-    success: true,
-    message: "Creator Growth Software API is running",
-  });
-});
+app.get(
+  "/",
+  (req, res) => {
+
+    return res.status(200).json({
+      success: true,
+
+      message:
+        "Creator Growth Software API is running",
+    });
+  }
+);
 
 /**
+ * --------------------------------------------------
  * Health Check
+ * --------------------------------------------------
  */
 
-app.get("/api/health", (req, res) => {
-  return res.status(200).json({
-    success: true,
-    status: "OK",
-    environment: process.env.NODE_ENV,
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-  });
-});
+app.get(
+  "/api/health",
+  (req, res) => {
+
+    return res.status(200).json({
+      success: true,
+
+      status: "OK",
+
+      environment:
+        process.env.NODE_ENV,
+
+      uptime:
+        process.uptime(),
+
+      timestamp:
+        new Date().toISOString(),
+    });
+  }
+);
 
 /**
  * --------------------------------------------------
- * ACTIVE ROUTES
+ * API Routes
  * --------------------------------------------------
  */
-
-app.use("/api/auth", authRoutes);
 
 /**
- * --------------------------------------------------
- * FUTURE ROUTES
- * --------------------------------------------------
- *
- * Enable after implementation
+ * Authentication
  */
 
-//Insta get route 
+app.use(
+  "/api/auth",
+  authRoutes
+);
+
+/**
+ * Instagram OAuth
+ */
+
 app.use(
   "/api/instagram",
   instagramRoutes
 );
 
-// app.use("/api/conversations", conversationRoutes);
+//Instgram Analytics Routes
+app.use(
+  "/api/instagram/analytics",
+  instagramAnalyticsRoutes
+);
 
-// app.use("/api/notes", noteRoutes);
-
-// app.use("/api/content-ideas", contentIdeaRoutes);
-
-// app.use("/api/reminders", reminderRoutes);
-
-// app.use("/api/creator-score", creatorScoreRoutes);
-
-// app.use("/api/instagram/auth", instagramAuthRoutes);
-
-// app.use(
-//   "/api/instagram/analytics",
-//   instagramAnalyticsRoutes
-// );
-
-// app.use("/api/ai", aiRoutes);
 
 /**
- * 404
+ * Instagram Media Sync
  */
 
-app.use((req, res) => {
-  return res.status(404).json({
-    success: false,
-    message: "Route not found",
-  });
-});
+app.use(
+  "/api/instagram/media",
+  instagramMediaRoutes
+);
 
 /**
- * Error Handler
+ * --------------------------------------------------
+ * 404 Handler
+ * --------------------------------------------------
  */
 
-app.use(errorMiddleware);
+app.use(
+  (req, res) => {
+
+    return res.status(404).json({
+      success: false,
+
+      message:
+        "Route not found",
+    });
+  }
+);
+
+/**
+ * --------------------------------------------------
+ * Global Error Handler
+ * --------------------------------------------------
+ */
+
+app.use(
+  errorMiddleware
+);
+
+/**
+ * --------------------------------------------------
+ * Startup Log
+ * --------------------------------------------------
+ */
 
 logger.info(
   "Express application initialized"
