@@ -32,6 +32,8 @@ import CreatorScoreRoutes from "./routes/creatorScoreRoutes.js";
 
 import creatorInsightsRoutes from "./routes/creatorInsightsRoutes.js";
 
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+
 
 const app = express();
 
@@ -240,6 +242,15 @@ app.use(
 );
 
 /**
+ * Dashboard
+ */
+
+app.use(
+  "/api/dashboard",
+  dashboardRoutes
+);
+
+/**
  * Creator Insights Engine
  */
 
@@ -247,6 +258,8 @@ app.use(
   "/api/creator-insights",
   creatorInsightsRoutes
 );
+
+
 
 /**
  * --------------------------------------------------
