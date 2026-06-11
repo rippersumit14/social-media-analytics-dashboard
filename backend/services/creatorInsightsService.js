@@ -12,9 +12,7 @@ import CreatorInsight from "../models/CreatorInsight.js";
  * --------------------------------------------------
  */
 
-export const generateCreatorInsights = async (
-  userId
-) => {
+export const generateCreatorInsights = async (userId) => {
   try {
     /**
      * ------------------------------------------
@@ -22,17 +20,13 @@ export const generateCreatorInsights = async (
      * ------------------------------------------
      */
 
-    const account =
-      await InstagramAccount.findOne({
-        user: userId,
-        isActive: true,
-      });
+    const account = await InstagramAccount.findOne({
+      user: userId,
+      isActive: true,
+    });
 
     if (!account) {
-      throw new AppError(
-        "Instagram account not found",
-        404
-      );
+      throw new AppError("Instagram account not found", 404);
     }
 
     /**
@@ -41,27 +35,21 @@ export const generateCreatorInsights = async (
      * ------------------------------------------
      */
 
-    const snapshots =
-      await AnalyticsSnapshot.find({
-        account: account._id,
+    const snapshots = await AnalyticsSnapshot.find({
+      account: account._id,
+    })
+      .sort({
+        snapshotDate: -1,
       })
-        .sort({
-          snapshotDate: -1,
-        })
-        .limit(2);
+      .limit(2);
 
     if (snapshots.length === 0) {
-      throw new AppError(
-        "No analytics snapshots found",
-        404
-      );
+      throw new AppError("No analytics snapshots found", 404);
     }
 
-    const currentSnapshot =
-      snapshots[0];
+    const currentSnapshot = snapshots[0];
 
-    const previousSnapshot =
-      snapshots[1] || null;
+    const previousSnapshot = snapshots[1] || null;
 
     /**
      * ------------------------------------------
@@ -69,21 +57,17 @@ export const generateCreatorInsights = async (
      * ------------------------------------------
      */
 
-    const scores =
-      await CreatorScore.find({
-        instagramAccount:
-          account._id,
+    const scores = await CreatorScore.find({
+      instagramAccount: account._id,
+    })
+      .sort({
+        calculatedAt: -1,
       })
-        .sort({
-          calculatedAt: -1,
-        })
-        .limit(2);
+      .limit(2);
 
-    const currentScore =
-      scores[0] || null;
+    const currentScore = scores[0] || null;
 
-    const previousScore =
-      scores[1] || null;
+    const previousScore = scores[1] || null;
 
     /**
      * ------------------------------------------
@@ -91,13 +75,10 @@ export const generateCreatorInsights = async (
      * ------------------------------------------
      */
 
-    const media =
-      await InstagramMedia.find({
-        instagramAccount:
-          account._id,
-
-        isDeleted: false,
-      });
+    const media = await InstagramMedia.find({
+      instagramAccount: account._id,
+      isDeleted: false,
+    });
 
     /**
      * ------------------------------------------
@@ -107,9 +88,7 @@ export const generateCreatorInsights = async (
 
     await CreatorInsight.updateMany(
       {
-        instagramAccount:
-          account._id,
-
+        instagramAccount: account._id,
         isActive: true,
       },
       {
@@ -129,39 +108,32 @@ export const generateCreatorInsights = async (
 
     if (previousSnapshot) {
       const followerGrowth =
-        currentSnapshot.followers -
-        previousSnapshot.followers;
+        currentSnapshot.followers - previousSnapshot.followers;
 
       if (followerGrowth > 0) {
         insights.push({
-          instagramAccount:
-            account._id,
+          instagramAccount: account._id,
 
           type: "growth",
 
           priority: "medium",
 
-          title:
-            "Follower Growth Detected",
+          title: "Follower Growth Detected",
 
-          description:
-            `You gained ${followerGrowth} followers since your previous analytics snapshot.`,
+          description: `You gained ${followerGrowth} followers since your previous analytics snapshot.`,
 
           recommendation:
             "Continue posting consistently to maintain growth.",
 
           metadata: {
-            currentValue:
-              currentSnapshot.followers,
+            currentValue: currentSnapshot.followers,
 
-            previousValue:
-              previousSnapshot.followers,
+            previousValue: previousSnapshot.followers,
 
             changePercent:
               previousSnapshot.followers > 0
                 ? (
-                    (followerGrowth /
-                      previousSnapshot.followers) *
+                    (followerGrowth / previousSnapshot.followers) *
                     100
                   ).toFixed(2)
                 : 0,
@@ -171,30 +143,25 @@ export const generateCreatorInsights = async (
 
       if (followerGrowth < 0) {
         insights.push({
-          instagramAccount:
-            account._id,
+          instagramAccount: account._id,
 
           type: "growth",
 
           priority: "high",
 
-          title:
-            "Follower Decline Detected",
+          title: "Follower Decline Detected",
 
-          description:
-            `You lost ${Math.abs(
-              followerGrowth
-            )} followers since your previous snapshot.`,
+          description: `You lost ${Math.abs(
+            followerGrowth
+          )} followers since your previous snapshot.`,
 
           recommendation:
             "Review recent content performance and posting strategy.",
 
           metadata: {
-            currentValue:
-              currentSnapshot.followers,
+            currentValue: currentSnapshot.followers,
 
-            previousValue:
-              previousSnapshot.followers,
+            previousValue: previousSnapshot.followers,
           },
         });
       }
@@ -206,68 +173,54 @@ export const generateCreatorInsights = async (
      * ==================================================
      */
 
-    if (
-      currentScore &&
-      previousScore
-    ) {
+    if (currentScore && previousScore) {
       const scoreDifference =
-        currentScore.totalScore -
-        previousScore.totalScore;
+        currentScore.totalScore - previousScore.totalScore;
 
       if (scoreDifference > 5) {
         insights.push({
-          instagramAccount:
-            account._id,
+          instagramAccount: account._id,
 
           type: "score",
 
           priority: "medium",
 
-          title:
-            "Creator Score Improved",
+          title: "Creator Score Improved",
 
-          description:
-            `Your creator score increased by ${scoreDifference} points.`,
+          description: `Your creator score increased by ${scoreDifference} points.`,
 
           recommendation:
             "Keep repeating the content patterns driving growth.",
 
           metadata: {
-            currentValue:
-              currentScore.totalScore,
+            currentValue: currentScore.totalScore,
 
-            previousValue:
-              previousScore.totalScore,
+            previousValue: previousScore.totalScore,
           },
         });
       }
 
       if (scoreDifference < -5) {
         insights.push({
-          instagramAccount:
-            account._id,
+          instagramAccount: account._id,
 
           type: "score",
 
           priority: "high",
 
-          title:
-            "Creator Score Dropped",
+          title: "Creator Score Dropped",
 
-          description:
-            `Your creator score decreased by ${Math.abs(
-              scoreDifference
-            )} points.`,
+          description: `Your creator score decreased by ${Math.abs(
+            scoreDifference
+          )} points.`,
 
           recommendation:
             "Increase posting consistency and engagement activity.",
 
           metadata: {
-            currentValue:
-              currentScore.totalScore,
+            currentValue: currentScore.totalScore,
 
-            previousValue:
-              previousScore.totalScore,
+            previousValue: previousScore.totalScore,
           },
         });
       }
@@ -280,52 +233,31 @@ export const generateCreatorInsights = async (
      */
 
     if (media.length > 0) {
-      const latestPost =
-        media.sort(
-          (a, b) =>
-            new Date(
-              b.postedAt
-            ) -
-            new Date(
-              a.postedAt
-            )
-        )[0];
+      const latestPost = media.sort(
+        (a, b) => new Date(b.postedAt) - new Date(a.postedAt)
+      )[0];
 
-      const daysSincePost =
-        Math.floor(
-          (
-            Date.now() -
-            new Date(
-              latestPost.postedAt
-            )
-          ) /
-            (1000 *
-              60 *
-              60 *
-              24)
-        );
+      const daysSincePost = Math.floor(
+        (Date.now() - new Date(latestPost.postedAt)) / (1000 * 60 * 60 * 24)
+      );
 
       if (daysSincePost >= 7) {
         insights.push({
-          instagramAccount:
-            account._id,
+          instagramAccount: account._id,
 
           type: "consistency",
 
           priority: "high",
 
-          title:
-            "Posting Consistency Warning",
+          title: "Posting Consistency Warning",
 
-          description:
-            `You have not posted for ${daysSincePost} days.`,
+          description: `You have not posted for ${daysSincePost} days.`,
 
           recommendation:
             "Publish new content to maintain audience engagement.",
 
           metadata: {
-            currentValue:
-              daysSincePost,
+            currentValue: daysSincePost,
           },
         });
       }
@@ -337,19 +269,15 @@ export const generateCreatorInsights = async (
      * ==================================================
      */
 
-    if (
-      currentSnapshot.mediaCount <= 3
-    ) {
+    if (currentSnapshot.mediaCount <= 3) {
       insights.push({
-        instagramAccount:
-          account._id,
+        instagramAccount: account._id,
 
         type: "activity",
 
         priority: "medium",
 
-        title:
-          "Low Content Volume",
+        title: "Low Content Volume",
 
         description:
           "Your account currently has a low amount of published content.",
@@ -358,8 +286,7 @@ export const generateCreatorInsights = async (
           "Increase posting frequency to improve discoverability.",
 
         metadata: {
-          currentValue:
-            currentSnapshot.mediaCount,
+          currentValue: currentSnapshot.mediaCount,
         },
       });
     }
@@ -370,49 +297,31 @@ export const generateCreatorInsights = async (
      * ==================================================
      */
 
-    const createdInsights =
-      await CreatorInsight.insertMany(
-        insights
-      );
+    if (insights.length === 0) {
+      return {
+        insightCount: 0,
+        insights: [],
+      };
+    }
+
+    const createdInsights = await CreatorInsight.insertMany(insights);
 
     return {
-      insightCount:
-        createdInsights.length,
-
-      insights:
-        createdInsights,
+      insightCount: createdInsights.length,
+      insights: createdInsights,
     };
   } catch (error) {
-    console.log(
-      "\n================================="
-    );
+    console.log("\n=================================");
+    console.log("CREATOR INSIGHTS FAILED");
+    console.log("=================================");
+    console.log(error.message);
+    console.log("=================================\n");
 
-    console.log(
-      "CREATOR INSIGHTS FAILED"
-    );
-
-    console.log(
-      "================================="
-    );
-
-    console.log(
-      error.message
-    );
-
-    console.log(
-      "=================================\n"
-    );
-
-    if (
-      error instanceof AppError
-    ) {
+    if (error instanceof AppError) {
       throw error;
     }
 
-    throw new AppError(
-      "Failed to generate creator insights",
-      500
-    );
+    throw new AppError("Failed to generate creator insights", 500);
   }
 };
 
@@ -422,32 +331,22 @@ export const generateCreatorInsights = async (
  * --------------------------------------------------
  */
 
-export const getCreatorInsights =
-  async (
-    userId,
-    limit = 20
-  ) => {
-    const account =
-      await InstagramAccount.findOne({
-        user: userId,
-        isActive: true,
-      });
+export const getCreatorInsights = async (userId, limit = 20) => {
+  const account = await InstagramAccount.findOne({
+    user: userId,
+    isActive: true,
+  });
 
-    if (!account) {
-      throw new AppError(
-        "Instagram account not found",
-        404
-      );
-    }
+  if (!account) {
+    throw new AppError("Instagram account not found", 404);
+  }
 
-    return CreatorInsight.find({
-      instagramAccount:
-        account._id,
-
-      isActive: true,
+  return CreatorInsight.find({
+    instagramAccount: account._id,
+    isActive: true,
+  })
+    .sort({
+      generatedAt: -1,
     })
-      .sort({
-        generatedAt: -1,
-      })
-      .limit(limit);
-  };
+    .limit(limit);
+};
