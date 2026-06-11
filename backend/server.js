@@ -7,47 +7,73 @@
 import "./config/env.js";
 
 /**
+ * --------------------------------------------------
  * Application
+ * --------------------------------------------------
  */
+
 import app from "./app.js";
 
 /**
+ * --------------------------------------------------
  * Database
+ * --------------------------------------------------
  */
+
 import connectDB from "./config/db.js";
 
 /**
+ * --------------------------------------------------
  * Environment Validation
+ * --------------------------------------------------
  */
+
 import validateEnv from "./config/validateEnv.js";
 
 /**
+ * --------------------------------------------------
  * Mail Verification
+ * --------------------------------------------------
  */
+
 import {
   verifyMailConnection,
 } from "./config/mail.js";
 
 /**
- * Logger
- */
-import logger from "./utils/logger.js";
-
-/**
- * Redis import
+ * --------------------------------------------------
+ * Redis
+ * --------------------------------------------------
  */
 
 import redis from "./config/redis.js";
 
 /**
- * Server Port
+ * --------------------------------------------------
+ * Automation Runner
+ * --------------------------------------------------
  */
+
+import startAutomationRunner
+  from "./jobs/automationRunner.js";
+
+/**
+ * --------------------------------------------------
+ * Logger
+ * --------------------------------------------------
+ */
+
+import logger from "./utils/logger.js";
+
+/**
+ * --------------------------------------------------
+ * Server Configuration
+ * --------------------------------------------------
+ */
+
 const PORT =
   process.env.PORT || 5000;
 
-/**
- * Server Instance
- */
 let server;
 
 /**
@@ -58,41 +84,55 @@ let server;
 
 const startServer =
   async () => {
+
     try {
+
       const startedAt =
         Date.now();
 
       /**
+       * ----------------------------------------------
        * Validate Environment Variables
+       * ----------------------------------------------
        */
 
       validateEnv();
 
       /**
-       * Connect Database
+       * ----------------------------------------------
+       * Connect MongoDB
+       * ----------------------------------------------
        */
 
       await connectDB();
 
       /**
+       * ----------------------------------------------
        * Verify SMTP Connection
+       * ----------------------------------------------
        */
 
       await verifyMailConnection();
 
       /**
-       * Verify Redis connection
+       * ----------------------------------------------
+       * Verify Redis Connection
+       * ----------------------------------------------
        */
+
       await redis.ping();
 
       /**
+       * ----------------------------------------------
        * Start Express Server
+       * ----------------------------------------------
        */
 
       server =
         app.listen(
           PORT,
           () => {
+
             logger.info(
               "Backend server started successfully",
               {
@@ -109,9 +149,23 @@ const startServer =
                   process.version,
               }
             );
+
+            /**
+             * ------------------------------------------
+             * Start Automation Scheduler
+             * ------------------------------------------
+             */
+
+            startAutomationRunner();
+
+            logger.info(
+              "Automation scheduler initialized successfully"
+            );
           }
         );
+
     } catch (error) {
+
       logger.error(
         "Server startup failed",
         {
@@ -134,9 +188,8 @@ const startServer =
  */
 
 const gracefulShutdown =
-  async (
-    signal
-  ) => {
+  async (signal) => {
+
     logger.warn(
       "Graceful shutdown initiated",
       {
@@ -145,16 +198,23 @@ const gracefulShutdown =
     );
 
     try {
-      if (server) {
-        server.close(() => {
-          logger.info(
-            "HTTP server closed successfully"
-          );
 
-          process.exit(0);
-        });
+      if (server) {
+
+        server.close(
+          () => {
+
+            logger.info(
+              "HTTP server closed successfully"
+            );
+
+            process.exit(0);
+          }
+        );
       }
+
     } catch (error) {
+
       logger.error(
         "Graceful shutdown failed",
         {
@@ -176,6 +236,7 @@ const gracefulShutdown =
 process.on(
   "unhandledRejection",
   (reason) => {
+
     logger.error(
       "Unhandled Promise Rejection",
       {
@@ -190,6 +251,7 @@ process.on(
 process.on(
   "uncaughtException",
   (error) => {
+
     logger.error(
       "Uncaught Exception",
       {
@@ -223,7 +285,7 @@ process.on(
 
 /**
  * --------------------------------------------------
- * Start Server
+ * Bootstrap Application
  * --------------------------------------------------
  */
 
