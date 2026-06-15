@@ -1,8 +1,6 @@
 import {
   generateGroqResponse,
-
   generateGroqStreamResponse,
-
 } from "./providers/groqProvider.js";
 
 import {
@@ -22,92 +20,68 @@ import {
 } from "../../utils/retryHandler.js";
 
 import {
-
   isProviderAvailable,
-
   recordProviderFailure,
-
   recordProviderSuccess,
-
 } from "../../utils/circuitBreaker.js";
+
+import logger
+  from "../../utils/logger.js";
 
 /**
  * ---------------------------------------------------
- * AI Provider Priority
+ * Provider Registry
  * ---------------------------------------------------
- *
- * Order matters.
- *
- * Fastest + cheapest first.
  */
 
 const AI_PROVIDERS = [
-
   {
     name: "groq",
-
-    handler:
-      generateGroqResponse,
+    handler: generateGroqResponse,
   },
 
   {
     name: "openrouter",
-
-    handler:
-      generateOpenRouterResponse,
+    handler: generateOpenRouterResponse,
   },
 
   {
     name: "together",
-
-    handler:
-      generateTogetherResponse,
+    handler: generateTogetherResponse,
   },
 
   {
     name: "gemini",
-
-    handler:
-      generateGeminiResponse,
+    handler: generateGeminiResponse,
   },
 ];
 
 /**
  * ---------------------------------------------------
- * Generate Standard AI Response
+ * Generate AI Response
  * ---------------------------------------------------
  */
 
 export const generateAIResponse =
   async ({
-
     prompt,
   }) => {
 
     const errors = [];
 
-    /**
-     * Try providers sequentially
-     */
     for (
       const provider
       of AI_PROVIDERS
     ) {
 
-      /**
-       * Skip unavailable providers
-       */
-      const available =
-        isProviderAvailable(
-
+      if (
+        !isProviderAvailable(
           provider.name
-        );
+        )
+      ) {
 
-      if (!available) {
-
-        console.warn(
-
-          `[AI_ORCHESTRATOR] Skipping unavailable provider: ${provider.name}`
+        logger.warn(
+          `Provider unavailable: ${provider.name}`
         );
 
         continue;
@@ -115,54 +89,40 @@ export const generateAIResponse =
 
       try {
 
-        console.log(
-
-          `[AI_ORCHESTRATOR] Trying provider: ${provider.name}`
+        logger.ai(
+          `Trying provider: ${provider.name}`
         );
 
         const response =
           await retryAsyncOperation(
 
-            async () => {
-
-              return await provider.handler({
-
+            async () =>
+              provider.handler({
                 prompt,
-              });
-            },
+              }),
 
-            1,
-
+            2,
             1000
           );
 
-        /**
-         * Record provider success
-         */
         recordProviderSuccess(
           provider.name
         );
 
-        console.log(
-
-          `[AI_ORCHESTRATOR] Success from: ${provider.name}`
+        logger.success(
+          `Provider success: ${provider.name}`
         );
 
         return response;
 
       } catch (error) {
 
-        /**
-         * Record provider failure
-         */
         recordProviderFailure(
           provider.name
         );
 
-        console.error(
-
-          `[AI_ORCHESTRATOR_ERROR] ${provider.name}`,
-
+        logger.error(
+          `Provider failed: ${provider.name}`,
           {
             message:
               error.message,
@@ -170,7 +130,6 @@ export const generateAIResponse =
         );
 
         errors.push({
-
           provider:
             provider.name,
 
@@ -180,11 +139,7 @@ export const generateAIResponse =
       }
     }
 
-    /**
-     * All providers failed
-     */
     throw new Error(
-
       `All AI providers failed: ${JSON.stringify(errors)}`
     );
   };
@@ -193,21 +148,41 @@ export const generateAIResponse =
  * ---------------------------------------------------
  * Generate Streaming AI Response
  * ---------------------------------------------------
+ *
+ * Current Strategy:
+ * Use Groq native streaming.
+ *
+ * Future:
+ * Add provider fallback streaming.
  */
 
 export const generateStreamingAIResponse =
   async ({
-
     prompt,
   }) => {
 
-    /**
-     * For now:
-     * use Groq native streaming
-     */
+    try {
 
-    return await generateGroqStreamResponse({
+      logger.ai(
+        "Starting streaming response"
+      );
 
-      prompt,
-    });
+      return await
+        generateGroqStreamResponse({
+
+          prompt,
+        });
+
+    } catch (error) {
+
+      logger.error(
+        "Streaming response failed",
+        {
+          message:
+            error.message,
+        }
+      );
+
+      throw error;
+    }
   };

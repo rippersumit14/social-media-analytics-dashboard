@@ -5,41 +5,43 @@ import mongoose from "mongoose";
  * Attachment Schema
  * --------------------------------------------------
  *
- * Future Support:
+ * Supports:
  * - Images
+ * - PDFs
  * - Documents
- * - Other uploaded files
+ * - Future Media Uploads
  */
 
-const attachmentSchema = new mongoose.Schema(
-  {
-    url: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+const attachmentSchema =
+  new mongoose.Schema(
+    {
+      url: {
+        type: String,
+        required: true,
+        trim: true,
+      },
 
-    publicId: {
-      type: String,
-      default: null,
-      trim: true,
-    },
+      publicId: {
+        type: String,
+        default: null,
+        trim: true,
+      },
 
-    mimeType: {
-      type: String,
-      default: null,
-    },
+      mimeType: {
+        type: String,
+        default: null,
+      },
 
-    size: {
-      type: Number,
-      default: null,
-      min: 0,
+      size: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
     },
-  },
-  {
-    _id: false,
-  }
-);
+    {
+      _id: false,
+    }
+  );
 
 /**
  * --------------------------------------------------
@@ -48,107 +50,139 @@ const attachmentSchema = new mongoose.Schema(
  *
  * Stores:
  * - User Messages
- * - AI Responses
- * - Conversation History
+ * - Assistant Responses
+ * - System Messages
  * - Attachments
  * - Token Usage
- *
- * Relationship:
- *
- * User
- *   ↓
- * Conversation
- *   ↓
- * Message
- *
  */
 
-const messageSchema = new mongoose.Schema(
-  {
-    /**
-     * Parent Conversation
-     */
-    conversation: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Conversation",
-      required: true,
-      index: true,
-    },
+const messageSchema =
+  new mongoose.Schema(
+    {
+      /**
+       * Parent Conversation
+       */
 
-    /**
-     * Message Owner
-     */
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      index: true,
-    },
+      conversation: {
+        type:
+          mongoose.Schema.Types.ObjectId,
 
-    /**
-     * Message Role
-     *
-     * user
-     * assistant
-     * system
-     */
-    role: {
-      type: String,
-      enum: ["user", "assistant", "system"],
-      required: true,
-      index: true,
-    },
+        ref: "Conversation",
 
-    /**
-     * Message Content
-     */
-    content: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 50000,
-    },
+        required: true,
 
-    /**
-     * AI Model Used
-     *
-     * Examples:
-     * gemini-2.5-flash
-     * llama-4
-     * deepseek-chat
-     */
-    model: {
-      type: String,
-      default: null,
-      trim: true,
-    },
+        index: true,
+      },
 
-    /**
-     * Token Usage
-     *
-     * Useful for:
-     * - Usage Analytics
-     * - AI Limits
-     * - Cost Tracking
-     */
-    tokensUsed: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
+      /**
+       * Message Owner
+       */
 
-    /**
-     * File Attachments
-     */
-    attachments: {
-      type: [attachmentSchema],
-      default: [],
+      user: {
+        type:
+          mongoose.Schema.Types.ObjectId,
+
+        ref: "User",
+
+        required: true,
+
+        index: true,
+      },
+
+      /**
+       * Message Role
+       */
+
+      role: {
+        type: String,
+
+        enum: [
+          "user",
+          "assistant",
+          "system",
+        ],
+
+        required: true,
+
+        index: true,
+      },
+
+      /**
+       * Message Content
+       */
+
+      content: {
+        type: String,
+
+        required: true,
+
+        trim: true,
+
+        maxlength: 50000,
+      },
+
+      /**
+       * AI Provider Used
+       */
+
+      provider: {
+        type: String,
+
+        default: null,
+
+        trim: true,
+      },
+
+      /**
+       * AI Model Used
+       */
+
+      model: {
+        type: String,
+
+        default: null,
+
+        trim: true,
+      },
+
+      /**
+       * Token Consumption
+       */
+
+      tokensUsed: {
+        type: Number,
+
+        default: 0,
+
+        min: 0,
+      },
+
+      /**
+       * Generation Latency
+       */
+
+      latencyMs: {
+        type: Number,
+
+        default: 0,
+
+        min: 0,
+      },
+
+      /**
+       * Uploaded Attachments
+       */
+
+      attachments: {
+        type: [attachmentSchema],
+
+        default: [],
+      },
     },
-  },
-  {
-    timestamps: true,
-  }
-);
+    {
+      timestamps: true,
+    }
+  );
 
 /**
  * --------------------------------------------------
@@ -158,23 +192,17 @@ const messageSchema = new mongoose.Schema(
 
 /**
  * Load Conversation Messages
- *
- * Most Common Query:
- *
- * Message.find({
- *   conversation
- * }).sort({
- *   createdAt: 1
- * });
  */
+
 messageSchema.index({
   conversation: 1,
   createdAt: 1,
 });
 
 /**
- * User Message History
+ * User Chat History
  */
+
 messageSchema.index({
   user: 1,
   createdAt: -1,
@@ -183,9 +211,19 @@ messageSchema.index({
 /**
  * Ownership Validation
  */
+
 messageSchema.index({
   conversation: 1,
   user: 1,
+});
+
+/**
+ * Role Queries
+ */
+
+messageSchema.index({
+  role: 1,
+  createdAt: -1,
 });
 
 /**
@@ -194,12 +232,15 @@ messageSchema.index({
  * --------------------------------------------------
  */
 
-messageSchema.set("toJSON", {
-  transform: (_, ret) => {
-    delete ret.__v;
-    return ret;
-  },
-});
+messageSchema.set(
+  "toJSON",
+  {
+    transform: (_, ret) => {
+      delete ret.__v;
+      return ret;
+    },
+  }
+);
 
 /**
  * --------------------------------------------------
@@ -207,9 +248,10 @@ messageSchema.set("toJSON", {
  * --------------------------------------------------
  */
 
-const Message = mongoose.model(
-  "Message",
-  messageSchema
-);
+const Message =
+  mongoose.model(
+    "Message",
+    messageSchema
+  );
 
 export default Message;

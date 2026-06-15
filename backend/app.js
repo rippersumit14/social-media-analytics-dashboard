@@ -34,6 +34,8 @@ import creatorInsightsRoutes from "./routes/creatorInsightsRoutes.js";
 
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 
+import recommendationRoutes from "./models/Recommendation.js";
+
 
 const app = express();
 
@@ -257,6 +259,15 @@ app.use(
 app.use(
   "/api/creator-insights",
   creatorInsightsRoutes
+);
+
+/**
+ * Recommendation Engine
+ */
+
+app.use(
+  "/api/recommendations",
+   recommendationRoutes
 );
 
 

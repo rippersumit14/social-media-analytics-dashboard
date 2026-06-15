@@ -1,592 +1,254 @@
-// services/chatService.
-// 
-import ChatSession from "../models/ChatSession.js";
-import ChatMessage from "../models/ChatMessage.js";
+import Conversation from "../models/Conversation.js";
+import Message from "../models/Message.js";
 
-import User, {
-    PLAN_AI_LIMITS,
-} from "../models/User.js";
+import InstagramAccount
+  from "../models/InstagramAccount.js";
 
-import {
-    deleteImageFromCloudinary,
-} from "./cloudinaryStorageService.js";
+import AnalyticsSnapshot
+  from "../models/AnalyticsSnapshot.js";
 
-/**
- * ---------------------------------------------------
- * Constants
- * ---------------------------------------------------
- */
+import CreatorScore
+  from "../models/CreatorScore.js";
 
-const MAX_SESSIONS_PER_ACCOUNT = 20;
+import CreatorInsight
+  from "../models/CreatorInsight.js";
 
-const MAX_MESSAGES_PER_SESSION = 100;
-
-const MAX_CONTEXT_MESSAGES = 12;
-
-const ONE_DAY_IN_MS =
-    24 * 60 * 60 * 1000;
+import AppError
+  from "../utils/AppError.js";
 
 /**
- * ---------------------------------------------------
- * Safe Cloudinary Cleanup
- * ---------------------------------------------------
+ * Create conversation (core function)
  */
 
-export const safeDeleteCloudinaryImage =
-    async (
-        publicId
-    ) => {
-
-        try {
-
-            if (!publicId) {
-                return;
-            }
-
-            await deleteImageFromCloudinary(
-                publicId
-            );
-
-        } catch (error) {
-
-            console.error(
-                "[CLOUDINARY_DELETE_ERROR]",
-                {
-                    publicId,
-
-                    message:
-                        error.message,
-                }
-            );
-        }
-    };
-
-/**
- * ---------------------------------------------------
- * Determine AI Usage Reset
- * ---------------------------------------------------
- */
-
-const shouldResetAIUsage =
-    (
-        resetDate
-    ) => {
-
-        if (!resetDate) {
-            return true;
-        }
-
-        const lastReset =
-            new Date(
-                resetDate
-            ).getTime();
-
-        return (
-            Date.now() -
-                lastReset >=
-            ONE_DAY_IN_MS
-        );
-    };
-
-/**
- * ---------------------------------------------------
- * Prepare User AI Usage
- * ---------------------------------------------------
- *
- * Handles:
- * - plan limits
- * - daily reset
- * - usage synchronization
- */
-
-export const prepareAIUsageForRequest =
-    async (
-        user
-    ) => {
-
-        const limit =
-            PLAN_AI_LIMITS[
-                user.plan
-            ] ||
-            PLAN_AI_LIMITS.FREE;
-
-        user.aiUsageLimit =
-            limit;
-
-        /**
-         * Reset usage if needed
-         */
-        if (
-            shouldResetAIUsage(
-                user.aiUsageResetDate
-            )
-        ) {
-
-            user.aiUsageCount = 0;
-
-            user.aiUsageResetDate =
-                new Date();
-        }
-
-        await user.save();
-
-        return user;
-    };
-
-/**
- * ---------------------------------------------------
- * Build Usage Info
- * ---------------------------------------------------
- */
-
-export const buildUsageInfo =
-    (
-        user
-    ) => {
-
-        return {
-
-            plan: user.plan,
-
-            used:
-                user.aiUsageCount,
-
-            limit:
-                user.aiUsageLimit,
-
-            remaining:
-                Math.max(
-                    user.aiUsageLimit -
-                        user.aiUsageCount,
-                    0
-                ),
-
-            resetDate:
-                user.aiUsageResetDate,
-        };
-    };
-
-/**
- * ---------------------------------------------------
- * Build Chat Session Title
- * ---------------------------------------------------
- */
-
-const buildSessionTitle =
-    (
-        message
-    ) => {
-
-        const clean =
-            message
-                ?.replace(
-                    /\s+/g,
-                    " "
-                )
-                .trim();
-
-        if (!clean) {
-            return "New Chat";
-        }
-
-        return clean.length > 60
-            ? `${clean.slice(
-                  0,
-                  60
-              )}...`
-            : clean;
-    };
-
-/**
- * ---------------------------------------------------
- * Build User Message Text
- * ---------------------------------------------------
- */
-
-export const buildUserMessageText =
-    (
-        message,
-        hasImages
-    ) => {
-
-        const clean =
-            message?.trim() || "";
-
-        if (clean) {
-            return clean;
-        }
-
-        if (hasImages) {
-            return "Analyze the uploaded images.";
-        }
-
-        return "";
-    };
-
-/**
- * ---------------------------------------------------
- * Trim Old Sessions
- * ---------------------------------------------------
- */
-
-export const trimOldSessions =
-    async (
-        userId,
-        socialAccountId
-    ) => {
-
-        const sessions =
-            await ChatSession.find({
-
-                user: userId,
-
-                socialAccount:
-                    socialAccountId,
-            })
-                .sort({
-                    updatedAt: -1,
-                })
-                .select("_id");
-
-        if (
-            sessions.length <=
-            MAX_SESSIONS_PER_ACCOUNT
-        ) {
-            return;
-        }
-
-        const sessionsToDelete =
-            sessions.slice(
-                MAX_SESSIONS_PER_ACCOUNT
-            );
-
-        const sessionIds =
-            sessionsToDelete.map(
-                (session) =>
-                    session._id
-            );
-
-        const messages =
-            await ChatMessage.find({
-                session: {
-                    $in: sessionIds,
-                },
-            });
-
-        /**
-         * Cleanup Cloudinary images
-         */
-        for (const message of messages) {
-
-            for (const image of message.images || []) {
-
-                await safeDeleteCloudinaryImage(
-                    image.publicId
-                );
-            }
-        }
-
-        /**
-         * Delete old messages
-         */
-        await ChatMessage.deleteMany({
-
-            session: {
-                $in: sessionIds,
-            },
-        });
-
-        /**
-         * Delete old sessions
-         */
-        await ChatSession.deleteMany({
-
-            _id: {
-                $in: sessionIds,
-            },
-        });
-    };
-
-/**
- * ---------------------------------------------------
- * Trim Old Messages
- * ---------------------------------------------------
- */
-
-export const trimOldMessages =
-    async (
-        sessionId
-    ) => {
-
-        const messages =
-            await ChatMessage.find({
-
-                session: sessionId,
-            })
-                .sort({
-                    createdAt: 1,
-                })
-                .select("_id images");
-
-        if (
-            messages.length <=
-            MAX_MESSAGES_PER_SESSION
-        ) {
-            return;
-        }
-
-        const messagesToDelete =
-            messages.slice(
-                0,
-                messages.length -
-                    MAX_MESSAGES_PER_SESSION
-            );
-
-        /**
-         * Cleanup old images
-         */
-        for (const message of messagesToDelete) {
-
-            for (const image of message.images || []) {
-
-                await safeDeleteCloudinaryImage(
-                    image.publicId
-                );
-            }
-        }
-
-        /**
-         * Delete old messages
-         */
-        await ChatMessage.deleteMany({
-
-            _id: {
-                $in:
-                    messagesToDelete.map(
-                        (message) =>
-                            message._id
-                    ),
-            },
-        });
-    };
-
-/**
- * ---------------------------------------------------
- * Get Or Create Chat Session
- * ---------------------------------------------------
- */
-
-export const getOrCreateChatSession =
-  async ({
-
-    sessionId,
-
+export const createConversation = async({
     userId,
+    instagramAccountId,
+    title,
+}) => {
+    return Conversation.create({
+        user: userId,
+        instagramAccount: instagramAccountId,
 
-    socialAccountId,
+        title: title || "New Chat",
+    });
+};
 
-    userMessageText,
+/**
+ * Get User Conversations
+ */
+
+export const getUserConversations = async (userId) => {
+    return Conversation.find({
+        user: userId,
+        isArchived: false,
+    }).sort({
+        latestMessageAt: -1,
+    });
+};
+
+/**
+ * Save User Message
+ */
+
+export const saveUserMessage =
+  async ({
+    conversationId,
+    userId,
+    content,
+    attachments = [],
   }) => {
 
-    /**
-     * Existing session flow
-     */
-    if (sessionId) {
+    return Message.create({
 
-      const existingSession =
-        await ChatSession.findOne({
+      conversation:
+        conversationId,
 
-          _id:
-            sessionId,
+      user:
+        userId,
 
-          user:
-            userId,
+      role:
+        "user",
 
-          socialAccount:
-            socialAccountId,
-        });
+      content,
 
-      /**
-       * Return existing session
-       */
-      if (existingSession) {
+      attachments,
+    });
+  };
 
-        return existingSession;
-      }
+  /**
+   * Save assistant Message
+   */
+
+export const saveAssistantMessage =
+  async ({
+    conversationId,
+    userId,
+    content,
+    provider,
+    model,
+    tokensUsed = 0,
+    latencyMs = 0,
+  }) => {
+
+    return Message.create({
+
+      conversation:
+        conversationId,
+
+      user:
+        userId,
+
+      role:
+        "assistant",
+
+      content,
+
+      provider,
+
+      model,
+
+      tokensUsed,
+
+      latencyMs,
+    });
+  };
+
+/**
+ * Get Conversation Messages
+ */
+
+export const getConversationMessages =
+  async (
+    conversationId
+  ) => {
+
+    return Message.find({
+
+      conversation:
+        conversationId,
+    })
+      .sort({
+        createdAt: 1,
+      });
+  };
+
+/**
+ * Build history Window
+ */
+
+export const buildHistoryMessages =
+  async (
+    conversationId
+  ) => {
+
+    const messages =
+      await Message.find({
+
+        conversation:
+          conversationId,
+      })
+        .sort({
+          createdAt: -1,
+        })
+        .limit(20)
+        .lean();
+
+    return messages
+      .reverse()
+      .map((message) => ({
+        role:
+          message.role,
+
+        content:
+          message.content,
+      }));
+  };
+
+/**
+ * Build creator context 
+ */
+
+export const buildCreatorContext =
+  async (
+    instagramAccountId
+  ) => {
+
+    const account =
+      await InstagramAccount.findById(
+        instagramAccountId
+      );
+
+    if (!account) {
+
+      throw new AppError(
+        "Instagram account not found",
+        404
+      );
     }
 
-    /**
-     * Create new session
-     */
-    const newSession =
-      await ChatSession.create({
+    const latestSnapshot =
+      await AnalyticsSnapshot
+        .findOne({
+          instagramAccount:
+            instagramAccountId,
+        })
+        .sort({
+          createdAt: -1,
+        });
 
-        user:
-          userId,
+    const latestScore =
+      await CreatorScore
+        .findOne({
+          instagramAccount:
+            instagramAccountId,
+        })
+        .sort({
+          createdAt: -1,
+        });
 
-        socialAccount:
-          socialAccountId,
+    const insights =
+      await CreatorInsight.find({
+        instagramAccount:
+          instagramAccountId,
 
-        title:
-          buildSessionTitle(
-            userMessageText
-          ),
+        isActive: true,
       });
 
-    /**
-     * Trim old sessions
-     */
-    await trimOldSessions(
+    return `
+Creator Username:
+${account.username}
 
-      userId,
+Followers:
+${latestSnapshot?.followers || 0}
 
-      socialAccountId
-    );
+Engagement Rate:
+${latestSnapshot?.engagementRate || 0}
 
-    return newSession;
+Creator Score:
+${latestScore?.totalScore || 0}
+
+Insights:
+${insights
+  .map(
+    (insight) =>
+      `- ${insight.title}`
+  )
+  .join("\n")}
+`;
   };
 
 
 /**
- * ---------------------------------------------------
- * Build History Messages
- * ---------------------------------------------------
+ * Update Conversation Activity 
  */
 
-export const buildHistoryMessages =
-    async (
-        sessionId
-    ) => {
+export const updateConversationActivity = async(conversationId) => {
+    await Conversation.findByIdAndUpdate(
+        conversationId,
 
-        const messages =
-            await ChatMessage.find({
-
-                session: sessionId,
-            })
-                .sort({
-                    createdAt: -1,
-                })
-                .limit(
-                    MAX_CONTEXT_MESSAGES
-                )
-                .lean();
-
-        return messages
-            .reverse()
-            .map((msg) => ({
-
-                role: msg.role,
-
-                content:
-                    msg.content,
-            }));
-    };
-
-/**
- * ---------------------------------------------------
- * Build Analytics Context
- * ---------------------------------------------------
- */
-
-export const buildAnalyticsContext =
-    (
-        socialAccount,
-        snapshots
-    ) => {
-
-        const latest =
-            snapshots[
-                snapshots.length - 1
-            ] || {};
-
-        return `
-Platform: ${socialAccount.platform}
-Username: ${socialAccount.username}
-Followers: ${latest.followers || 0}
-Engagement Rate: ${latest.engagementRate || 0}
-Reach: ${latest.reach || 0}
-Impressions: ${latest.impressions || 0}
-`;
-    };
-
-/**
- * ---------------------------------------------------
- * Finalize AI Response
- * ---------------------------------------------------
- *
- * Handles:
- * - assistant message persistence
- * - usage increment
- * - session update
- * - message trimming
- */
-
-export const finalizeAIResponse =
-    async ({
-
-        user,
-
-        activeSession,
-
-        userId,
-
-        socialAccountId,
-
-        aiResult,
-    }) => {
-
-        /**
-         * Save assistant message
-         */
-        await ChatMessage.create({
-
-            session:
-                activeSession._id,
-
-            user: userId,
-
-            socialAccount:
-                socialAccountId,
-
-            role: "assistant",
-
-            content:
-                aiResult.reply,
-
-            images: [],
-
-            model:
-                aiResult.modelUsed,
-
-            latencyMs:
-                aiResult.latencyMs,
-        });
-
-        /**
-         * Increment usage
-         */
-        user.aiUsageCount += 1;
-
-        await user.save();
-
-        /**
-         * Update session activity
-         */
-        activeSession.updatedAt =
-            new Date();
-
-        await activeSession.save();
-
-        /**
-         * Trim old messages
-         */
-        await trimOldMessages(
-            activeSession._id
-        );
-
-        return {
-
-            aiReply:
-                aiResult.reply,
-        };
-    };
+        {
+            lastMessageAt:
+            new Date(),
+        }
+    );
+};

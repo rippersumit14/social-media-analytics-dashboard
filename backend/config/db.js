@@ -1,8 +1,6 @@
-import mongoose
-  from "mongoose";
+import mongoose from "mongoose";
 
-import logger
-  from "../utils/logger.js";
+import logger from "../utils/logger.js";
 
 /**
  * ---------------------------------------------------
@@ -10,134 +8,113 @@ import logger
  * ---------------------------------------------------
  */
 
-const connectDB =
-  async () => {
+const connectDB = async () => {
+
+  /**
+   * Validate Mongo URI
+   */
+
+  if (!process.env.MONGO_URI) {
+
+    throw new Error(
+      "MONGO_URI is required to start the backend"
+    );
+  }
+
+  try {
 
     /**
-     * Validate Mongo URI
+     * Strict Query Mode
      */
 
-    if (
-      !process.env.MONGO_URI
-    ) {
+    mongoose.set(
+      "strictQuery",
+      true
+    );
 
-      throw new Error(
-        "MONGO_URI is required to start the backend"
+    /**
+     * Debug Log
+     */
+
+    console.log(
+      "MONGO URI LOADED:",
+      process.env.MONGO_URI?.slice(0, 60)
+    );
+
+    /**
+     * Connect MongoDB
+     */
+
+    const conn =
+      await mongoose.connect(
+        process.env.MONGO_URI,
+        {
+          serverSelectionTimeoutMS: 10000,
+        }
       );
-    }
 
-    try {
+    logger.info(
+      "MongoDB connected successfully",
+      {
+        host:
+          conn.connection.host,
 
-      /**
-       * Strict query mode
-       *
-       * Prevents unknown query fields
-       */
+        database:
+          conn.connection.name,
+      }
+    );
 
-      mongoose.set(
+    /**
+     * Mongo Connection Events
+     */
 
-        "strictQuery",
+    mongoose.connection.on(
+      "disconnected",
+      () => {
+        logger.warn(
+          "MongoDB disconnected"
+        );
+      }
+    );
 
-        true
-      );
+    mongoose.connection.on(
+      "reconnected",
+      () => {
+        logger.info(
+          "MongoDB reconnected"
+        );
+      }
+    );
 
-      /**
-       * Connect MongoDB
-       */
+    mongoose.connection.on(
+      "error",
+      (error) => {
 
-      const conn =
-        await mongoose.connect(
-
-          process.env.MONGO_URI,
-
+        logger.error(
+          "MongoDB connection error",
           {
-
-            serverSelectionTimeoutMS:
-              10000,
+            message:
+              error.message,
           }
         );
+      }
+    );
 
-      logger.info(
+  } catch (error) {
 
-        "MongoDB connected successfully",
+    logger.error(
+      "MongoDB connection failed",
+      {
+        message:
+          error.message,
 
-        {
+        stack:
+          error.stack,
+      }
+    );
 
-          host:
-            conn.connection.host,
-
-          database:
-            conn.connection.name,
-        }
-      );
-
-      /**
-       * ---------------------------------------------------
-       * Mongo Connection Events
-       * ---------------------------------------------------
-       */
-
-      mongoose.connection.on(
-
-        "disconnected",
-
-        () => {
-
-          logger.warn(
-            "MongoDB disconnected"
-          );
-        }
-      );
-
-      mongoose.connection.on(
-
-        "reconnected",
-
-        () => {
-
-          logger.info(
-            "MongoDB reconnected"
-          );
-        }
-      );
-
-      mongoose.connection.on(
-
-        "error",
-
-        (error) => {
-
-          logger.error(
-
-            "MongoDB connection error",
-
-            {
-
-              message:
-                error.message,
-            }
-          );
-        }
-      );
-
-    } catch (error) {
-
-      logger.error(
-
-        "MongoDB connection failed",
-
-        {
-
-          message:
-            error.message,
-
-          stack:
-            error.stack,
-        }
-      );
-
-      throw error;
-    }
-  };
+    throw error;
+  }
+};
 
 export default connectDB;

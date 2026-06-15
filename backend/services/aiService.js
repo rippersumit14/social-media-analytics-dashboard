@@ -1,5 +1,3 @@
-// services/aiService.js
-
 import {
   generateAIResponse,
   generateStreamingAIResponse,
@@ -10,94 +8,112 @@ import logger
 
 /**
  * ---------------------------------------------------
- * AI System Prompt
+ * Creator Growth AI System Prompt
  * ---------------------------------------------------
- *
- * Core AI behavior layer.
  */
 
 const SYSTEM_PROMPT = `
-You are an advanced AI social media analytics assistant.
+You are Creator Growth AI.
 
-Your responsibilities:
-- analyze analytics data
-- explain engagement metrics
-- suggest growth strategies
-- analyze audience behavior
-- explain content performance
-- help creators improve social media growth
+Your role is to help content creators grow their audience,
+improve engagement, understand analytics,
+and make better content decisions.
 
-Guidelines:
-- always provide structured responses
-- prioritize actionable insights
-- explain analytics clearly
-- avoid hallucinating fake metrics
-- be concise but insightful
-- support multimodal image understanding
+Responsibilities:
+
+- Analyze creator performance
+- Explain analytics metrics
+- Identify growth bottlenecks
+- Suggest content improvements
+- Recommend engagement strategies
+- Answer creator-related questions
+
+Rules:
+
+- Never invent analytics data
+- Only use provided context
+- Be actionable and practical
+- Prefer concise responses
+- Use bullet points when useful
+- Explain reasoning clearly
 `;
 
 /**
  * ---------------------------------------------------
- * Build Final AI Prompt
+ * Build Chat History
  * ---------------------------------------------------
- *
- * Combines:
- * - analytics context
- * - history messages
- * - latest user message
+ */
+
+const buildHistorySection =
+  (historyMessages = []) => {
+
+    const limitedHistory =
+      historyMessages.slice(-10);
+
+    if (
+      limitedHistory.length === 0
+    ) {
+
+      return "No previous conversation.";
+    }
+
+    return limitedHistory
+      .map(
+        (message) =>
+          `${message.role.toUpperCase()}: ${message.content}`
+      )
+      .join("\n");
+  };
+
+/**
+ * ---------------------------------------------------
+ * Build Final Prompt
+ * ---------------------------------------------------
  */
 
 const buildFinalPrompt =
   ({
-
-    analyticsContext,
-
-    historyMessages = [],
-
+    creatorContext,
+    historyMessages,
     latestUserMessage,
   }) => {
 
-    /**
-     * Normalize history
-     */
-
-    const formattedHistory =
-      historyMessages
-
-        .map(
-
-          (message) => {
-
-            return `${message.role.toUpperCase()}: ${message.content}`;
-          }
-        )
-
-        .join("\n");
-
-    /**
-     * Final prompt
-     */
+    const history =
+      buildHistorySection(
+        historyMessages
+      );
 
     return `
 ${SYSTEM_PROMPT}
 
---------------------------------------------------
-ANALYTICS CONTEXT
---------------------------------------------------
+==================================================
+CREATOR CONTEXT
+==================================================
 
-${analyticsContext || "No analytics context available."}
+${creatorContext || "No creator context available."}
 
---------------------------------------------------
-CHAT HISTORY
---------------------------------------------------
+==================================================
+CONVERSATION HISTORY
+==================================================
 
-${formattedHistory || "No previous history."}
+${history}
 
---------------------------------------------------
-LATEST USER MESSAGE
---------------------------------------------------
+==================================================
+USER QUESTION
+==================================================
 
 ${latestUserMessage}
+
+==================================================
+INSTRUCTIONS
+==================================================
+
+Answer using the creator context.
+
+If context is missing,
+state that clearly.
+
+Provide actionable insights.
 `;
   };
 
@@ -117,38 +133,34 @@ const normalizeAIResponse =
 
       reply:
         aiResult?.reply ||
-
         "AI response unavailable.",
 
       provider:
         aiResult?.provider ||
-
         "unknown",
 
       modelUsed:
         aiResult?.modelUsed ||
-
         "unknown",
 
       latencyMs,
+
+      generatedAt:
+        new Date()
+          .toISOString(),
     };
   };
 
 /**
  * ---------------------------------------------------
- * Generate Analytics AI Response
+ * Generate AI Response
  * ---------------------------------------------------
- *
- * Main non-streaming AI execution flow.
  */
 
 export const generateAnalyticsResponse =
   async ({
-
-    analyticsContext,
-
-    historyMessages,
-
+    creatorContext,
+    historyMessages = [],
     latestUserMessage,
   }) => {
 
@@ -157,26 +169,26 @@ export const generateAnalyticsResponse =
 
     try {
 
+      logger.ai(
+        "AI request started"
+      );
+
       /**
-       * Build AI prompt
+       * Build Prompt
        */
 
       const finalPrompt =
         buildFinalPrompt({
 
-          analyticsContext,
+          creatorContext,
 
           historyMessages,
 
           latestUserMessage,
         });
 
-      logger.ai(
-        "Generating AI response"
-      );
-
       /**
-       * Execute AI orchestration
+       * Execute AI Request
        */
 
       const aiResult =
@@ -186,20 +198,13 @@ export const generateAnalyticsResponse =
             finalPrompt,
         });
 
-      /**
-       * Track latency
-       */
-
       const latencyMs =
         Date.now() -
         startTime;
 
       logger.success(
-
         "AI response generated",
-
         {
-
           provider:
             aiResult.provider,
 
@@ -210,25 +215,16 @@ export const generateAnalyticsResponse =
         }
       );
 
-      /**
-       * Normalized AI contract
-       */
-
       return normalizeAIResponse(
-
         aiResult,
-
         latencyMs
       );
 
     } catch (error) {
 
       logger.error(
-
         "AI generation failed",
-
         {
-
           message:
             error.message,
         }
@@ -240,60 +236,45 @@ export const generateAnalyticsResponse =
 
 /**
  * ---------------------------------------------------
- * Generate Streaming Analytics Response
+ * Generate Streaming Response
  * ---------------------------------------------------
- *
- * SSE streaming execution flow.
  */
 
 export const generateStreamingAnalyticsResponse =
   async ({
-
-    analyticsContext,
-
-    historyMessages,
-
+    creatorContext,
+    historyMessages = [],
     latestUserMessage,
   }) => {
 
     try {
 
-      /**
-       * Build AI prompt
-       */
+      logger.ai(
+        "Streaming AI request started"
+      );
 
       const finalPrompt =
         buildFinalPrompt({
 
-          analyticsContext,
+          creatorContext,
 
           historyMessages,
 
           latestUserMessage,
         });
 
-      logger.ai(
-        "Starting streaming AI response"
-      );
+      return await
+        generateStreamingAIResponse({
 
-      /**
-       * Start provider stream
-       */
-
-      return await generateStreamingAIResponse({
-
-        prompt:
-          finalPrompt,
-      });
+          prompt:
+            finalPrompt,
+        });
 
     } catch (error) {
 
       logger.error(
-
         "Streaming AI failed",
-
         {
-
           message:
             error.message,
         }

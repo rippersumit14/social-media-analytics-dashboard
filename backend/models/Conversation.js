@@ -2,124 +2,75 @@ import mongoose from "mongoose";
 
 /**
  * --------------------------------------------------
- * Attachment Schema
- * --------------------------------------------------
- */
-
-const attachmentSchema = new mongoose.Schema(
-  {
-    url: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-
-    publicId: {
-      type: String,
-      default: null,
-      trim: true,
-    },
-
-    mimeType: {
-      type: String,
-      default: null,
-    },
-
-    size: {
-      type: Number,
-      default: null,
-      min: 0,
-    },
-  },
-  {
-    _id: false,
-  }
-);
-
-/**
- * --------------------------------------------------
- * Message Schema
+ * Conversation Schema
  * --------------------------------------------------
  *
- * Stores:
- * - User Prompts
- * - AI Responses
- * - Attachments
- * - Token Usage
+ * Stores chat session metadata.
  *
+ * Messages are stored separately
+ * in Message collection.
  */
 
-const messageSchema = new mongoose.Schema(
-  {
-    /**
-     * Parent conversation
-     */
-    conversation: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Conversation",
-      required: true,
-      index: true,
-    },
+const conversationSchema =
+  new mongoose.Schema(
+    {
+      /**
+       * Conversation Owner
+       */
 
-    /**
-     * Message owner
-     */
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      index: true,
-    },
+      user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+        index: true,
+      },
 
-    /**
-     * Message role
-     */
-    role: {
-      type: String,
-      enum: ["user", "assistant", "system"],
-      required: true,
-      index: true,
-    },
+      /**
+       * Linked Instagram Account
+       */
 
-    /**
-     * Message content
-     */
-    content: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+      instagramAccount: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "InstagramAccount",
+        default: null,
+        index: true,
+      },
 
-    /**
-     * AI model used
-     */
-    model: {
-      type: String,
-      default: null,
-      trim: true,
-    },
+      /**
+       * Conversation Title
+       */
 
-    /**
-     * Token usage
-     */
-    tokensUsed: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
+      title: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 120,
+      },
 
-    /**
-     * Uploaded files
-     */
-    attachments: {
-      type: [attachmentSchema],
-      default: [],
+      /**
+       * Soft Delete / Archive
+       */
+
+      isArchived: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
+
+      /**
+       * Last Activity
+       */
+
+      lastMessageAt: {
+        type: Date,
+        default: Date.now,
+        index: true,
+      },
     },
-  },
-  {
-    timestamps: true,
-  }
-);
+    {
+      timestamps: true,
+    }
+  );
 
 /**
  * --------------------------------------------------
@@ -128,27 +79,21 @@ const messageSchema = new mongoose.Schema(
  */
 
 /**
- * Load conversation messages
+ * User Conversations
  */
-messageSchema.index({
-  conversation: 1,
-  createdAt: 1,
+
+conversationSchema.index({
+  user: 1,
+  updatedAt: -1,
 });
 
 /**
- * User message history
+ * User Active Conversations
  */
-messageSchema.index({
-  user: 1,
-  createdAt: -1,
-});
 
-/**
- * Ownership validation
- */
-messageSchema.index({
-  conversation: 1,
+conversationSchema.index({
   user: 1,
+  isArchived: 1,
 });
 
 /**
@@ -157,12 +102,15 @@ messageSchema.index({
  * --------------------------------------------------
  */
 
-messageSchema.set("toJSON", {
-  transform: (_, ret) => {
-    delete ret.__v;
-    return ret;
-  },
-});
+conversationSchema.set(
+  "toJSON",
+  {
+    transform: (_, ret) => {
+      delete ret.__v;
+      return ret;
+    },
+  }
+);
 
 /**
  * --------------------------------------------------
@@ -170,9 +118,10 @@ messageSchema.set("toJSON", {
  * --------------------------------------------------
  */
 
-const Message = mongoose.model(
-  "Message",
-  messageSchema
-);
+const Conversation =
+  mongoose.model(
+    "Conversation",
+    conversationSchema
+  );
 
-export default Message;
+export default Conversation;
