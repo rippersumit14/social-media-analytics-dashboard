@@ -1,11 +1,6 @@
-import asyncHandler
-  from "../middlewares/asyncHandler.js";
-
-import ApiResponse
-  from "../utils/ApiResponse.js";
-
-import AppError
-  from "../utils/AppError.js";
+import asyncHandler from "../middlewares/asyncHandler.js";
+import ApiResponse from "../utils/ApiResponse.js";
+import AppError from "../utils/AppError.js";
 
 import {
   createConversation,
@@ -31,15 +26,20 @@ import {
  */
 
 export const createConversationController =
-  asyncHandler(async (
-    req,
-    res
-  ) => {
+  asyncHandler(async (req, res) => {
 
     const {
       instagramAccountId,
       title,
     } = req.body;
+
+    if (!instagramAccountId) {
+
+      throw new AppError(
+        "Instagram account id is required",
+        400
+      );
+    }
 
     const conversation =
       await createConversation({
@@ -54,14 +54,19 @@ export const createConversationController =
 
     return res.status(201).json(
 
-      new ApiResponse(
-        true,
-        "Conversation created successfully",
+      new ApiResponse({
 
-        {
+        success: true,
+
+        statusCode: 201,
+
+        message:
+          "Conversation created successfully",
+
+        data: {
           conversation,
-        }
-      )
+        },
+      })
     );
   });
 
@@ -72,10 +77,7 @@ export const createConversationController =
  */
 
 export const getConversationsController =
-  asyncHandler(async (
-    req,
-    res
-  ) => {
+  asyncHandler(async (req, res) => {
 
     const conversations =
       await getUserConversations(
@@ -84,14 +86,19 @@ export const getConversationsController =
 
     return res.status(200).json(
 
-      new ApiResponse(
-        true,
-        "Conversations fetched successfully",
+      new ApiResponse({
 
-        {
+        success: true,
+
+        statusCode: 200,
+
+        message:
+          "Conversations fetched successfully",
+
+        data: {
           conversations,
-        }
-      )
+        },
+      })
     );
   });
 
@@ -102,10 +109,7 @@ export const getConversationsController =
  */
 
 export const getConversationMessagesController =
-  asyncHandler(async (
-    req,
-    res
-  ) => {
+  asyncHandler(async (req, res) => {
 
     const {
       conversationId,
@@ -125,14 +129,19 @@ export const getConversationMessagesController =
 
     return res.status(200).json(
 
-      new ApiResponse(
-        true,
-        "Messages fetched successfully",
+      new ApiResponse({
 
-        {
+        success: true,
+
+        statusCode: 200,
+
+        message:
+          "Messages fetched successfully",
+
+        data: {
           messages,
-        }
-      )
+        },
+      })
     );
   });
 
@@ -143,10 +152,7 @@ export const getConversationMessagesController =
  */
 
 export const chatWithAIController =
-  asyncHandler(async (
-    req,
-    res
-  ) => {
+  asyncHandler(async (req, res) => {
 
     const {
       conversationId,
@@ -156,9 +162,7 @@ export const chatWithAIController =
       message,
     } = req.body;
 
-    if (
-      !message?.trim()
-    ) {
+    if (!message?.trim()) {
 
       throw new AppError(
         "Message is required",
@@ -190,7 +194,7 @@ export const chatWithAIController =
     });
 
     /**
-     * Build AI Context
+     * Build Context
      */
 
     const [
@@ -248,21 +252,29 @@ export const chatWithAIController =
           aiResult.latencyMs,
       });
 
+    /**
+     * Update Conversation Activity
+     */
+
     await updateConversationActivity(
       conversationId
     );
 
     return res.status(200).json(
 
-      new ApiResponse(
-        true,
-        "AI response generated successfully",
+      new ApiResponse({
 
-        {
-          reply:
-            aiMessage,
-        }
-      )
+        success: true,
+
+        statusCode: 200,
+
+        message:
+          "AI response generated successfully",
+
+        data: {
+          reply: aiMessage,
+        },
+      })
     );
   });
 
@@ -273,10 +285,7 @@ export const chatWithAIController =
  */
 
 export const archiveConversationController =
-  asyncHandler(async (
-    req,
-    res
-  ) => {
+  asyncHandler(async (req, res) => {
 
     const {
       conversationId,
@@ -292,13 +301,18 @@ export const archiveConversationController =
 
     return res.status(200).json(
 
-      new ApiResponse(
-        true,
-        "Conversation archived successfully",
+      new ApiResponse({
 
-        {
+        success: true,
+
+        statusCode: 200,
+
+        message:
+          "Conversation archived successfully",
+
+        data: {
           conversation,
-        }
-      )
+        },
+      })
     );
   });
