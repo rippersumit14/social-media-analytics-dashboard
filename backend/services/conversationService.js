@@ -17,37 +17,106 @@ import AppError
   from "../utils/AppError.js";
 
 /**
- * Create conversation (core function)
+ * --------------------------------------------------
+ * Create Conversation
+ * --------------------------------------------------
+ *
+ * Creates a new chat session
+ * for a specific user.
  */
 
-export const createConversation = async({
+export const createConversation =
+  async ({
     userId,
     instagramAccountId,
     title,
-}) => {
-    return Conversation.create({
-        user: userId,
-        instagramAccount: instagramAccountId,
+  }) => {
 
-        title: title || "New Chat",
+    return Conversation.create({
+
+      user:
+        userId,
+
+      instagramAccount:
+        instagramAccountId,
+
+      title:
+        title || "New Chat",
     });
-};
+  };
 
 /**
+ * --------------------------------------------------
  * Get User Conversations
+ * --------------------------------------------------
+ *
+ * Returns active conversations
+ * sorted by latest activity.
  */
 
-export const getUserConversations = async (userId) => {
+export const getUserConversations =
+  async (
+    userId
+  ) => {
+
     return Conversation.find({
-        user: userId,
-        isArchived: false,
-    }).sort({
-        latestMessageAt: -1,
-    });
-};
+
+      user:
+        userId,
+
+      isArchived:
+        false,
+    })
+      .sort({
+
+        lastMessageAt:
+          -1,
+      })
+      .lean();
+  };
 
 /**
+ * --------------------------------------------------
+ * Get Conversation By Id
+ * --------------------------------------------------
+ *
+ * Ownership validation.
+ */
+
+export const getConversationById =
+  async (
+    conversationId,
+    userId
+  ) => {
+
+    const conversation =
+      await Conversation.findOne({
+
+        _id:
+          conversationId,
+
+        user:
+          userId,
+
+        isArchived:
+          false,
+      });
+
+    if (!conversation) {
+
+      throw new AppError(
+        "Conversation not found",
+        404
+      );
+    }
+
+    return conversation;
+  };
+
+/**
+ * --------------------------------------------------
  * Save User Message
+ * --------------------------------------------------
  */
 
 export const saveUserMessage =
@@ -75,9 +144,11 @@ export const saveUserMessage =
     });
   };
 
-  /**
-   * Save assistant Message
-   */
+/**
+ * --------------------------------------------------
+ * Save Assistant Message
+ * --------------------------------------------------
+ */
 
 export const saveAssistantMessage =
   async ({
@@ -114,7 +185,9 @@ export const saveAssistantMessage =
   };
 
 /**
+ * --------------------------------------------------
  * Get Conversation Messages
+ * --------------------------------------------------
  */
 
 export const getConversationMessages =
@@ -129,11 +202,17 @@ export const getConversationMessages =
     })
       .sort({
         createdAt: 1,
-      });
+      })
+      .lean();
   };
 
 /**
- * Build history Window
+ * --------------------------------------------------
+ * Build History Messages
+ * --------------------------------------------------
+ *
+ * Returns latest 20 messages
+ * for AI context.
  */
 
 export const buildHistoryMessages =
@@ -155,17 +234,24 @@ export const buildHistoryMessages =
 
     return messages
       .reverse()
-      .map((message) => ({
-        role:
-          message.role,
+      .map(
+        (message) => ({
+          role:
+            message.role,
 
-        content:
-          message.content,
-      }));
+          content:
+            message.content,
+        })
+      );
   };
 
 /**
- * Build creator context 
+ * --------------------------------------------------
+ * Build Creator Context
+ * --------------------------------------------------
+ *
+ * Builds analytics context
+ * for AI chat.
  */
 
 export const buildCreatorContext =
@@ -173,10 +259,54 @@ export const buildCreatorContext =
     instagramAccountId
   ) => {
 
-    const account =
-      await InstagramAccount.findById(
-        instagramAccountId
-      );
+    const [
+
+      account,
+
+      latestSnapshot,
+
+      latestScore,
+
+      insights,
+
+    ] = await Promise.all([
+
+      InstagramAccount
+        .findById(
+          instagramAccountId
+        )
+        .lean(),
+
+      AnalyticsSnapshot
+        .findOne({
+          instagramAccount:
+            instagramAccountId,
+        })
+        .sort({
+          createdAt: -1,
+        })
+        .lean(),
+
+      CreatorScore
+        .findOne({
+          instagramAccount:
+            instagramAccountId,
+        })
+        .sort({
+          createdAt: -1,
+        })
+        .lean(),
+
+      CreatorInsight
+        .find({
+          instagramAccount:
+            instagramAccountId,
+
+          isActive:
+            true,
+        })
+        .lean(),
+    ]);
 
     if (!account) {
 
@@ -186,37 +316,9 @@ export const buildCreatorContext =
       );
     }
 
-    const latestSnapshot =
-      await AnalyticsSnapshot
-        .findOne({
-          instagramAccount:
-            instagramAccountId,
-        })
-        .sort({
-          createdAt: -1,
-        });
-
-    const latestScore =
-      await CreatorScore
-        .findOne({
-          instagramAccount:
-            instagramAccountId,
-        })
-        .sort({
-          createdAt: -1,
-        });
-
-    const insights =
-      await CreatorInsight.find({
-        instagramAccount:
-          instagramAccountId,
-
-        isActive: true,
-      });
-
     return `
 Creator Username:
-${account.username}
+${account.username || "Unknown"}
 
 Followers:
 ${latestSnapshot?.followers || 0}
@@ -228,27 +330,68 @@ Creator Score:
 ${latestScore?.totalScore || 0}
 
 Insights:
-${insights
-  .map(
-    (insight) =>
-      `- ${insight.title}`
-  )
-  .join("\n")}
+${insights.length > 0
+  ? insights
+      .map(
+        (insight) =>
+          `- ${insight.title}`
+      )
+      .join("\n")
+  : "No active insights"}
 `;
   };
 
-
 /**
- * Update Conversation Activity 
+ * --------------------------------------------------
+ * Update Conversation Activity
+ * --------------------------------------------------
+ *
+ * Updates latest activity time.
  */
 
-export const updateConversationActivity = async(conversationId) => {
+export const updateConversationActivity =
+  async (
+    conversationId
+  ) => {
+
     await Conversation.findByIdAndUpdate(
+
+      conversationId,
+
+      {
+
+        lastMessageAt:
+          new Date(),
+      }
+    );
+  };
+
+/**
+ * --------------------------------------------------
+ * Archive Conversation
+ * --------------------------------------------------
+ *
+ * Soft delete.
+ */
+
+export const archiveConversation =
+  async (
+    conversationId,
+    userId
+  ) => {
+
+    const conversation =
+      await getConversationById(
+
         conversationId,
 
-        {
-            lastMessageAt:
-            new Date(),
-        }
-    );
-};
+        userId
+      );
+
+    conversation.isArchived =
+      true;
+
+    await conversation.save();
+
+    return conversation;
+  };    

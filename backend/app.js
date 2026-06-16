@@ -36,6 +36,8 @@ import dashboardRoutes from "./routes/dashboardRoutes.js";
 
 import recommendationRoutes from "./models/Recommendation.js";
 
+import conversationRoutes from "./routes/conversationRoutes.js";
+
 
 const app = express();
 
@@ -270,6 +272,10 @@ app.use(
    recommendationRoutes
 );
 
+app.use(
+  "/api/conversation",
+  conversationRoutes
+);
 
 
 /**

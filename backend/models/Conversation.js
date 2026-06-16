@@ -4,30 +4,17 @@ import mongoose from "mongoose";
  * --------------------------------------------------
  * Conversation Schema
  * --------------------------------------------------
- *
- * Stores chat session metadata.
- *
- * Messages are stored separately
- * in Message collection.
  */
 
 const conversationSchema =
   new mongoose.Schema(
     {
-      /**
-       * Conversation Owner
-       */
-
       user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
         required: true,
         index: true,
       },
-
-      /**
-       * Linked Instagram Account
-       */
 
       instagramAccount: {
         type: mongoose.Schema.Types.ObjectId,
@@ -36,10 +23,6 @@ const conversationSchema =
         index: true,
       },
 
-      /**
-       * Conversation Title
-       */
-
       title: {
         type: String,
         required: true,
@@ -47,19 +30,11 @@ const conversationSchema =
         maxlength: 120,
       },
 
-      /**
-       * Soft Delete / Archive
-       */
-
       isArchived: {
         type: Boolean,
         default: false,
         index: true,
       },
-
-      /**
-       * Last Activity
-       */
 
       lastMessageAt: {
         type: Date,
@@ -78,18 +53,10 @@ const conversationSchema =
  * --------------------------------------------------
  */
 
-/**
- * User Conversations
- */
-
 conversationSchema.index({
   user: 1,
   updatedAt: -1,
 });
-
-/**
- * User Active Conversations
- */
 
 conversationSchema.index({
   user: 1,
