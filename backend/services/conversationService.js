@@ -279,7 +279,7 @@ export const buildCreatorContext =
 
       AnalyticsSnapshot
         .findOne({
-          instagramAccount:
+          account:
             instagramAccountId,
         })
         .sort({
@@ -315,6 +315,25 @@ export const buildCreatorContext =
         404
       );
     }
+
+    /**
+     * Temp Debugging
+     */
+
+    console.log("\nACCOUNT:");
+    console.dir(account, { depth: null });
+    
+    console.log("\nLATEST SNAPSHOT:");
+    console.dir(latestSnapshot, { depth: null });
+    
+    console.log("\nLATEST SCORE:");
+    console.dir(latestScore, { depth: null });
+    
+    console.log("\nINSIGHTS:");
+    console.dir(insights, { depth: null });
+    
+
+
 
     return `
 Creator Username:
