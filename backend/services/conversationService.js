@@ -1,20 +1,10 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
-
-import InstagramAccount
-  from "../models/InstagramAccount.js";
-
-import AnalyticsSnapshot
-  from "../models/AnalyticsSnapshot.js";
-
-import CreatorScore
-  from "../models/CreatorScore.js";
-
-import CreatorInsight
-  from "../models/CreatorInsight.js";
-
-import AppError
-  from "../utils/AppError.js";
+import InstagramAccount from "../models/InstagramAccount.js";
+import AnalyticsSnapshot from "../models/AnalyticsSnapshot.js";
+import CreatorScore from "../models/CreatorScore.js";
+import CreatorInsight from "../models/CreatorInsight.js";
+import AppError from "../utils/AppError.js";
 
 /**
  * --------------------------------------------------
@@ -25,25 +15,17 @@ import AppError
  * for a specific user.
  */
 
-export const createConversation =
-  async ({
-    userId,
-    instagramAccountId,
-    title,
-  }) => {
-
-    return Conversation.create({
-
-      user:
-        userId,
-
-      instagramAccount:
-        instagramAccountId,
-
-      title:
-        title || "New Chat",
-    });
-  };
+export const createConversation = async ({
+  userId,
+  instagramAccountId,
+  title,
+}) => {
+  return Conversation.create({
+    user: userId,
+    instagramAccount: instagramAccountId,
+    title: title || "New Chat",
+  });
+};
 
 /**
  * --------------------------------------------------
@@ -54,26 +36,16 @@ export const createConversation =
  * sorted by latest activity.
  */
 
-export const getUserConversations =
-  async (
-    userId
-  ) => {
-
-    return Conversation.find({
-
-      user:
-        userId,
-
-      isArchived:
-        false,
+export const getUserConversations = async (userId) => {
+  return Conversation.find({
+    user: userId,
+    isArchived: false,
+  })
+    .sort({
+      lastMessageAt: -1,
     })
-      .sort({
-
-        lastMessageAt:
-          -1,
-      })
-      .lean();
-  };
+    .lean();
+};
 
 /**
  * --------------------------------------------------
@@ -83,35 +55,19 @@ export const getUserConversations =
  * Ownership validation.
  */
 
-export const getConversationById =
-  async (
-    conversationId,
-    userId
-  ) => {
+export const getConversationById = async (conversationId, userId) => {
+  const conversation = await Conversation.findOne({
+    _id: conversationId,
+    user: userId,
+    isArchived: false,
+  });
 
-    const conversation =
-      await Conversation.findOne({
+  if (!conversation) {
+    throw new AppError("Conversation not found", 404);
+  }
 
-        _id:
-          conversationId,
-
-        user:
-          userId,
-
-        isArchived:
-          false,
-      });
-
-    if (!conversation) {
-
-      throw new AppError(
-        "Conversation not found",
-        404
-      );
-    }
-
-    return conversation;
-  };
+  return conversation;
+};
 
 /**
  * --------------------------------------------------
@@ -119,30 +75,20 @@ export const getConversationById =
  * --------------------------------------------------
  */
 
-export const saveUserMessage =
-  async ({
-    conversationId,
-    userId,
+export const saveUserMessage = async ({
+  conversationId,
+  userId,
+  content,
+  attachments = [],
+}) => {
+  return Message.create({
+    conversation: conversationId,
+    user: userId,
+    role: "user",
     content,
-    attachments = [],
-  }) => {
-
-    return Message.create({
-
-      conversation:
-        conversationId,
-
-      user:
-        userId,
-
-      role:
-        "user",
-
-      content,
-
-      attachments,
-    });
-  };
+    attachments,
+  });
+};
 
 /**
  * --------------------------------------------------
@@ -150,39 +96,26 @@ export const saveUserMessage =
  * --------------------------------------------------
  */
 
-export const saveAssistantMessage =
-  async ({
-    conversationId,
-    userId,
+export const saveAssistantMessage = async ({
+  conversationId,
+  userId,
+  content,
+  provider,
+  model,
+  tokensUsed = 0,
+  latencyMs = 0,
+}) => {
+  return Message.create({
+    conversation: conversationId,
+    user: userId,
+    role: "assistant",
     content,
     provider,
     model,
-    tokensUsed = 0,
-    latencyMs = 0,
-  }) => {
-
-    return Message.create({
-
-      conversation:
-        conversationId,
-
-      user:
-        userId,
-
-      role:
-        "assistant",
-
-      content,
-
-      provider,
-
-      model,
-
-      tokensUsed,
-
-      latencyMs,
-    });
-  };
+    tokensUsed,
+    latencyMs,
+  });
+};
 
 /**
  * --------------------------------------------------
@@ -190,21 +123,15 @@ export const saveAssistantMessage =
  * --------------------------------------------------
  */
 
-export const getConversationMessages =
-  async (
-    conversationId
-  ) => {
-
-    return Message.find({
-
-      conversation:
-        conversationId,
+export const getConversationMessages = async (conversationId) => {
+  return Message.find({
+    conversation: conversationId,
+  })
+    .sort({
+      createdAt: 1,
     })
-      .sort({
-        createdAt: 1,
-      })
-      .lean();
-  };
+    .lean();
+};
 
 /**
  * --------------------------------------------------
@@ -215,35 +142,23 @@ export const getConversationMessages =
  * for AI context.
  */
 
-export const buildHistoryMessages =
-  async (
-    conversationId
-  ) => {
+export const buildHistoryMessages = async (conversationId) => {
+  const messages = await Message.find({
+    conversation: conversationId,
+  })
+    .sort({
+      createdAt: -1,
+    })
+    .limit(20)
+    .lean();
 
-    const messages =
-      await Message.find({
-
-        conversation:
-          conversationId,
-      })
-        .sort({
-          createdAt: -1,
-        })
-        .limit(20)
-        .lean();
-
-    return messages
-      .reverse()
-      .map(
-        (message) => ({
-          role:
-            message.role,
-
-          content:
-            message.content,
-        })
-      );
-  };
+  return messages
+    .reverse()
+    .map((message) => ({
+      role: message.role,
+      content: message.content,
+    }));
+};
 
 /**
  * --------------------------------------------------
@@ -254,111 +169,214 @@ export const buildHistoryMessages =
  * for AI chat.
  */
 
-export const buildCreatorContext =
-  async (
-    instagramAccountId
-  ) => {
+/**
+ * --------------------------------------------------
+ * Build Creator Context
+ * --------------------------------------------------
+ *
+ * Builds rich creator analytics context
+ * for AI chat responses.
+ */
 
-    const [
+export const buildCreatorContext = async (instagramAccountId) => {
+  const [account, latestSnapshot, latestScore, insights] = await Promise.all([
+    InstagramAccount.findById(instagramAccountId).lean(),
 
-      account,
+    AnalyticsSnapshot.findOne({
+      account: instagramAccountId,
+    })
+      .sort({
+        createdAt: -1,
+      })
+      .lean(),
 
-      latestSnapshot,
+    CreatorScore.findOne({
+      instagramAccount: instagramAccountId,
+    })
+      .sort({
+        createdAt: -1,
+      })
+      .lean(),
 
-      latestScore,
+    CreatorInsight.find({
+      instagramAccount: instagramAccountId,
+      isActive: true,
+    }).lean(),
+  ]);
 
-      insights,
+  /**
+   * Account validation
+   */
 
-    ] = await Promise.all([
+  if (!account) {
+    throw new AppError("Instagram account not found", 404);
+  }
 
-      InstagramAccount
-        .findById(
-          instagramAccountId
-        )
-        .lean(),
+  /**
+   * Build Active Insights Section
+   */
 
-      AnalyticsSnapshot
-        .findOne({
-          account:
-            instagramAccountId,
-        })
-        .sort({
-          createdAt: -1,
-        })
-        .lean(),
+  const insightsSection =
+    insights.length > 0
+      ? insights
+          .map(
+            (insight, index) => `
+Insight ${index + 1}
 
-      CreatorScore
-        .findOne({
-          instagramAccount:
-            instagramAccountId,
-        })
-        .sort({
-          createdAt: -1,
-        })
-        .lean(),
+Type:
+${insight.type}
 
-      CreatorInsight
-        .find({
-          instagramAccount:
-            instagramAccountId,
+Priority:
+${insight.priority}
 
-          isActive:
-            true,
-        })
-        .lean(),
-    ]);
+Title:
+${insight.title}
 
-    if (!account) {
+Description:
+${insight.description}
 
-      throw new AppError(
-        "Instagram account not found",
-        404
-      );
-    }
+Recommendation:
+${insight.recommendation || "No recommendation available"}
+`
+          )
+          .join("\n")
+      : "No active insights available.";
 
-    /**
-     * Temp Debugging
-     */
-
-    console.log("\nACCOUNT:");
-    console.dir(account, { depth: null });
-    
-    console.log("\nLATEST SNAPSHOT:");
-    console.dir(latestSnapshot, { depth: null });
-    
-    console.log("\nLATEST SCORE:");
-    console.dir(latestScore, { depth: null });
-    
-    console.log("\nINSIGHTS:");
-    console.dir(insights, { depth: null });
-    
-
-
-
-    return `
+  const context = `
 Creator Username:
 ${account.username || "Unknown"}
 
 Followers:
 ${latestSnapshot?.followers || 0}
 
-Engagement Rate:
-${latestSnapshot?.engagementRate || 0}
+Media Count:
+${latestSnapshot?.mediaCount || 0}
 
 Creator Score:
 ${latestScore?.totalScore || 0}
 
 Insights:
-${insights.length > 0
-  ? insights
-      .map(
-        (insight) =>
-          `- ${insight.title}`
-      )
-      .join("\n")
-  : "No active insights"}
+${
+  insights.length > 0
+    ? insights.map((insight) => `- ${insight.title}`).join("\n")
+    : "No active insights"
+}
 `;
-  };
+
+  console.log("\n========== CREATOR CONTEXT ==========");
+  console.log(context);
+  console.log("=====================================\n");
+
+  return context;
+
+  /**
+   * Return AI Context
+   */
+
+  return `
+==================================================
+CREATOR PROFILE
+==================================================
+
+Username:
+${account.username || "Unknown"}
+
+Account Type:
+${account.accountType || "Unknown"}
+
+==================================================
+ANALYTICS SNAPSHOT
+==================================================
+
+Followers:
+${latestSnapshot?.followers || 0}
+
+Following:
+${latestSnapshot?.following || 0}
+
+Posts:
+${latestSnapshot?.mediaCount || 0}
+
+Total Likes:
+${latestSnapshot?.totalLikes || 0}
+
+Total Comments:
+${latestSnapshot?.totalComments || 0}
+
+Total Engagement:
+${latestSnapshot?.totalEngagement || 0}
+
+Average Likes:
+${latestSnapshot?.averageLikes || 0}
+
+Average Comments:
+${latestSnapshot?.averageComments || 0}
+
+Average Engagement:
+${latestSnapshot?.averageEngagement || 0}
+
+==================================================
+GROWTH METRICS
+==================================================
+
+Follower Growth:
+${latestSnapshot?.followerGrowth || 0}
+
+Engagement Growth:
+${latestSnapshot?.engagementGrowth || 0}
+
+Media Growth:
+${latestSnapshot?.mediaGrowth || 0}
+
+==================================================
+CREATOR SCORE
+==================================================
+
+Overall Score:
+${latestScore?.totalScore || 0}
+
+Engagement Score:
+${latestScore?.engagementScore || 0}
+
+Growth Score:
+${latestScore?.growthScore || 0}
+
+Consistency Score:
+${latestScore?.consistencyScore || 0}
+
+Activity Score:
+${latestScore?.activityScore || 0}
+
+==================================================
+ACTIVE INSIGHTS
+==================================================
+
+${insightsSection}
+
+==================================================
+AI INSTRUCTIONS
+==================================================
+
+You are an Instagram Creator Growth Assistant.
+
+Use the analytics data, creator score,
+growth metrics, and active insights above.
+
+Always provide:
+
+1. Data-driven analysis
+2. Growth opportunities
+3. Actionable recommendations
+4. Content suggestions
+5. Engagement improvements
+
+Reference the creator score and insights
+whenever possible.
+
+Avoid generic advice when analytics data
+is available.
+`;
+};
 
 /**
  * --------------------------------------------------
@@ -368,22 +386,11 @@ ${insights.length > 0
  * Updates latest activity time.
  */
 
-export const updateConversationActivity =
-  async (
-    conversationId
-  ) => {
-
-    await Conversation.findByIdAndUpdate(
-
-      conversationId,
-
-      {
-
-        lastMessageAt:
-          new Date(),
-      }
-    );
-  };
+export const updateConversationActivity = async (conversationId) => {
+  await Conversation.findByIdAndUpdate(conversationId, {
+    lastMessageAt: new Date(),
+  });
+};
 
 /**
  * --------------------------------------------------
@@ -393,24 +400,12 @@ export const updateConversationActivity =
  * Soft delete.
  */
 
-export const archiveConversation =
-  async (
-    conversationId,
-    userId
-  ) => {
+export const archiveConversation = async (conversationId, userId) => {
+  const conversation = await getConversationById(conversationId, userId);
 
-    const conversation =
-      await getConversationById(
+  conversation.isArchived = true;
 
-        conversationId,
+  await conversation.save();
 
-        userId
-      );
-
-    conversation.isArchived =
-      true;
-
-    await conversation.save();
-
-    return conversation;
-  };    
+  return conversation;
+};

@@ -15,9 +15,7 @@ import {
   archiveConversation,
 } from "../services/conversationService.js";
 
-import {
-  generateAnalyticsResponse,
-} from "../services/aiService.js";
+import { generateAnalyticsResponse } from "../services/aiService.js";
 
 /**
  * --------------------------------------------------
@@ -25,50 +23,30 @@ import {
  * --------------------------------------------------
  */
 
-export const createConversationController =
-  asyncHandler(async (req, res) => {
+export const createConversationController = asyncHandler(async (req, res) => {
+  const { instagramAccountId, title } = req.body;
 
-    const {
-      instagramAccountId,
-      title,
-    } = req.body;
+  if (!instagramAccountId) {
+    throw new AppError("Instagram account id is required", 400);
+  }
 
-    if (!instagramAccountId) {
-
-      throw new AppError(
-        "Instagram account id is required",
-        400
-      );
-    }
-
-    const conversation =
-      await createConversation({
-
-        userId:
-          req.user._id,
-
-        instagramAccountId,
-
-        title,
-      });
-
-    return res.status(201).json(
-
-      new ApiResponse({
-
-        success: true,
-
-        statusCode: 201,
-
-        message:
-          "Conversation created successfully",
-
-        data: {
-          conversation,
-        },
-      })
-    );
+  const conversation = await createConversation({
+    userId: req.user._id,
+    instagramAccountId,
+    title,
   });
+
+  return res.status(201).json(
+    new ApiResponse({
+      success: true,
+      statusCode: 201,
+      message: "Conversation created successfully",
+      data: {
+        conversation,
+      },
+    })
+  );
+});
 
 /**
  * --------------------------------------------------
@@ -76,31 +54,20 @@ export const createConversationController =
  * --------------------------------------------------
  */
 
-export const getConversationsController =
-  asyncHandler(async (req, res) => {
+export const getConversationsController = asyncHandler(async (req, res) => {
+  const conversations = await getUserConversations(req.user._id);
 
-    const conversations =
-      await getUserConversations(
-        req.user._id
-      );
-
-    return res.status(200).json(
-
-      new ApiResponse({
-
-        success: true,
-
-        statusCode: 200,
-
-        message:
-          "Conversations fetched successfully",
-
-        data: {
-          conversations,
-        },
-      })
-    );
-  });
+  return res.status(200).json(
+    new ApiResponse({
+      success: true,
+      statusCode: 200,
+      message: "Conversations fetched successfully",
+      data: {
+        conversations,
+      },
+    })
+  );
+});
 
 /**
  * --------------------------------------------------
@@ -108,42 +75,24 @@ export const getConversationsController =
  * --------------------------------------------------
  */
 
-export const getConversationMessagesController =
-  asyncHandler(async (req, res) => {
+export const getConversationMessagesController = asyncHandler(async (req, res) => {
+  const { conversationId } = req.params;
 
-    const {
-      conversationId,
-    } = req.params;
+  await getConversationById(conversationId, req.user._id);
 
-    await getConversationById(
+  const messages = await getConversationMessages(conversationId);
 
-      conversationId,
-
-      req.user._id
-    );
-
-    const messages =
-      await getConversationMessages(
-        conversationId
-      );
-
-    return res.status(200).json(
-
-      new ApiResponse({
-
-        success: true,
-
-        statusCode: 200,
-
-        message:
-          "Messages fetched successfully",
-
-        data: {
-          messages,
-        },
-      })
-    );
-  });
+  return res.status(200).json(
+    new ApiResponse({
+      success: true,
+      statusCode: 200,
+      message: "Messages fetched successfully",
+      data: {
+        messages,
+      },
+    })
+  );
+});
 
 /**
  * --------------------------------------------------
@@ -151,132 +100,78 @@ export const getConversationMessagesController =
  * --------------------------------------------------
  */
 
-export const chatWithAIController =
-  asyncHandler(async (req, res) => {
+export const chatWithAIController = asyncHandler(async (req, res) => {
+  const { conversationId } = req.params;
+  const { message } = req.body;
 
-    const {
-      conversationId,
-    } = req.params;
+  if (!message?.trim()) {
+    throw new AppError("Message is required", 400);
+  }
 
-    const {
-      message,
-    } = req.body;
+  const conversation = await getConversationById(conversationId, req.user._id);
 
-    if (!message?.trim()) {
+  /**
+   * Save User Message
+   */
 
-      throw new AppError(
-        "Message is required",
-        400
-      );
-    }
-
-    const conversation =
-      await getConversationById(
-
-        conversationId,
-
-        req.user._id
-      );
-
-    /**
-     * Save User Message
-     */
-
-    await saveUserMessage({
-
-      conversationId,
-
-      userId:
-        req.user._id,
-
-      content:
-        message,
-    });
-
-    /**
-     * Build Context
-     */
-
-    const [
-      historyMessages,
-      creatorContext,
-    ] = await Promise.all([
-
-      buildHistoryMessages(
-        conversationId
-      ),
-
-      buildCreatorContext(
-        conversation.instagramAccount
-      ),
-    ]);
-
-    /**
-     * Generate AI Response
-     */
-
-    const aiResult =
-      await generateAnalyticsResponse({
-
-        analyticsContext:
-          creatorContext,
-
-        historyMessages,
-
-        latestUserMessage:
-          message,
-      });
-
-    /**
-     * Save Assistant Message
-     */
-
-    const aiMessage =
-      await saveAssistantMessage({
-
-        conversationId,
-
-        userId:
-          req.user._id,
-
-        content:
-          aiResult.reply,
-
-        provider:
-          aiResult.provider,
-
-        model:
-          aiResult.modelUsed,
-
-        latencyMs:
-          aiResult.latencyMs,
-      });
-
-    /**
-     * Update Conversation Activity
-     */
-
-    await updateConversationActivity(
-      conversationId
-    );
-
-    return res.status(200).json(
-
-      new ApiResponse({
-
-        success: true,
-
-        statusCode: 200,
-
-        message:
-          "AI response generated successfully",
-
-        data: {
-          reply: aiMessage,
-        },
-      })
-    );
+  await saveUserMessage({
+    conversationId,
+    userId: req.user._id,
+    content: message,
   });
+
+  /**
+   * Build Context
+   */
+
+  const [historyMessages, creatorContext] = await Promise.all([
+    buildHistoryMessages(conversationId),
+    buildCreatorContext(conversation.instagramAccount),
+  ]);
+
+  console.log("\nCREATOR CONTEXT RECEIVED:");
+  console.log(creatorContext);
+
+  /**
+   * Generate AI Response
+   */
+
+  const aiResult = await generateAnalyticsResponse({
+    analyticsContext: creatorContext,
+    historyMessages,
+    latestUserMessage: message,
+  });
+
+  /**
+   * Save Assistant Message
+   */
+
+  const aiMessage = await saveAssistantMessage({
+    conversationId,
+    userId: req.user._id,
+    content: aiResult.reply,
+    provider: aiResult.provider,
+    model: aiResult.modelUsed,
+    latencyMs: aiResult.latencyMs,
+  });
+
+  /**
+   * Update Conversation Activity
+   */
+
+  await updateConversationActivity(conversationId);
+
+  return res.status(200).json(
+    new ApiResponse({
+      success: true,
+      statusCode: 200,
+      message: "AI response generated successfully",
+      data: {
+        reply: aiMessage,
+      },
+    })
+  );
+});
 
 /**
  * --------------------------------------------------
@@ -284,35 +179,19 @@ export const chatWithAIController =
  * --------------------------------------------------
  */
 
-export const archiveConversationController =
-  asyncHandler(async (req, res) => {
+export const archiveConversationController = asyncHandler(async (req, res) => {
+  const { conversationId } = req.params;
 
-    const {
-      conversationId,
-    } = req.params;
+  const conversation = await archiveConversation(conversationId, req.user._id);
 
-    const conversation =
-      await archiveConversation(
-
-        conversationId,
-
-        req.user._id
-      );
-
-    return res.status(200).json(
-
-      new ApiResponse({
-
-        success: true,
-
-        statusCode: 200,
-
-        message:
-          "Conversation archived successfully",
-
-        data: {
-          conversation,
-        },
-      })
-    );
-  });
+  return res.status(200).json(
+    new ApiResponse({
+      success: true,
+      statusCode: 200,
+      message: "Conversation archived successfully",
+      data: {
+        conversation,
+      },
+    })
+  );
+});
