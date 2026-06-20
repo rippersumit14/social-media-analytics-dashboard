@@ -36,6 +36,16 @@ const conversationSchema =
         index: true,
       },
 
+      //Soft delete
+      //Conversations are never permanently removed
+      //Allows Restore functionality
+
+      isDeleted: {
+        type: Boolean,
+        default: false,
+        index: true,
+      },
+
       lastMessageAt: {
         type: Date,
         default: Date.now,

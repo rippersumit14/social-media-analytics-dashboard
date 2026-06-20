@@ -16,6 +16,14 @@ import {
 
   archiveConversationController,
 
+  renameConversationController,
+
+  deleteConversationController,
+
+  restoreConversationController,
+
+  
+
 } from "../controllers/conversationController.js";
 
 const router =
@@ -74,5 +82,49 @@ router.patch(
   protect,
   archiveConversationController
 );
+
+
+/**
+ * --------------------------------------------------
+ * Rename Conversation
+ * --------------------------------------------------
+ *
+ * PATCH /api/conversation/:conversationId
+ */
+
+router.patch(
+  "/:conversationId",
+  protect,
+  renameConversationController
+);
+
+/**
+ * --------------------------------------------------
+ * Delete Conversation
+ * --------------------------------------------------
+ *
+ * Soft delete.
+ */
+
+router.delete(
+  "/:conversationId",
+  protect,
+  deleteConversationController
+);
+
+/**
+ * --------------------------------------------------
+ * Restore Conversation
+ * --------------------------------------------------
+ */
+
+router.patch(
+  "/:conversationId/restore",
+  protect,
+  restoreConversationController
+);
+
+
+
 
 export default router;

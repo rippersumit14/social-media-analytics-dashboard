@@ -40,6 +40,7 @@ export const getUserConversations = async (userId) => {
   return Conversation.find({
     user: userId,
     isArchived: false,
+    isDeleted: false,
   })
     .sort({
       lastMessageAt: -1,
@@ -60,6 +61,7 @@ export const getConversationById = async (conversationId, userId) => {
     _id: conversationId,
     user: userId,
     isArchived: false,
+    isDeleted: false,
   });
 
   if (!conversation) {
@@ -268,114 +270,6 @@ ${
   console.log("=====================================\n");
 
   return context;
-
-  /**
-   * Return AI Context
-   */
-
-  return `
-==================================================
-CREATOR PROFILE
-==================================================
-
-Username:
-${account.username || "Unknown"}
-
-Account Type:
-${account.accountType || "Unknown"}
-
-==================================================
-ANALYTICS SNAPSHOT
-==================================================
-
-Followers:
-${latestSnapshot?.followers || 0}
-
-Following:
-${latestSnapshot?.following || 0}
-
-Posts:
-${latestSnapshot?.mediaCount || 0}
-
-Total Likes:
-${latestSnapshot?.totalLikes || 0}
-
-Total Comments:
-${latestSnapshot?.totalComments || 0}
-
-Total Engagement:
-${latestSnapshot?.totalEngagement || 0}
-
-Average Likes:
-${latestSnapshot?.averageLikes || 0}
-
-Average Comments:
-${latestSnapshot?.averageComments || 0}
-
-Average Engagement:
-${latestSnapshot?.averageEngagement || 0}
-
-==================================================
-GROWTH METRICS
-==================================================
-
-Follower Growth:
-${latestSnapshot?.followerGrowth || 0}
-
-Engagement Growth:
-${latestSnapshot?.engagementGrowth || 0}
-
-Media Growth:
-${latestSnapshot?.mediaGrowth || 0}
-
-==================================================
-CREATOR SCORE
-==================================================
-
-Overall Score:
-${latestScore?.totalScore || 0}
-
-Engagement Score:
-${latestScore?.engagementScore || 0}
-
-Growth Score:
-${latestScore?.growthScore || 0}
-
-Consistency Score:
-${latestScore?.consistencyScore || 0}
-
-Activity Score:
-${latestScore?.activityScore || 0}
-
-==================================================
-ACTIVE INSIGHTS
-==================================================
-
-${insightsSection}
-
-==================================================
-AI INSTRUCTIONS
-==================================================
-
-You are an Instagram Creator Growth Assistant.
-
-Use the analytics data, creator score,
-growth metrics, and active insights above.
-
-Always provide:
-
-1. Data-driven analysis
-2. Growth opportunities
-3. Actionable recommendations
-4. Content suggestions
-5. Engagement improvements
-
-Reference the creator score and insights
-whenever possible.
-
-Avoid generic advice when analytics data
-is available.
-`;
 };
 
 /**
@@ -409,3 +303,163 @@ export const archiveConversation = async (conversationId, userId) => {
 
   return conversation;
 };
+
+
+/**
+ * --------------------------------------------------
+ * Rename Conversation
+ * --------------------------------------------------
+ *
+ * Allows user to rename
+ * a conversation.
+ */
+
+export const renameConversation =
+  async ({
+
+    conversationId,
+
+    userId,
+
+    title,
+  }) => {
+
+    if (!title?.trim()) {
+
+      throw new AppError(
+        "Conversation title is required",
+        400
+      );
+    }
+
+    const conversation =
+      await Conversation.findById(
+        conversationId
+      );
+
+    if (!conversation) {
+
+      throw new AppError(
+        "Conversation not found",
+        404
+      );
+    }
+
+    if (
+      conversation.user.toString() !==
+      userId.toString()
+    ) {
+
+      throw new AppError(
+        "Not authorized to modify this conversation",
+        403
+      );
+    }
+
+    conversation.title =
+      title.trim();
+
+    await conversation.save();
+
+    return conversation;
+  };
+
+/**
+ * --------------------------------------------------
+ * Delete Conversation
+ * --------------------------------------------------
+ *
+ * Soft delete.
+ */
+
+export const deleteConversation =
+  async ({
+
+    conversationId,
+
+    userId,
+  }) => {
+
+    const conversation =
+      await Conversation.findById(
+        conversationId
+      );
+
+    if (!conversation) {
+
+      throw new AppError(
+        "Conversation not found",
+        404
+      );
+    }
+
+    if (
+      conversation.user.toString() !==
+      userId.toString()
+    ) {
+
+      throw new AppError(
+        "Not authorized to delete this conversation",
+        403
+      );
+    }
+
+    conversation.isDeleted =
+      true;
+
+    await conversation.save();
+
+    return conversation;
+  };
+
+
+
+  /**
+ * --------------------------------------------------
+ * Restore Conversation
+ * --------------------------------------------------
+ *
+ * Restores a deleted
+ * conversation.
+ */
+
+export const restoreConversation =
+  async ({
+
+    conversationId,
+
+    userId,
+  }) => {
+
+    const conversation =
+      await Conversation.findById(
+        conversationId
+      );
+
+    if (!conversation) {
+
+      throw new AppError(
+        "Conversation not found",
+        404
+      );
+    }
+
+    if (
+      conversation.user.toString() !==
+      userId.toString()
+    ) {
+
+      throw new AppError(
+        "Not authorized to restore this conversation",
+        403
+      );
+    }
+
+    conversation.isDeleted =
+      false;
+
+    await conversation.save();
+
+    return conversation;
+  };
+

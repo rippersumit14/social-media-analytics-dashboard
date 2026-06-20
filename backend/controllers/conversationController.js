@@ -13,6 +13,9 @@ import {
   buildCreatorContext,
   updateConversationActivity,
   archiveConversation,
+  renameConversation,
+  deleteConversation,
+  restoreConversation,
 } from "../services/conversationService.js";
 
 import { generateAnalyticsResponse } from "../services/aiService.js";
@@ -195,3 +198,128 @@ export const archiveConversationController = asyncHandler(async (req, res) => {
     })
   );
 });
+
+/**
+ * --------------------------------------------------
+ * Rename Conversation
+ * --------------------------------------------------
+ */
+
+export const renameConversationController =
+  asyncHandler(async (req, res) => {
+
+    const { conversationId } =
+      req.params;
+
+    const { title } =
+      req.body;
+
+    const conversation =
+      await renameConversation({
+
+        conversationId,
+
+        userId:
+          req.user._id,
+
+        title,
+      });
+
+    return res.status(200).json(
+
+      new ApiResponse({
+
+        success: true,
+
+        statusCode: 200,
+
+        message:
+          "Conversation renamed successfully",
+
+        data: {
+          conversation,
+        },
+      })
+    );
+  });
+
+  /**
+ * --------------------------------------------------
+ * Delete Conversation
+ * --------------------------------------------------
+ *
+ * Soft delete.
+ */
+
+export const deleteConversationController =
+  asyncHandler(async (req, res) => {
+
+    const { conversationId } =
+      req.params;
+
+    const conversation =
+      await deleteConversation({
+
+        conversationId,
+
+        userId:
+          req.user._id,
+      });
+
+    return res.status(200).json(
+
+      new ApiResponse({
+
+        success: true,
+
+        statusCode: 200,
+
+        message:
+          "Conversation deleted successfully",
+
+        data: {
+          conversation,
+        },
+      })
+    );
+  });
+
+
+  /**
+ * --------------------------------------------------
+ * Restore Conversation
+ * --------------------------------------------------
+ */
+
+export const restoreConversationController =
+  asyncHandler(async (req, res) => {
+
+    const { conversationId } =
+      req.params;
+
+    const conversation =
+      await restoreConversation({
+
+        conversationId,
+
+        userId:
+          req.user._id,
+      });
+
+    return res.status(200).json(
+
+      new ApiResponse({
+
+        success: true,
+
+        statusCode: 200,
+
+        message:
+          "Conversation restored successfully",
+
+        data: {
+          conversation,
+        },
+      })
+    );
+  });
