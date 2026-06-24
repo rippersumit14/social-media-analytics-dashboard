@@ -36,9 +36,7 @@ import validateEnv from "./config/validateEnv.js";
  * --------------------------------------------------
  */
 
-import {
-  verifyMailConnection,
-} from "./config/mail.js";
+import { verifyMailConnection } from "./config/mail.js";
 
 /**
  * --------------------------------------------------
@@ -54,8 +52,7 @@ import redis from "./config/redis.js";
  * --------------------------------------------------
  */
 
-import startAutomationRunner
-  from "./jobs/automationRunner.js";
+import startAutomationRunner from "./jobs/automationRunner.js";
 
 /**
  * --------------------------------------------------
@@ -71,8 +68,7 @@ import logger from "./utils/logger.js";
  * --------------------------------------------------
  */
 
-const PORT =
-  process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000;
 
 let server;
 
@@ -82,104 +78,65 @@ let server;
  * --------------------------------------------------
  */
 
-const startServer =
-  async () => {
+const startServer = async () => {
+  try {
+    const startedAt = Date.now();
 
-    try {
+    /**
+     * Validate Environment Variables
+     */
+    validateEnv();
 
-      const startedAt =
-        Date.now();
+    /**
+     * Connect MongoDB
+     */
+    await connectDB();
 
-      /**
-       * ----------------------------------------------
-       * Validate Environment Variables
-       * ----------------------------------------------
-       */
+    /**
+     * Verify SMTP Connection
+     */
+    await verifyMailConnection();
 
-      validateEnv();
+    /**
+     * Verify Redis Connection
+     */
+    await redis.ping();
 
-      /**
-       * ----------------------------------------------
-       * Connect MongoDB
-       * ----------------------------------------------
-       */
+    /**
+     * Start Express Server
+     */
+    server = app.listen(PORT, () => {
+      logger.info("Backend server started successfully", {
+        port: PORT,
+        environment: process.env.NODE_ENV,
+        startupTimeMs: Date.now() - startedAt,
+        nodeVersion: process.version,
+      });
 
-      await connectDB();
+      startAutomationRunner();
 
-      /**
-       * ----------------------------------------------
-       * Verify SMTP Connection
-       * ----------------------------------------------
-       */
+      logger.info("Automation scheduler initialized successfully");
+    });
 
-      await verifyMailConnection();
+    /**
+     * Fix 3 — SSE timeout settings.
+     * Without these, long-lived SSE connections get cut off by Node's
+     * default keep-alive timeout before streaming finishes.
+     * Set outside the listen() callback so they apply immediately
+     * after the server instance is created.
+     */
+    server.keepAliveTimeout = 65000;
+    server.headersTimeout = 66000;
 
-      /**
-       * ----------------------------------------------
-       * Verify Redis Connection
-       * ----------------------------------------------
-       */
+  } catch (error) {
+    logger.error("Server startup failed", {
+      message: error.message,
+      stack: error.stack,
+    });
 
-      await redis.ping();
-
-      /**
-       * ----------------------------------------------
-       * Start Express Server
-       * ----------------------------------------------
-       */
-
-      server =
-        app.listen(
-          PORT,
-          () => {
-
-            logger.info(
-              "Backend server started successfully",
-              {
-                port: PORT,
-
-                environment:
-                  process.env.NODE_ENV,
-
-                startupTimeMs:
-                  Date.now() -
-                  startedAt,
-
-                nodeVersion:
-                  process.version,
-              }
-            );
-
-            /**
-             * ------------------------------------------
-             * Start Automation Scheduler
-             * ------------------------------------------
-             */
-
-            startAutomationRunner();
-
-            logger.info(
-              "Automation scheduler initialized successfully"
-            );
-          }
-        );
-
-    } catch (error) {
-
-      logger.error(
-        "Server startup failed",
-        {
-          message:
-            error.message,
-
-          stack:
-            error.stack,
-        }
-      );
-
-      process.exit(1);
-    }
-  };
+    process.exit(1);
+  }
+};
 
 /**
  * --------------------------------------------------
@@ -187,45 +144,41 @@ const startServer =
  * --------------------------------------------------
  */
 
-const gracefulShutdown =
-  async (signal) => {
+const gracefulShutdown = async (signal) => {
+  logger.warn("Graceful shutdown initiated", { signal });
 
-    logger.warn(
-      "Graceful shutdown initiated",
-      {
-        signal,
-      }
-    );
+  try {
+    if (server) {
+      server.close(async () => {
+        logger.info("HTTP server closed successfully");
 
-    try {
-
-      if (server) {
-
-        server.close(
-          () => {
-
-            logger.info(
-              "HTTP server closed successfully"
-            );
-
-            process.exit(0);
-          }
-        );
-      }
-
-    } catch (error) {
-
-      logger.error(
-        "Graceful shutdown failed",
-        {
-          message:
-            error.message,
+        try {
+          await redis.quit();
+          logger.info("Redis connection closed");
+        } catch (redisError) {
+          logger.error("Error closing Redis connection", {
+            message: redisError.message,
+          });
         }
-      );
 
-      process.exit(1);
+        process.exit(0);
+      });
+    } else {
+      /**
+       * Fix 4 — Handle edge case where SIGTERM arrives before the server
+       * instance is created (e.g. startup fails mid-way).
+       * Without this else branch, shutdown would hang indefinitely.
+       */
+      process.exit(0);
     }
-  };
+  } catch (error) {
+    logger.error("Graceful shutdown failed", {
+      message: error.message,
+    });
+
+    process.exit(1);
+  }
+};
 
 /**
  * --------------------------------------------------
@@ -233,55 +186,24 @@ const gracefulShutdown =
  * --------------------------------------------------
  */
 
-process.on(
-  "unhandledRejection",
-  (reason) => {
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled Promise Rejection", {
+    reason: reason?.message || reason,
+  });
+});
 
-    logger.error(
-      "Unhandled Promise Rejection",
-      {
-        reason:
-          reason?.message ||
-          reason,
-      }
-    );
-  }
-);
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught Exception", {
+    message: error.message,
+    stack: error.stack,
+  });
 
-process.on(
-  "uncaughtException",
-  (error) => {
+  process.exit(1);
+});
 
-    logger.error(
-      "Uncaught Exception",
-      {
-        message:
-          error.message,
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-        stack:
-          error.stack,
-      }
-    );
-
-    process.exit(1);
-  }
-);
-
-process.on(
-  "SIGINT",
-  () =>
-    gracefulShutdown(
-      "SIGINT"
-    )
-);
-
-process.on(
-  "SIGTERM",
-  () =>
-    gracefulShutdown(
-      "SIGTERM"
-    )
-);
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 /**
  * --------------------------------------------------

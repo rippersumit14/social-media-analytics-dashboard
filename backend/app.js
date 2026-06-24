@@ -34,10 +34,15 @@ import creatorInsightsRoutes from "./routes/creatorInsightsRoutes.js";
 
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 
-import recommendationRoutes from "./models/Recommendation.js";
+/**
+ * Fix 1 — was importing from ./models/Recommendation.js (a model, not a route).
+ * Corrected to the actual route file.
+ */
+import recommendationRoutes from "./routes/recommendationRoutes.js";
 
 import conversationRoutes from "./routes/conversationRoutes.js";
 
+import personalNoteRoutes from "./routes/personalNoteRoutes.js";
 
 const app = express();
 
@@ -46,56 +51,34 @@ const app = express();
  * Temporary Meta Connectivity Test
  * --------------------------------------------------
  *
- * Remove after development.
+ * Remove before deployment — along with the axios import above.
  */
 
-app.get(
-  "/meta-test",
-  async (req, res) => {
-    try {
-      const response =
-        await axios.get(
-          "https://graph.facebook.com/v25.0/oauth/access_token",
-          {
-            params: {
-              client_id:
-                process.env.META_APP_ID,
+app.get("/meta-test", async (req, res) => {
+  try {
+    const response = await axios.get(
+      "https://graph.facebook.com/v25.0/oauth/access_token",
+      {
+        params: {
+          client_id: process.env.META_APP_ID,
+          client_secret: process.env.META_APP_SECRET,
+          grant_type: "client_credentials",
+        },
+      }
+    );
 
-              client_secret:
-                process.env.META_APP_SECRET,
+    return res.status(200).json(response.data);
+  } catch (error) {
+    console.error("\nMETA TEST ERROR");
+    console.dir(error.response?.data, { depth: null });
 
-              grant_type:
-                "client_credentials",
-            },
-          }
-        );
-
-      return res.status(200).json(
-        response.data
-      );
-
-    } catch (error) {
-
-      console.error(
-        "\nMETA TEST ERROR"
-      );
-
-      console.dir(
-        error.response?.data,
-        {
-          depth: null,
-        }
-      );
-
-      return res.status(500).json(
-        error.response?.data || {
-          message:
-            error.message,
-        }
-      );
-    }
+    return res.status(500).json(
+      error.response?.data || {
+        message: error.message,
+      }
+    );
   }
-);
+});
 
 /**
  * --------------------------------------------------
@@ -103,21 +86,20 @@ app.get(
  * --------------------------------------------------
  */
 
-app.disable(
-  "x-powered-by"
-);
+app.disable("x-powered-by");
 
-app.use(
-  helmetConfig
-);
+app.use(helmetConfig);
 
-app.use(
-  corsConfig
-);
+app.use(corsConfig);
 
-app.use(
-  globalRateLimiter
-);
+/**
+ * Fix 2 — requestLogger moved before globalRateLimiter.
+ * Previously rate-limited requests were never logged at all.
+ * Now every request is logged regardless of whether it gets blocked.
+ */
+app.use(requestLogger);
+
+app.use(globalRateLimiter);
 
 /**
  * --------------------------------------------------
@@ -127,27 +109,15 @@ app.use(
 
 app.use(
   express.json({
-    limit:
-      JSON_PAYLOAD_LIMIT,
+    limit: JSON_PAYLOAD_LIMIT,
   })
 );
 
 app.use(
   express.urlencoded({
     extended: true,
-    limit:
-      URL_ENCODED_LIMIT,
+    limit: URL_ENCODED_LIMIT,
   })
-);
-
-/**
- * --------------------------------------------------
- * Request Logging
- * --------------------------------------------------
- */
-
-app.use(
-  requestLogger
 );
 
 /**
@@ -156,18 +126,12 @@ app.use(
  * --------------------------------------------------
  */
 
-app.get(
-  "/",
-  (req, res) => {
-
-    return res.status(200).json({
-      success: true,
-
-      message:
-        "Creator Growth Software API is running",
-    });
-  }
-);
+app.get("/", (req, res) => {
+  return res.status(200).json({
+    success: true,
+    message: "Creator Growth Software API is running",
+  });
+});
 
 /**
  * --------------------------------------------------
@@ -175,26 +139,15 @@ app.get(
  * --------------------------------------------------
  */
 
-app.get(
-  "/api/health",
-  (req, res) => {
-
-    return res.status(200).json({
-      success: true,
-
-      status: "OK",
-
-      environment:
-        process.env.NODE_ENV,
-
-      uptime:
-        process.uptime(),
-
-      timestamp:
-        new Date().toISOString(),
-    });
-  }
-);
+app.get("/api/health", (req, res) => {
+  return res.status(200).json({
+    success: true,
+    status: "OK",
+    environment: process.env.NODE_ENV,
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
 
 /**
  * --------------------------------------------------
@@ -205,78 +158,52 @@ app.get(
 /**
  * Authentication
  */
-
-app.use(
-  "/api/auth",
-  authRoutes
-);
+app.use("/api/auth", authRoutes);
 
 /**
  * Instagram OAuth
  */
+app.use("/api/instagram", instagramRoutes);
 
-app.use(
-  "/api/instagram",
-  instagramRoutes
-);
-
-//Instgram Analytics Routes
-app.use(
-  "/api/instagram/analytics",
-  instagramAnalyticsRoutes
-);
-
+/**
+ * Instagram Analytics
+ */
+app.use("/api/instagram/analytics", instagramAnalyticsRoutes);
 
 /**
  * Instagram Media Sync
  */
-
-app.use(
-  "/api/instagram/media",
-  instagramMediaRoutes
-);
+app.use("/api/instagram/media", instagramMediaRoutes);
 
 /**
- * Creator score engine
+ * Creator Score Engine
  */
-
-app.use(
-  "/api/creator-score",
-  CreatorScoreRoutes
-);
+app.use("/api/creator-score", CreatorScoreRoutes);
 
 /**
  * Dashboard
  */
-
-app.use(
-  "/api/dashboard",
-  dashboardRoutes
-);
+app.use("/api/dashboard", dashboardRoutes);
 
 /**
  * Creator Insights Engine
  */
-
-app.use(
-  "/api/creator-insights",
-  creatorInsightsRoutes
-);
+app.use("/api/creator-insights", creatorInsightsRoutes);
 
 /**
  * Recommendation Engine
  */
+app.use("/api/recommendations", recommendationRoutes);
 
-app.use(
-  "/api/recommendations",
-   recommendationRoutes
-);
+/**
+ * Conversation
+ */
+app.use("/api/conversation", conversationRoutes);
 
-app.use(
-  "/api/conversation",
-  conversationRoutes
-);
-
+/**
+ * Personal Notes
+ */
+app.use("/api/notes", personalNoteRoutes);
 
 /**
  * --------------------------------------------------
@@ -284,17 +211,13 @@ app.use(
  * --------------------------------------------------
  */
 
-app.use(
-  (req, res) => {
-
-    return res.status(404).json({
-      success: false,
-
-      message:
-        "Route not found",
-    });
-  }
-);
+app.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    statusCode: 404,
+    message: "Route not found",
+  });
+});
 
 /**
  * --------------------------------------------------
@@ -302,9 +225,7 @@ app.use(
  * --------------------------------------------------
  */
 
-app.use(
-  errorMiddleware
-);
+app.use(errorMiddleware);
 
 /**
  * --------------------------------------------------
@@ -312,8 +233,6 @@ app.use(
  * --------------------------------------------------
  */
 
-logger.info(
-  "Express application initialized"
-);
+logger.info("Express application initialized");
 
 export default app;

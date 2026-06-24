@@ -22,6 +22,8 @@ import {
 
   restoreConversationController,
 
+  streamChatWithAIController,
+
   
 
 } from "../controllers/conversationController.js";
@@ -69,6 +71,14 @@ router.post(
   "/:conversationId/chat",
   protect,
   chatWithAIController
+);
+
+//Streaming
+
+router.post(
+  "/:conversationId/chat/stream",
+  protect,
+  streamChatWithAIController
 );
 
 /**
