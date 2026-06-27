@@ -34,6 +34,8 @@ import {
  * the User model's pre-save hook.
  */
 
+import EmailVerificationOTP from "../../models/EmailVerificationOTP.js";
+
 export const createTestUser = async (
   overrides = {}
 ) => {
@@ -54,5 +56,42 @@ export const createTestUser = async (
     await User.create(defaultUser);
 
   return user;
+
+};
+
+
+/**
+ * --------------------------------------------------
+ * Create Test Email Verification OTP
+ * --------------------------------------------------
+ */
+
+export const createTestOTP = async (
+  overrides = {}
+) => {
+
+  const user = overrides.user
+    ? { _id: overrides.user }
+    : await createTestUser();
+
+  const defaultOTP = {
+
+    user: user._id,
+
+    email: user.email,
+
+    otp: "123456",
+
+    expiresAt: new Date(
+      Date.now() + 10 * 60 * 1000
+    ),
+
+    ...overrides,
+
+  };
+
+  return EmailVerificationOTP.create(
+    defaultOTP
+  );
 
 };
