@@ -3,75 +3,51 @@
  * Global Jest Setup
  * --------------------------------------------------
  *
- * This file is automatically executed
- * before the test suite starts.
- *
  * Responsibilities:
  *
- * • Connect Test Database
- * • Clear Database Before Each Test
- * • Reset Jest Mocks
+ * • Connect Mongo Memory Server
+ * • Clear Database After Every Test
  * • Disconnect Database
+ *
+ * This file is executed automatically
+ * before every test suite.
  */
 
 import {
   beforeAll,
-  beforeEach,
   afterEach,
   afterAll,
-  jest,
 } from "@jest/globals";
 
 import {
-  connectTestDatabase,
-  clearTestDatabase,
-  disconnectTestDatabase,
+  connectTestDB,
+  clearTestDB,
+  disconnectTestDB,
 } from "./testDb.js";
 
 /**
  * --------------------------------------------------
  * Connect Test Database
  * --------------------------------------------------
- *
- * Runs once before the
- * entire test suite.
  */
 
 beforeAll(async () => {
 
-  await connectTestDatabase();
+  await connectTestDB();
 
 });
 
 /**
  * --------------------------------------------------
- * Reset Database
+ * Clean Database
  * --------------------------------------------------
  *
- * Runs before every
- * individual test.
+ * Runs after every individual test.
  */
 
-beforeEach(async () => {
+afterEach(async () => {
 
-  await clearTestDatabase();
-
-});
-
-/**
- * --------------------------------------------------
- * Reset Jest Mocks
- * --------------------------------------------------
- *
- * Prevents one test
- * from affecting another.
- */
-
-afterEach(() => {
-
-  jest.clearAllMocks();
-
-  jest.restoreAllMocks();
+  await clearTestDB();
 
 });
 
@@ -79,13 +55,10 @@ afterEach(() => {
  * --------------------------------------------------
  * Disconnect Test Database
  * --------------------------------------------------
- *
- * Runs once after all
- * test suites finish.
  */
 
 afterAll(async () => {
 
-  await disconnectTestDatabase();
+  await disconnectTestDB();
 
 });

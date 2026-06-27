@@ -1,119 +1,87 @@
-import mongoose from "mongoose";
-
-import {
-  MongoMemoryServer,
-} from "mongodb-memory-server";
-
 /**
  * --------------------------------------------------
- * Mongo Memory Server Instance
- * --------------------------------------------------
- *
- * Stores the temporary in-memory
- * MongoDB instance used during testing.
- */
-
-let mongoServer;
-
-/**
- * --------------------------------------------------
- * Connect Test Database
+ * Test Database Manager
  * --------------------------------------------------
  *
  * Responsibilities:
  *
  * • Start Mongo Memory Server
- * • Get temporary connection URI
  * • Connect Mongoose
+ * • Clear Collections
+ * • Disconnect Database
+ * • Stop Mongo Memory Server
+ *
+ * Used by:
+ *
+ * • Model Tests
+ * • Service Tests
+ * • Controller Tests
+ * • Route Tests
+ * • Integration Tests
  */
 
-export const connectTestDatabase =
-  async () => {
+import mongoose from "mongoose";
 
-    /**
-     * Start temporary MongoDB
-     */
+import { MongoMemoryServer } from "mongodb-memory-server";
 
-    mongoServer =
-      await MongoMemoryServer.create();
-
-    /**
-     * Connection URI
-     */
-
-    const mongoUri =
-      mongoServer.getUri();
-
-    /**
-     * Connect Mongoose
-     */
-
-    await mongoose.connect(
-      mongoUri
-    );
-  };
+let mongoServer;
 
 /**
  * --------------------------------------------------
- * Clear Test Database
+ * Start Test Database
+ * --------------------------------------------------
+ */
+
+export const connectTestDB = async () => {
+
+  mongoServer =
+    await MongoMemoryServer.create();
+
+  const mongoUri =
+    mongoServer.getUri();
+
+  await mongoose.connect(
+    mongoUri
+  );
+
+};
+
+/**
+ * --------------------------------------------------
+ * Clear Database
  * --------------------------------------------------
  *
  * Removes every document
  * from every collection.
- *
- * Executed before each test
- * to guarantee isolation.
  */
 
-export const clearTestDatabase =
-  async () => {
+export const clearTestDB = async () => {
 
-    /**
-     * Get every collection
-     */
+  const collections =
+    mongoose.connection.collections;
 
-    const collections =
-      mongoose.connection.collections;
+  for (const collection of Object.values(collections)) {
 
-    /**
-     * Delete documents
-     */
+    await collection.deleteMany({});
 
-    for (
-      const collection of
-      Object.values(collections)
-    ) {
+  }
 
-      await collection.deleteMany({});
-    }
-  };
+};
 
 /**
  * --------------------------------------------------
- * Disconnect Test Database
+ * Close Test Database
  * --------------------------------------------------
- *
- * Responsibilities:
- *
- * • Close Mongoose connection
- * • Stop Mongo Memory Server
  */
 
-export const disconnectTestDatabase =
-  async () => {
+export const disconnectTestDB = async () => {
 
-    /**
-     * Close Mongoose
-     */
+  await mongoose.connection.close();
 
-    await mongoose.disconnect();
+  if (mongoServer) {
 
-    /**
-     * Stop MongoDB Memory Server
-     */
+    await mongoServer.stop();
 
-    if (mongoServer) {
+  }
 
-      await mongoServer.stop();
-    }
-  };
+};

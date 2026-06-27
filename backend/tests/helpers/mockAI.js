@@ -1,155 +1,121 @@
 /**
  * --------------------------------------------------
- * Mock AI Response
+ * Mock AI Responses
  * --------------------------------------------------
  *
- * Standard AI response used across
- * multiple automation tests.
+ * Reusable fake AI responses for testing.
+ *
+ * Responsibilities:
+ *
+ * • Success responses
+ * • Streaming chunks
+ * • Provider failures
+ * • Empty responses
+ *
+ * NOTE:
+ * This file only exports data.
+ * It does NOT mock SDKs.
+ */
+
+/**
+ * --------------------------------------------------
+ * Successful AI Response
+ * --------------------------------------------------
  */
 
 export const mockAIResponse = {
 
-  provider: "mock-provider",
-
-  modelUsed: "mock-model",
-
   reply:
-    "This is a mocked AI response for testing.",
+    "Based on your analytics, posting consistently 3-4 times per week and increasing Reels content can improve your engagement rate.",
 
-  latencyMs: 25,
+  provider: "groq",
 
-  generatedAt:
-    new Date().toISOString(),
+  modelUsed: "llama-3.3-70b-versatile",
+
+  latencyMs: 1200,
+
 };
 
 /**
  * --------------------------------------------------
- * Create Mock AI Response
+ * Empty AI Response
  * --------------------------------------------------
- *
- * Generates a customizable AI response.
  */
 
-export const createMockAIResponse = (
-  overrides = {}
-) => {
+export const mockEmptyAIResponse = {
 
-  return {
+  reply: "",
 
-    provider: "mock-provider",
+  provider: "groq",
 
-    modelUsed: "mock-model",
+  modelUsed: "llama-3.3-70b-versatile",
 
-    reply:
-      "This is a mocked AI response for testing.",
-
-    latencyMs: 25,
-
-    generatedAt:
-      new Date().toISOString(),
-
-    ...overrides,
-  };
+  latencyMs: 0,
 
 };
 
 /**
  * --------------------------------------------------
- * Mock Streaming Chunks
+ * Streaming Chunks
  * --------------------------------------------------
  *
- * Simulates AI streaming responses.
+ * Mimics streamed tokens from an AI provider.
  */
 
 export const mockStreamingChunks = [
 
-  "Hello",
+  {
+    choices: [
+      {
+        delta: {
+          content: "Hello",
+        },
+      },
+    ],
+  },
 
-  " there,",
+  {
+    choices: [
+      {
+        delta: {
+          content: " there",
+        },
+      },
+    ],
+  },
 
-  " this",
-
-  " is",
-
-  " a",
-
-  " streamed",
-
-  " response.",
+  {
+    choices: [
+      {
+        delta: {
+          content: "! How can I help you?",
+        },
+      },
+    ],
+  },
 
 ];
 
 /**
  * --------------------------------------------------
- * Async Mock Stream Generator
+ * Provider Failure
  * --------------------------------------------------
- *
- * Simulates an async iterator
- * similar to Groq streaming.
  */
 
-export async function* createMockAIStream() {
-
-  for (
-    const chunk
-    of mockStreamingChunks
-  ) {
-
-    yield {
-
-      choices: [
-
-        {
-
-          delta: {
-
-            content:
-              chunk,
-
-          },
-
-        },
-
-      ],
-
-    };
-
-  }
-
-}
+export const mockAIError = new Error(
+  "AI provider unavailable"
+);
 
 /**
  * --------------------------------------------------
- * Mock AI Failure
- * --------------------------------------------------
- *
- * Used to test provider failures,
- * retries and circuit breaker logic.
- */
-
-export const mockAIError =
-  new Error(
-    "Mock AI Provider Failure"
-  );
-
-/**
- * --------------------------------------------------
- * Mock Provider Metadata
+ * AI Provider Metadata
  * --------------------------------------------------
  */
 
-export const mockProviderMetadata = {
+export const mockProviderInfo = {
 
-  provider:
-    "mock-provider",
+  provider: "groq",
 
-  model:
-    "mock-model",
-
-  latencyMs:
-    25,
-
-  tokensUsed:
-    150,
+  model: "llama-3.3-70b-versatile",
 
 };

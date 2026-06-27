@@ -1,68 +1,61 @@
-import request from "supertest";
-import app from "../config/testServer.js";
+/**
+ * --------------------------------------------------
+ * Authentication Test Helpers
+ * --------------------------------------------------
+ *
+ * Responsibilities:
+ *
+ * • Create verified users
+ * • Create unverified users
+ *
+ * NOTE:
+ *
+ * JWT helpers will be added later when
+ * we begin testing authenticated routes.
+ */
+
 import { createTestUser } from "./factory.js";
 
 /**
- * Create Authenticated user 
- * 
- * - Creates a test user 
- * - Login using the API
- * - Returned authenticated user 
- * - Return JWT token
+ * --------------------------------------------------
+ * Create Verified User
+ * --------------------------------------------------
  */
 
-export const createAuthenticatedUser = async(
-    overrides = {}
+export const createVerifiedUser = async (
+  overrides = {}
 ) => {
-    //-Create User 
-    const {
-        user,
-        password,
-    } = await createTestUser(
-        overrides
-    );
 
-    //Login
+  const user = await createTestUser({
 
-    const response = 
-      await request(app)
+    isEmailVerified: true,
 
-       .post("/api/auth/login")
+    ...overrides,
 
-       .send({
-        email: 
-          user.email,
+  });
 
-        password,
-       });
+  return user;
 
-    //Verify Login
-
-    if(
-        response.status !== 200
-    ){
-        throw new Error(
-            "Unable to authenticate test user."
-        );
-    }
-
-    //Extract JWT 
-
-    const token = 
-      response.body 
-        ?.data
-        ?.token;
-
-    /**
-     * Return authentication
-     */
-
-    return {
-        user,
-
-        token,
-
-        password,
-    };
 };
 
+/**
+ * --------------------------------------------------
+ * Create Unverified User
+ * --------------------------------------------------
+ */
+
+export const createUnverifiedUser = async (
+  overrides = {}
+) => {
+
+  const user = await createTestUser({
+
+    isEmailVerified: false,
+
+    ...overrides,
+
+  });
+
+  return user;
+
+};

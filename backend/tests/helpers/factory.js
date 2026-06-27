@@ -1,84 +1,58 @@
-import bcrypt from "bcryptjs";
+/**
+ * --------------------------------------------------
+ * Test Factory
+ * --------------------------------------------------
+ *
+ * Responsibilities:
+ *
+ * • Create real MongoDB documents
+ * • Provide sensible defaults
+ * • Allow overriding any field
+ *
+ * Current Factories:
+ *
+ * • createTestUser()
+ *
+ * This file will grow feature-by-feature
+ * as the backend grows.
+ */
 
 import User from "../../models/User.js";
 
-/**
- * --------------------------------------------------
- * Generate Random Value
- * --------------------------------------------------
- *
- * Prevents duplicate values
- * during test execution.
- */
-
-const random =
-  () =>
-    Math.random()
-      .toString(36)
-      .substring(2, 10);
+import {
+  randomEmail,
+} from "./testUtils.js";
 
 /**
  * --------------------------------------------------
  * Create Test User
  * --------------------------------------------------
  *
- * Creates and stores
- * a user in the test database.
+ * Creates a real user document.
+ *
+ * Password hashing is handled by
+ * the User model's pre-save hook.
  */
 
-export const createTestUser =
-  async (
-    overrides = {}
-  ) => {
+export const createTestUser = async (
+  overrides = {}
+) => {
 
-    /**
-     * Default password
-     */
+  const defaultUser = {
 
-    const password =
-      overrides.password ||
-      "Password@123";
+    name: "Test User",
 
-    /**
-     * Hash password
-     */
+    email: randomEmail(),
 
-    const hashedPassword =
-      await bcrypt.hash(
-        password,
-        10
-      );
+    password: "Password@123",
 
-    /**
-     * Create user
-     */
+    ...overrides,
 
-    const user =
-      await User.create({
-
-        name:
-          overrides.name ||
-          `Test User ${random()}`,
-
-        email:
-          overrides.email ||
-          `user_${random()}@test.com`,
-
-        password:
-          hashedPassword,
-
-        ...overrides,
-      });
-
-    /**
-     * Return user
-     * along with the plain password.
-     */
-
-    return {
-
-      user,
-
-      password,
-    };
   };
+
+  const user =
+    await User.create(defaultUser);
+
+  return user;
+
+};

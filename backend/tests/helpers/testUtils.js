@@ -1,16 +1,43 @@
+/**
+ * --------------------------------------------------
+ * Test Utility Helpers
+ * --------------------------------------------------
+ *
+ * Generic helper functions used across
+ * the entire backend test suite.
+ *
+ * Responsibilities:
+ *
+ * • Generate random test data
+ * • Generate ObjectIds
+ * • Generate dates
+ * • Sleep utility
+ */
+
 import mongoose from "mongoose";
 
 /**
  * --------------------------------------------------
- * Generate Random String
+ * Random Email
  * --------------------------------------------------
- *
- * Generates a random alphanumeric
- * string for test data.
+ */
+
+export const randomEmail = () => {
+
+  return `test-${Date.now()}-${Math.floor(
+    Math.random() * 10000
+  )}@example.com`;
+
+};
+
+/**
+ * --------------------------------------------------
+ * Random String
+ * --------------------------------------------------
  */
 
 export const randomString = (
-  length = 8
+  length = 12
 ) => {
 
   return Math.random()
@@ -21,55 +48,11 @@ export const randomString = (
 
 /**
  * --------------------------------------------------
- * Generate Random Email
- * --------------------------------------------------
- *
- * Prevents duplicate email
- * conflicts during tests.
- */
-
-export const randomEmail = () => {
-
-  return `test_${randomString()}@example.com`;
-
-};
-
-/**
- * --------------------------------------------------
- * Generate Random Username
+ * Random ObjectId
  * --------------------------------------------------
  */
 
-export const randomUsername = () => {
-
-  return `user_${randomString()}`;
-
-};
-
-/**
- * --------------------------------------------------
- * Generate Random Title
- * --------------------------------------------------
- */
-
-export const randomTitle = (
-  prefix = "Test"
-) => {
-
-  return `${prefix} ${randomString(6)}`;
-
-};
-
-/**
- * --------------------------------------------------
- * Generate Mongo ObjectId
- * --------------------------------------------------
- *
- * Useful for invalid ownership
- * and authorization tests.
- */
-
-export const generateObjectId = () => {
+export const randomObjectId = () => {
 
   return new mongoose.Types.ObjectId();
 
@@ -77,50 +60,58 @@ export const generateObjectId = () => {
 
 /**
  * --------------------------------------------------
- * Sleep Utility
+ * Future Date
  * --------------------------------------------------
- *
- * Useful for:
- *
- * • Streaming tests
- * • Retry tests
- * • Automation jobs
  */
 
-export const sleep = async (
-  milliseconds
+export const futureDate = (
+  minutes = 10
 ) => {
 
-  return new Promise(
-
-    (resolve) =>
-
-      setTimeout(
-        resolve,
-        milliseconds
-      )
-
+  return new Date(
+    Date.now() + minutes * 60 * 1000
   );
 
 };
 
 /**
  * --------------------------------------------------
- * Build Authorization Header
+ * Past Date
  * --------------------------------------------------
- *
- * Converts a JWT token into
- * a valid Authorization header.
  */
 
-export const buildAuthHeader = (
-  token
+export const pastDate = (
+  minutes = 10
 ) => {
 
-  return {
+  return new Date(
+    Date.now() - minutes * 60 * 1000
+  );
 
-    Authorization:
-      `Bearer ${token}`,
-  };
+};
+
+/**
+ * --------------------------------------------------
+ * Sleep
+ * --------------------------------------------------
+ *
+ * Useful when testing retries,
+ * delays or polling behaviour.
+ */
+
+export const sleep = (
+  milliseconds
+) => {
+
+  return new Promise(
+    (resolve) => {
+
+      setTimeout(
+        resolve,
+        milliseconds
+      );
+
+    }
+  );
 
 };
