@@ -59,20 +59,70 @@ export const createTestUser = async (
 
 };
 
-
 /**
  * --------------------------------------------------
  * Create Test Email Verification OTP
  * --------------------------------------------------
+ *
+ * Creates a real OTP document.
+ *
+ * Behavior:
+ *
+ * • Creates a new test user if none is provided.
+ * • Accepts either a User document or a User ObjectId.
+ * • Uses sensible defaults.
+ * • Allows overriding any field.
  */
 
 export const createTestOTP = async (
   overrides = {}
 ) => {
 
-  const user = overrides.user
-    ? { _id: overrides.user }
-    : await createTestUser();
+  let user;
+
+  /**
+   * ----------------------------------------------
+   * Resolve User
+   * ----------------------------------------------
+   */
+
+  if (!overrides.user) {
+
+    user = await createTestUser();
+
+  } else if (overrides.user._id) {
+
+    /**
+     * Full User document provided.
+     */
+
+    user = overrides.user;
+
+  } else {
+
+    /**
+     * User ObjectId provided.
+     */
+
+    user = await User.findById(
+      overrides.user
+    );
+
+    if (!user) {
+
+      throw new Error(
+        "Test factory could not find the provided user."
+      );
+
+    }
+
+  }
+
+  /**
+   * ----------------------------------------------
+   * Default OTP Document
+   * ----------------------------------------------
+   */
 
   const defaultOTP = {
 
@@ -80,18 +130,30 @@ export const createTestOTP = async (
 
     email: user.email,
 
-    otp: "123456",
+    otp:
+      overrides.otp ??
+      "123456",
 
-    expiresAt: new Date(
-      Date.now() + 10 * 60 * 1000
-    ),
-
-    ...overrides,
+    expiresAt:
+      overrides.expiresAt ??
+      new Date(
+        Date.now() + 10 * 60 * 1000
+      ),
 
   };
 
-  return EmailVerificationOTP.create(
-    defaultOTP
-  );
+  /**
+   * ----------------------------------------------
+   * Create Document
+   * ----------------------------------------------
+   */
+
+  return EmailVerificationOTP.create({
+
+    ...defaultOTP,
+
+    ...overrides,
+
+  });
 
 };
