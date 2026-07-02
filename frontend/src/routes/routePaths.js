@@ -1,0 +1,16 @@
+export const routePaths = {
+  dashboard: "/dashboard",
+  analytics: "/analytics",
+  creatorScore: "/creator-score",
+  insights: "/insights",
+  chat: "/ai-chat",
+  notes: "/notes",
+  instagram: "/instagram",
+  settings: "/settings",
+  profile: "/profile",
+  landing: "/landing",
+  login: "/login",
+  register: "/register",
+  verifyEmail: "/verify-email",
+  signup: "/signup",
+};

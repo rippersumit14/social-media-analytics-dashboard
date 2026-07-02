@@ -1,288 +1,161 @@
-import {
-  useCallback,
-  useMemo,
-  useState,
-} from "react";
+import { useState } from "react";
+import toast from "react-hot-toast";
+import { Link, useNavigate } from "react-router-dom";
 
-import {
-  Link,
-  useNavigate,
-} from "react-router-dom";
+import { Button } from "../components/ui/Button";
+import { TextField } from "../components/ui/TextField";
+import { useAuth } from "../hooks/useAuth";
+import { routePaths } from "../routes/routePaths";
+import { getApiErrorMessage } from "../utils/apiError";
 
-import { useAuth } from "../context/AuthContext.jsx";
-
-/**
- * Production-grade signup page.
- *
- * Handles:
- * - form state
- * - register lifecycle
- * - loading states
- * - error rendering
- * - redirect flow
- */
-const Signup = () => {
-  const navigate =
-    useNavigate();
-
-  /**
-   * Auth lifecycle.
-   */
-  const {
-    register,
-
-    loading:
-      authLoading,
-  } = useAuth();
-
-  /**
-   * Signup form state.
-   */
-  const [formData, setFormData] =
-    useState({
-      name: "",
-
-      email: "",
-
-      password: "",
-    });
-
-  /**
-   * UI state.
-   */
-  const [error, setError] =
-    useState("");
-
-  const [loading, setLoading] =
-    useState(false);
-
-  /**
-   * Stable disabled state.
-   */
-  const isDisabled =
-    useMemo(() => {
-      return (
-        loading ||
-        authLoading
-      );
-    }, [
-      loading,
-      authLoading,
-    ]);
-
-  /**
-   * Stable form updates.
-   */
-  const handleChange =
-    useCallback((event) => {
-      const {
-        name,
-        value,
-      } = event.target;
-
-      setFormData((prev) => ({
-        ...prev,
-
-        [name]: value,
-      }));
-    }, []);
-
-  /**
-   * Stable signup lifecycle.
-   */
-  const handleSubmit =
-    useCallback(
-      async (event) => {
-        event.preventDefault();
-
-        /**
-         * Prevent duplicate submits.
-         */
-        if (isDisabled) {
-          return;
-        }
-
-        setError("");
-
-        setLoading(true);
-
-        try {
-          /**
-           * Stable auth payload.
-           */
-          await register({
-            name:
-              formData.name.trim(),
-
-            email:
-              formData.email.trim(),
-
-            password:
-              formData.password,
-          });
-
-          /**
-           * Redirect after success.
-           */
-          navigate(
-            "/dashboard"
-          );
-        } catch (error) {
-          console.error(
-            "[SIGNUP ERROR]",
-            error
-          );
-
-          /**
-           * Interceptor-normalized errors.
-           */
-          setError(
-            error.message
-          );
-        } finally {
-          setLoading(false);
-        }
-      },
-      [
-        formData,
-        isDisabled,
-        navigate,
-        register,
-      ]
-    );
-
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">
-            Create Account
-          </h1>
-
-          <p className="mt-2 text-sm text-gray-500">
-            Start using your AI
-            analytics workspace.
-          </p>
-        </div>
-
-        {/* Error State */}
-        {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-
-        {/* Signup Form */}
-        <form
-          onSubmit={
-            handleSubmit
-          }
-          className="space-y-4"
-        >
-          {/* Name */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Name
-            </label>
-
-            <input
-              type="text"
-              name="name"
-              value={
-                formData.name
-              }
-              onChange={
-                handleChange
-              }
-              placeholder="Enter your name"
-              autoComplete="name"
-              disabled={
-                isDisabled
-              }
-              required
-              className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none transition focus:border-green-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Email
-            </label>
-
-            <input
-              type="email"
-              name="email"
-              value={
-                formData.email
-              }
-              onChange={
-                handleChange
-              }
-              placeholder="Enter your email"
-              autoComplete="email"
-              disabled={
-                isDisabled
-              }
-              required
-              className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none transition focus:border-green-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
-            />
-          </div>
-
-          {/* Password */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Password
-            </label>
-
-            <input
-              type="password"
-              name="password"
-              value={
-                formData.password
-              }
-              onChange={
-                handleChange
-              }
-              placeholder="Create your password"
-              autoComplete="new-password"
-              disabled={
-                isDisabled
-              }
-              required
-              className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none transition focus:border-green-500 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70"
-            />
-          </div>
-
-          {/* Submit */}
-          <button
-            type="submit"
-            disabled={
-              isDisabled
-            }
-            className="w-full rounded-xl bg-green-600 px-4 py-2 text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {loading
-              ? "Creating account..."
-              : "Sign Up"}
-          </button>
-        </form>
-
-        {/* Footer */}
-        <p className="mt-5 text-sm text-gray-600">
-          Already have an
-          account?{" "}
-          <Link
-            to="/"
-            className="font-medium text-blue-600 hover:underline"
-          >
-            Login
-          </Link>
-        </p>
-      </div>
-    </div>
-  );
+const initialForm = {
+  name: "",
+  email: "",
+  password: "",
+  confirmPassword: "",
 };
 
-export default Signup;
+function validateRegister(values) {
+  const errors = {};
+
+  if (values.name.trim().length < 2) {
+    errors.name = "Name must be at least 2 characters.";
+  }
+
+  if (!values.email.trim()) {
+    errors.email = "Email is required.";
+  } else if (!/\S+@\S+\.\S+/.test(values.email)) {
+    errors.email = "Enter a valid email address.";
+  }
+
+  if (values.password.length < 8) {
+    errors.password = "Password must be at least 8 characters.";
+  }
+
+  if (values.confirmPassword !== values.password) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+
+  return errors;
+}
+
+export default function Signup() {
+  const { register } = useAuth();
+  const navigate = useNavigate();
+  const [form, setForm] = useState(initialForm);
+  const [errors, setErrors] = useState({});
+  const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  function updateField(event) {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+    setErrors((current) => ({ ...current, [name]: "" }));
+    setFormError("");
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    const nextErrors = validateRegister(form);
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFormError("");
+
+    try {
+      const email = form.email.trim().toLowerCase();
+
+      await register({
+        name: form.name.trim(),
+        email,
+        password: form.password,
+      });
+
+      toast.success("Account created. Check your email for the OTP.");
+      navigate(`${routePaths.verifyEmail}?email=${encodeURIComponent(email)}`, { replace: true });
+    } catch (error) {
+      const message = getApiErrorMessage(error, "Unable to create account.");
+      setFormError(message);
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate>
+      <p className="mb-2 text-sm font-semibold uppercase text-brand-700">Authentication</p>
+      <h1 className="text-2xl font-semibold text-ink-950">Create your account</h1>
+      <p className="mt-2 text-sm leading-6 text-ink-500">
+        Register with the same details expected by the backend auth API.
+      </p>
+
+      {formError ? (
+        <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {formError}
+        </div>
+      ) : null}
+
+      <div className="mt-6 space-y-4">
+        <TextField
+          id="name"
+          name="name"
+          label="Name"
+          value={form.name}
+          onChange={updateField}
+          error={errors.name}
+          autoComplete="name"
+          placeholder="Your name"
+        />
+        <TextField
+          id="register-email"
+          name="email"
+          label="Email"
+          type="email"
+          value={form.email}
+          onChange={updateField}
+          error={errors.email}
+          autoComplete="email"
+          placeholder="creator@example.com"
+        />
+        <TextField
+          id="register-password"
+          name="password"
+          label="Password"
+          type="password"
+          value={form.password}
+          onChange={updateField}
+          error={errors.password}
+          autoComplete="new-password"
+          placeholder="At least 8 characters"
+        />
+        <TextField
+          id="confirm-password"
+          name="confirmPassword"
+          label="Confirm password"
+          type="password"
+          value={form.confirmPassword}
+          onChange={updateField}
+          error={errors.confirmPassword}
+          autoComplete="new-password"
+          placeholder="Repeat your password"
+        />
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? "Creating account..." : "Create account"}
+        </Button>
+      </div>
+
+      <p className="mt-6 text-center text-sm text-ink-500">
+        Already have an account?{" "}
+        <Link to={routePaths.login} className="font-semibold text-brand-700">
+          Log in
+        </Link>
+      </p>
+    </form>
+  );
+}
