@@ -1,3 +1,3 @@
 # Analytics Feature
 
-Instagram analytics charts, filters, and snapshot workflows will live here in the analytics milestone.
+Shared analytics dashboard components and hooks for Instagram snapshots, creator score, score history, and manual pipeline actions.
