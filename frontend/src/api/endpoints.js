@@ -33,6 +33,12 @@ export const apiEndpoints = {
   },
   notes: {
     list: "/notes",
+    detail: (noteId) => `/notes/${noteId}`,
+    restore: (noteId) => `/notes/${noteId}/restore`,
+    archive: (noteId) => `/notes/${noteId}/archive`,
+    unarchive: (noteId) => `/notes/${noteId}/unarchive`,
+    pin: (noteId) => `/notes/${noteId}/pin`,
+    unpin: (noteId) => `/notes/${noteId}/unpin`,
   },
   recommendations: {
     list: "/recommendations",

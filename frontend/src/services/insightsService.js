@@ -11,6 +11,8 @@ export const insightsService = {
   },
 
   async generate() {
-    return http.post(apiEndpoints.creatorInsights.generate);
+    const response = await http.post(apiEndpoints.creatorInsights.generate);
+
+    return response.data;
   },
 };
