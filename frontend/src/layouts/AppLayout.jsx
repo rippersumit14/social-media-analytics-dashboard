@@ -8,7 +8,7 @@ export function AppLayout() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-cloud-50 text-ink-950">
+    <div className="app-shell min-h-screen text-[var(--app-text)]">
       <div className="flex min-h-screen">
         <Sidebar isMobileOpen={isMobileNavOpen} onMobileClose={() => setIsMobileNavOpen(false)} />
         <div className="flex min-w-0 flex-1 flex-col">

@@ -5,9 +5,6 @@ import { clearStoredToken, getStoredToken } from "../utils/authStorage";
 
 export const apiClient = axios.create({
   baseURL: env.apiBaseUrl,
-  headers: {
-    "Content-Type": "application/json",
-  },
   timeout: 20_000,
 });
 
@@ -23,6 +20,10 @@ apiClient.interceptors.request.use((config) => {
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
   }
 
   return config;

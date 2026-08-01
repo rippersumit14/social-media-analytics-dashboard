@@ -3,6 +3,9 @@ import express
 
 import protect
   from "../middlewares/authMiddleware.js";
+import {
+  aiChatRateLimiter,
+} from "../middlewares/rateLimiter.js";
 
 import {
 
@@ -70,6 +73,7 @@ router.get(
 router.post(
   "/:conversationId/chat",
   protect,
+  aiChatRateLimiter,
   chatWithAIController
 );
 
@@ -78,6 +82,7 @@ router.post(
 router.post(
   "/:conversationId/chat/stream",
   protect,
+  aiChatRateLimiter,
   streamChatWithAIController
 );
 

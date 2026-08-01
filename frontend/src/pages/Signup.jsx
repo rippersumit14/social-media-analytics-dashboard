@@ -6,7 +6,7 @@ import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/TextField";
 import { useAuth } from "../hooks/useAuth";
 import { routePaths } from "../routes/routePaths";
-import { getApiErrorMessage } from "../utils/apiError";
+import { getApiErrorDetails } from "../utils/apiError";
 
 const initialForm = {
   name: "",
@@ -70,16 +70,32 @@ export default function Signup() {
     try {
       const email = form.email.trim().toLowerCase();
 
-      await register({
+      const response = await register({
         name: form.name.trim(),
         email,
         password: form.password,
       });
 
-      toast.success("Account created. Check your email for the OTP.");
+      const message =
+        response.data?.verificationPending
+          ? "Your account already exists but still needs email verification. A new code was sent if the cooldown allows it."
+          : response.data?.message || response.message || "Account created. Check your email for the OTP.";
+
+      toast.success(message);
       navigate(`${routePaths.verifyEmail}?email=${encodeURIComponent(email)}`, { replace: true });
     } catch (error) {
-      const message = getApiErrorMessage(error, "Unable to create account.");
+      const details = getApiErrorDetails(error, "Unable to create account.");
+      const message =
+        details.status === 400
+          ? "Please check the highlighted fields."
+          : details.status === 409
+            ? "An account already exists with this email. Log in or verify the pending account."
+            : details.status === 429
+              ? details.message
+              : details.status === 503
+                ? "We could not send the verification email right now. Please try again in a few minutes."
+                : details.message;
+
       setFormError(message);
       toast.error(message);
     } finally {

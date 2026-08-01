@@ -2,6 +2,7 @@ import asyncHandler from "../middlewares/asyncHandler.js";
 
 import ApiResponse from "../utils/ApiResponse.js";
 import AppError from "../utils/AppError.js";
+import logger from "../utils/logger.js";
 
 import InstagramAccount from "../models/InstagramAccount.js";
 
@@ -16,6 +17,52 @@ import {
   exchangeCodeForToken,
   getInstagramAccountInfo,
 } from "../services/instagramService.js";
+
+const getFrontendInstagramRedirect = ({
+  status,
+  code,
+  message,
+}) => {
+  const baseUrl =
+    process.env.INSTAGRAM_FRONTEND_CALLBACK_URL ||
+    `${process.env.FRONTEND_URL}/instagram/callback`;
+
+  const url = new URL(baseUrl);
+
+  url.searchParams.set(
+    status === "success" ? "connected" : "error",
+    code
+  );
+
+  if (message) {
+    url.searchParams.set(
+      "message",
+      message
+    );
+  }
+
+  return url.toString();
+};
+
+const normalizeOAuthErrorCode = (error) => {
+  if (error?.message?.includes("already connected")) {
+    return "account_already_connected";
+  }
+
+  if (error?.message?.includes("OAuth state")) {
+    return "invalid_state";
+  }
+
+  if (error?.message?.includes("access token")) {
+    return "token_exchange_failed";
+  }
+
+  if (error?.message?.includes("Instagram profile")) {
+    return "account_fetch_failed";
+  }
+
+  return "oauth_failed";
+};
 
 /**
  * --------------------------------------------------
@@ -106,110 +153,89 @@ export const connectInstagram = asyncHandler(
  */
 export const instagramOAuthCallback =
   asyncHandler(async (req, res) => {
-    console.log(
-      "\n================================="
-    );
-
-    console.log(
-      "INSTAGRAM CALLBACK HIT"
-    );
-
-    console.log(
-      "FULL QUERY:"
-    );
-
-    console.dir(
-      req.query,
-      { depth: null }
-    );
-
-    console.log(
-      "FULL URL:"
-    );
-
-    console.log(
-      req.originalUrl
-    );
-
-    console.log(
-      "=================================\n"
-    );
-
-    /**
-     * Meta sends:
-     * ?code=
-     * ?state=
-     */
     const {
       code,
       state,
+      error,
+      error_reason,
     } = req.query;
 
+    if (error) {
+      logger.warn(
+        "Instagram OAuth cancelled or rejected by provider",
+        {
+          reason:
+            error_reason || error,
+        }
+      );
+
+      return res.redirect(
+        getFrontendInstagramRedirect({
+          status:
+            "error",
+          code:
+            "oauth_cancelled",
+          message:
+            "Instagram authorization was not completed.",
+        })
+      );
+    }
+
     if (!code || !state) {
-      throw new AppError(
-        "Missing OAuth callback parameters",
-        400
+      return res.redirect(
+        getFrontendInstagramRedirect({
+          status:
+            "error",
+          code:
+            "missing_callback_params",
+          message:
+            "Instagram did not return the required OAuth parameters.",
+        })
       );
     }
 
-    /**
-     * Resolve UserId
-     * From Redis State
-     */
-    const userId =
-      await getUserIdFromState(
-        state
-      );
+    try {
+      const userId =
+        await getUserIdFromState(
+          state
+        );
 
-    /**
-     * Exchange OAuth Code
-     * For Access Token
-     */
-    const tokenData =
-      await exchangeCodeForToken(
-        code
-      );
+      const tokenData =
+        await exchangeCodeForToken(
+          code
+        );
 
-    const accessToken =
-      tokenData.access_token;
+      const accessToken =
+        tokenData.access_token;
 
-    if (!accessToken) {
-      throw new AppError(
-        "Failed to obtain access token",
-        500
-      );
-    }
+      if (!accessToken) {
+        throw new AppError(
+          "Failed to obtain access token",
+          502
+        );
+      }
 
-    /**
-     * Fetch Instagram Profile
-     */
-    const accountInfo =
-      await getInstagramAccountInfo(
-        accessToken
-      );
+      const accountInfo =
+        await getInstagramAccountInfo(
+          accessToken
+        );
 
-    /**
-     * Prevent Duplicate Connections
-     */
-    const existingAccount =
-      await InstagramAccount.findOne({
-        instagramUserId:
-          accountInfo.instagramUserId,
-      });
+      const existingAccount =
+        await InstagramAccount.findOne({
+          instagramUserId:
+            accountInfo.instagramUserId,
+        });
 
-    if (existingAccount) {
-      throw new AppError(
-        "Instagram account already connected",
-        409
-      );
-    }
+      if (existingAccount) {
+        throw new AppError(
+          "Instagram account already connected",
+          409
+        );
+      }
 
-    /**
-     * Save Instagram Account
-     */
-    const account =
       await InstagramAccount.create({
-        user: userId,
+        user:
+          userId,
 
         instagramUserId:
           accountInfo.instagramUserId,
@@ -231,28 +257,54 @@ export const instagramOAuthCallback =
 
         accessToken,
 
-        isPrimary: true,
+        isPrimary:
+          true,
 
         lastSyncedAt:
           new Date(),
       });
 
-    /**
-     * OAuth completed successfully.
-     *
-     * Remove temporary Redis state.
-     */
-    await deleteOAuthState(
-      state
-    );
+      await deleteOAuthState(
+        state
+      );
 
-    return res.status(200).json(
-      new ApiResponse({
-        success: true,
-        statusCode: 200,
-        message:
-          "Instagram account connected successfully",
-        data: account,
-      })
-    );
+      return res.redirect(
+        getFrontendInstagramRedirect({
+          status:
+            "success",
+          code:
+            "success",
+          message:
+            "Instagram account connected successfully.",
+        })
+      );
+    } catch (callbackError) {
+      await deleteOAuthState(
+        state
+      ).catch(() => {});
+
+      const code =
+        normalizeOAuthErrorCode(
+          callbackError
+        );
+
+      logger.warn(
+        "Instagram OAuth callback failed",
+        {
+          code,
+          statusCode:
+            callbackError.statusCode,
+        }
+      );
+
+      return res.redirect(
+        getFrontendInstagramRedirect({
+          status:
+            "error",
+          code,
+          message:
+            "Instagram connection could not be completed.",
+        })
+      );
+    }
   });

@@ -16,7 +16,9 @@ export const sendVerificationEmail = async ({
   otp,
 }) => {
   const mailOptions = {
-    from: `"Creator Growth AI" <${process.env.EMAIL_USER}>`,
+    from:
+      process.env.EMAIL_FROM ||
+      `"Creator Growth AI" <${process.env.EMAIL_USER}>`,
 
     to: email,
 

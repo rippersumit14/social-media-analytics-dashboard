@@ -1,22 +1,38 @@
 import AppError from "../utils/AppError.js";
 
-//centralized request validationg middleware 
+const formatPath = (path = []) => {
+    if (!Array.isArray(path) || path.length === 0) {
+        return "body";
+    }
+
+    return path
+        .map((part) => String(part))
+        .join(".");
+};
+
+//centralized request validation middleware
 const validateRequest = (schema) => {
     return (req, res, next) => {
-        //Validate request body using Zod schema 
+        //Validate request body using Zod schema
         const result = schema.safeParse(req.body);
 
         //validation failed
         if(!result.success){
-            //Extract readable error messages 
-            const errors = result.errors.errors.map((err) => ({
-                field: err.path.join("."),
+            //Extract readable error messages from Zod v4 issues.
+            const errors = result.error.issues.map((err) => ({
+                field: formatPath(err.path),
                 message: err.message,
             }));
 
+            const message = errors.length
+                ? `Validation failed: ${errors
+                    .map((err) => `${err.field}: ${err.message}`)
+                    .join("; ")}`
+                : "Validation failed";
+
             return next(
                 new AppError(
-                    errors[0]?.message || "Validation failed",
+                    message,
                     400
                 )
             );

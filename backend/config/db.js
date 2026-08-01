@@ -33,15 +33,6 @@ const connectDB = async () => {
     );
 
     /**
-     * Debug Log
-     */
-
-    console.log(
-      "MONGO URI LOADED:",
-      process.env.MONGO_URI?.slice(0, 60)
-    );
-
-    /**
      * Connect MongoDB
      */
 

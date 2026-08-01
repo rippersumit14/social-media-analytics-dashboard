@@ -20,6 +20,7 @@ import {
 import protect from "../middlewares/authMiddleware.js";
 
 import validateRequest from "../middlewares/validateRequest.js";
+import { authRateLimiter } from "../middlewares/rateLimiter.js";
 
 /**
  * Validation Schemas
@@ -50,6 +51,7 @@ const router = express.Router();
 
 router.post(
   "/register",
+  authRateLimiter,
   validateRequest(registerSchema),
   registerUser
 );
@@ -64,6 +66,7 @@ router.post(
 
 router.post(
   "/verify-email",
+  authRateLimiter,
   validateRequest(verifyEmailSchema),
   verifyEmail
 );
@@ -78,6 +81,7 @@ router.post(
 
 router.post(
   "/resend-otp",
+  authRateLimiter,
   validateRequest(resendOTPSchema),
   resendOTP
 );
@@ -92,6 +96,7 @@ router.post(
 
 router.post(
   "/login",
+  authRateLimiter,
   validateRequest(loginSchema),
   loginUser
 );
@@ -121,6 +126,7 @@ router.get(
 router.patch(
   "/password",
   protect,
+  authRateLimiter,
   validateRequest(updatePasswordSchema),
   updatePassword
 );

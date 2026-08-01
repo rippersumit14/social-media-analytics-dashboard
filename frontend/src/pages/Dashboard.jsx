@@ -10,6 +10,7 @@ import {
   Clock,
   Gauge,
   Image,
+  Lightbulb,
   RefreshCw,
   Sparkles,
   Target,
@@ -34,10 +35,11 @@ import { formatDateTime, formatNumber, formatPercent } from "../utils/formatters
 const quickActions = [
   { label: "Connect Instagram", icon: Camera, to: routePaths.instagram, variant: "primary" },
   { label: "Open AI Chat", icon: Bot, to: routePaths.chat, variant: "secondary" },
-  { label: "Sync Media", icon: RefreshCw, toast: "Media sync will be wired from the Instagram milestone." },
+  { label: "Sync Instagram", icon: RefreshCw, to: routePaths.instagram, variant: "secondary" },
   { label: "Generate Snapshot", icon: BarChart3, toast: "Snapshot generation is reserved for the analytics milestone." },
   { label: "Calculate Creator Score", icon: Gauge, toast: "Score calculation will be activated in the creator score milestone." },
   { label: "Generate Insights", icon: BrainCircuit, toast: "Insight generation will be activated in the insights milestone." },
+  { label: "Recommendations", icon: Lightbulb, to: routePaths.recommendations, variant: "secondary" },
 ];
 
 function getScoreLevel(score) {
@@ -130,7 +132,7 @@ export default function Dashboard() {
             </Button>
             <Button as={Link} to={routePaths.instagram}>
               <Camera aria-hidden="true" size={18} />
-              Connect
+              {account ? "Instagram" : "Connect"}
             </Button>
           </>
         }

@@ -8,15 +8,15 @@ const views = [
 
 export function NotesToolbar({ search, view, sort, onSearchChange, onViewChange, onSortChange }) {
   return (
-    <div className="rounded-lg border border-line-200 bg-white p-4 shadow-sm">
+    <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-paper)] p-4 shadow-sm shadow-black/5">
       <div className="grid gap-3 xl:grid-cols-[1fr_auto_180px]">
         <label className="relative block">
           <span className="sr-only">Search notes</span>
-          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-500" size={17} />
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--app-muted)]" size={17} />
           <input
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
-            className="h-11 w-full rounded-lg border border-line-200 bg-cloud-50 pl-10 pr-3 text-sm text-ink-950 outline-none transition placeholder:text-ink-500 focus:border-brand-600 focus:ring-4 focus:ring-blue-100"
+            className="h-11 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] pl-10 pr-3 text-sm text-[var(--app-text)] outline-none transition placeholder:text-[var(--app-muted)] focus:border-[var(--app-primary)] focus:ring-4 focus:ring-[var(--app-ring)]"
             placeholder="Search title, content, or category"
           />
         </label>
@@ -29,7 +29,7 @@ export function NotesToolbar({ search, view, sort, onSearchChange, onViewChange,
               onClick={() => onViewChange(item.value)}
               className={[
                 "h-11 rounded-lg border px-4 text-sm font-semibold transition",
-                view === item.value ? "border-brand-600 bg-blue-50 text-brand-700" : "border-line-200 bg-white text-ink-700 hover:bg-cloud-50",
+                view === item.value ? "border-[var(--app-primary)] bg-[var(--app-bg)] text-[var(--app-primary)]" : "border-[var(--app-border)] bg-[var(--app-paper)] text-[var(--app-text)] hover:bg-[var(--app-bg)]",
               ].join(" ")}
               role="tab"
               aria-selected={view === item.value}
@@ -44,7 +44,7 @@ export function NotesToolbar({ search, view, sort, onSearchChange, onViewChange,
           <select
             value={sort}
             onChange={(event) => onSortChange(event.target.value)}
-            className="h-11 w-full rounded-lg border border-line-200 bg-cloud-50 px-3 text-sm font-semibold text-ink-700 outline-none transition focus:border-brand-600 focus:ring-4 focus:ring-blue-100"
+            className="h-11 w-full rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] px-3 text-sm font-semibold text-[var(--app-text)] outline-none transition focus:border-[var(--app-primary)] focus:ring-4 focus:ring-[var(--app-ring)]"
           >
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>

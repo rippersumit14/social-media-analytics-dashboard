@@ -2,7 +2,7 @@ import { AlertCircle } from "lucide-react";
 
 export function ErrorPanel({ title = "Unable to load this section", message, action }) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+    <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-red-700" role="alert">
       <div className="flex gap-3">
         <AlertCircle aria-hidden="true" className="mt-0.5 shrink-0" size={18} />
         <div>

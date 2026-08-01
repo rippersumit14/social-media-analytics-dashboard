@@ -59,14 +59,32 @@ export const helmetConfig =
  * ---------------------------------------------------
  */
 
-const allowedOrigins = [
+const localDevelopmentOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5174",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+];
+
+const configuredOrigins = [
 
   process.env.FRONTEND_URL,
 
-  "http://localhost:5173",
-
-  "http://localhost:3000",
+  ...(process.env.FRONTEND_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
 ];
+
+const allowedOrigins =
+  new Set([
+    ...configuredOrigins.filter(Boolean),
+    ...(process.env.NODE_ENV === "production"
+      ? []
+      : localDevelopmentOrigins),
+  ]);
 
 /**
  * ---------------------------------------------------
@@ -100,7 +118,7 @@ export const corsConfig =
        * Allow trusted origins
        */
       if (
-        allowedOrigins.includes(
+        allowedOrigins.has(
           origin
         )
       ) {
@@ -142,6 +160,8 @@ export const corsConfig =
       "PATCH",
 
       "DELETE",
+
+      "OPTIONS",
     ],
 
     /**

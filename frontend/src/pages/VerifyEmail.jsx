@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -6,7 +6,7 @@ import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/TextField";
 import { authService } from "../services/authService";
 import { routePaths } from "../routes/routePaths";
-import { getApiErrorMessage } from "../utils/apiError";
+import { getApiErrorDetails } from "../utils/apiError";
 
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();
@@ -17,6 +17,21 @@ export default function VerifyEmail() {
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  const [resendCooldownUntil, setResendCooldownUntil] = useState(null);
+  const isResendCoolingDown = resendCooldownUntil && Date.now() < resendCooldownUntil;
+
+  useEffect(() => {
+    if (!resendCooldownUntil) {
+      return undefined;
+    }
+
+    const remainingMs = Math.max(resendCooldownUntil - Date.now(), 0);
+    const timeoutId = window.setTimeout(() => {
+      setResendCooldownUntil(null);
+    }, remainingMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [resendCooldownUntil]);
 
   function updateField(event) {
     const { name, value } = event.target;
@@ -61,7 +76,13 @@ export default function VerifyEmail() {
       toast.success("Email verified. You can log in now.");
       navigate(routePaths.login, { replace: true });
     } catch (error) {
-      const message = getApiErrorMessage(error, "Unable to verify email.");
+      const details = getApiErrorDetails(error, "Unable to verify email.");
+      const message =
+        details.status === 400
+          ? details.message || "Invalid or expired OTP. Check the code and try again."
+          : details.status === 429
+            ? details.message
+            : details.message;
       setFormError(message);
       toast.error(message);
     } finally {
@@ -79,10 +100,21 @@ export default function VerifyEmail() {
     setFormError("");
 
     try {
-      await authService.resendOtp({ email: form.email.trim().toLowerCase() });
-      toast.success("Verification OTP sent.");
+      const response = await authService.resendOtp({ email: form.email.trim().toLowerCase() });
+      toast.success(response.message || "Verification email sent. Check your inbox.");
     } catch (error) {
-      const message = getApiErrorMessage(error, "Unable to resend OTP.");
+      const details = getApiErrorDetails(error, "Unable to resend OTP.");
+      const message =
+        details.status === 429
+          ? details.message
+          : details.status === 400
+            ? "This account may already be verified. Try logging in."
+            : details.message;
+
+      if (details.retryAfter) {
+        setResendCooldownUntil(Date.now() + details.retryAfter * 1000);
+      }
+
       setFormError(message);
       toast.error(message);
     } finally {
@@ -129,8 +161,14 @@ export default function VerifyEmail() {
         <Button type="submit" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? "Verifying..." : "Verify email"}
         </Button>
-        <Button type="button" variant="secondary" className="w-full" onClick={handleResend} disabled={isResending}>
-          {isResending ? "Sending OTP..." : "Resend OTP"}
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full"
+          onClick={handleResend}
+          disabled={isResending || Boolean(isResendCoolingDown)}
+        >
+          {isResending ? "Sending OTP..." : isResendCoolingDown ? "Wait before resending" : "Resend OTP"}
         </Button>
       </div>
 

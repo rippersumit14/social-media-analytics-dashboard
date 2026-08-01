@@ -7,12 +7,12 @@ function SidebarContent({ onNavigate }) {
   return (
     <>
       <div className="mb-8 flex items-center gap-3 px-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-600 text-white">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--app-primary)] text-white shadow-sm shadow-blue-500/20">
           <Sparkles aria-hidden="true" size={20} />
         </div>
         <div>
-          <p className="text-sm font-semibold text-ink-950">CreatorIQ</p>
-          <p className="text-xs text-ink-500">Analytics SaaS</p>
+          <p className="text-sm font-semibold text-[var(--app-text)]">CreatorIQ</p>
+          <p className="text-xs text-[var(--app-muted)]">Analytics SaaS</p>
         </div>
       </div>
 
@@ -26,8 +26,8 @@ function SidebarContent({ onNavigate }) {
               [
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition",
                 isActive
-                  ? "bg-brand-600 text-white"
-                  : "text-ink-700 hover:bg-cloud-100 hover:text-ink-950",
+                  ? "bg-[var(--app-primary)] text-white shadow-sm shadow-blue-500/15"
+                  : "text-[var(--app-muted)] hover:bg-[var(--app-bg)] hover:text-[var(--app-text)]",
               ].join(" ")
             }
           >
@@ -43,7 +43,7 @@ function SidebarContent({ onNavigate }) {
 export function Sidebar({ isMobileOpen = false, onMobileClose }) {
   return (
     <>
-      <aside className="hidden min-h-screen w-72 shrink-0 border-r border-line-200 bg-white px-4 py-5 lg:block">
+      <aside className="hidden min-h-screen w-72 shrink-0 border-r border-[var(--app-border)] bg-[var(--app-paper)]/92 px-4 py-5 backdrop-blur-xl lg:block">
         <SidebarContent />
       </aside>
 
@@ -51,14 +51,14 @@ export function Sidebar({ isMobileOpen = false, onMobileClose }) {
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
           <button
             type="button"
-            className="absolute inset-0 bg-ink-950/30"
+            className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
             aria-label="Close navigation menu"
             onClick={onMobileClose}
           />
-          <aside className="relative min-h-screen w-[min(20rem,calc(100vw-2rem))] border-r border-line-200 bg-white px-4 py-5 shadow-xl">
+          <aside className="relative min-h-screen w-[min(20rem,calc(100vw-2rem))] border-r border-[var(--app-border)] bg-[var(--app-paper)] px-4 py-5 shadow-xl">
             <button
               type="button"
-              className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-line-200 text-ink-700"
+              className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--app-border)] text-[var(--app-text)] hover:bg-[var(--app-bg)]"
               aria-label="Close navigation menu"
               onClick={onMobileClose}
             >

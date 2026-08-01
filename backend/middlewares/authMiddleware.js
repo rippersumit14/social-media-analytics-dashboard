@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import logger from "../utils/logger.js";
 
 /**
  * --------------------------------------------------
@@ -14,10 +15,6 @@ const protect = async (
 ) => {
 
   try {
-
-    console.log(
-      "AUTH START"
-    );
 
     const authHeader =
       req.headers.authorization || "";
@@ -42,8 +39,8 @@ const protect = async (
       !process.env.JWT_SECRET
     ) {
 
-      console.error(
-        "[AUTH_CONFIG_ERROR] JWT_SECRET missing"
+      logger.error(
+        "JWT authentication secret is missing"
       );
 
       return res.status(500).json({
@@ -60,19 +57,11 @@ const protect = async (
         process.env.JWT_SECRET
       );
 
-    console.log(
-      "TOKEN VERIFIED"
-    );
-
     const user =
       await User.findById(
         decoded.id
       )
         .select("-password");
-
-    console.log(
-      "USER QUERY COMPLETED"
-    );
 
     if (!user) {
 
@@ -84,22 +73,14 @@ const protect = async (
       });
     }
 
-    console.log(
-      "USER FOUND"
-    );
-
     req.user = user;
-
-    console.log(
-      "AUTH NEXT"
-    );
 
     return next();
 
   } catch (error) {
 
-    console.error(
-      "[AUTH_ERROR]",
+    logger.warn(
+      "Authentication failed",
       {
         message:
           error.message,

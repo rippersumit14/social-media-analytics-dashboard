@@ -1,8 +1,8 @@
 const variants = {
-  success: "border-teal-200 bg-teal-50 text-teal-700",
-  warning: "border-amber-200 bg-amber-50 text-amber-700",
-  neutral: "border-line-200 bg-cloud-50 text-ink-700",
-  danger: "border-red-200 bg-red-50 text-red-700",
+  success: "border-teal-500/30 bg-teal-500/10 text-teal-700",
+  warning: "border-amber-500/35 bg-amber-500/10 text-amber-700",
+  neutral: "border-[var(--app-border)] bg-[var(--app-bg)] text-[var(--app-muted)]",
+  danger: "border-red-500/30 bg-red-500/10 text-red-700",
 };
 
 export function StatusBadge({ children, variant = "neutral" }) {

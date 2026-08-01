@@ -1,5 +1,5 @@
 import express from "express";
-import axios from "axios";
+import mongoose from "mongoose";
 
 import {
   helmetConfig,
@@ -13,6 +13,7 @@ import { globalRateLimiter } from "./middlewares/rateLimiter.js";
 import errorMiddleware from "./middlewares/errorMiddleware.js";
 
 import logger from "./utils/logger.js";
+import redis from "./config/redis.js";
 
 /**
  * --------------------------------------------------
@@ -45,40 +46,6 @@ import conversationRoutes from "./routes/conversationRoutes.js";
 import personalNoteRoutes from "./routes/personalNoteRoutes.js";
 
 const app = express();
-
-/**
- * --------------------------------------------------
- * Temporary Meta Connectivity Test
- * --------------------------------------------------
- *
- * Remove before deployment — along with the axios import above.
- */
-
-app.get("/meta-test", async (req, res) => {
-  try {
-    const response = await axios.get(
-      "https://graph.facebook.com/v25.0/oauth/access_token",
-      {
-        params: {
-          client_id: process.env.META_APP_ID,
-          client_secret: process.env.META_APP_SECRET,
-          grant_type: "client_credentials",
-        },
-      }
-    );
-
-    return res.status(200).json(response.data);
-  } catch (error) {
-    console.error("\nMETA TEST ERROR");
-    console.dir(error.response?.data, { depth: null });
-
-    return res.status(500).json(
-      error.response?.data || {
-        message: error.message,
-      }
-    );
-  }
-});
 
 /**
  * --------------------------------------------------
@@ -146,6 +113,40 @@ app.get("/api/health", (req, res) => {
     environment: process.env.NODE_ENV,
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
+  });
+});
+
+app.get("/api/ready", async (req, res) => {
+  const mongoReady =
+    mongoose.connection.readyState === 1;
+
+  let redisReady = false;
+
+  try {
+    await redis.ping();
+    redisReady = true;
+  } catch {
+    redisReady = false;
+  }
+
+  const isReady =
+    mongoReady && redisReady;
+
+  return res.status(
+    isReady ? 200 : 503
+  ).json({
+    success:
+      isReady,
+    status:
+      isReady ? "READY" : "NOT_READY",
+    checks: {
+      mongo:
+        mongoReady ? "connected" : "disconnected",
+      redis:
+        redisReady ? "connected" : "disconnected",
+    },
+    timestamp:
+      new Date().toISOString(),
   });
 });
 

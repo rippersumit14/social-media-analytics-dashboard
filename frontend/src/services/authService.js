@@ -30,4 +30,8 @@ export const authService = {
   async resendOtp(payload) {
     return unwrapResponse(await http.post(apiEndpoints.auth.resendOtp, payload));
   },
+
+  async updatePassword(payload) {
+    return unwrapResponse(await http.patch(apiEndpoints.auth.password, payload));
+  },
 };

@@ -1,13 +1,18 @@
-import { PlaceholderPage } from "../components/common/PlaceholderPage";
+import { BackToTopButton } from "../components/landing/BackToTopButton";
+import { LandingSections } from "../components/landing/LandingSections";
+import { PublicNavbar } from "../components/landing/PublicNavbar";
+import { useAuth } from "../hooks/useAuth";
 
 export default function Landing() {
+  const { isAuthenticated } = useAuth();
+
   return (
-    <PlaceholderPage
-      eyebrow="Landing"
-      title="Landing page placeholder"
-      description="This route exists for the Day 7 landing milestone only; the production homepage is not implemented on Day 1."
-      readyItems={["Landing route reserved", "Brand language aligned to product vision"]}
-      nextItems={["Hero media", "Public copy", "Conversion-focused calls to action"]}
-    />
+    <div className="landing-page">
+      <PublicNavbar isAuthenticated={isAuthenticated} />
+      <main>
+        <LandingSections isAuthenticated={isAuthenticated} />
+      </main>
+      <BackToTopButton />
+    </div>
   );
 }

@@ -76,17 +76,17 @@ export function NoteEditorModal({ note, isOpen, isSubmitting, onClose, onSubmit 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/40 p-4">
-      <form onSubmit={handleSubmit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-line-200 bg-white p-5 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="note-editor-title">
+      <form onSubmit={handleSubmit} className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-[var(--app-border)] bg-[var(--app-paper)] p-5 shadow-xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase text-brand-700">Personal Notes</p>
-            <h2 className="mt-1 text-lg font-semibold text-ink-950">{note ? "Edit note" : "Create note"}</h2>
+            <p className="text-xs font-semibold uppercase text-[var(--app-primary)]">Personal Notes</p>
+            <h2 id="note-editor-title" className="mt-1 text-lg font-semibold text-[var(--app-text)]">{note ? "Edit note" : "Create note"}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-500 hover:bg-cloud-100"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--app-muted)] transition hover:bg-[var(--app-bg)] hover:text-[var(--app-text)]"
             aria-label="Close note editor"
           >
             <X aria-hidden="true" size={18} />
@@ -114,7 +114,7 @@ export function NoteEditorModal({ note, isOpen, isSubmitting, onClose, onSubmit 
           />
 
           <div>
-            <label htmlFor="note-content" className="mb-2 block text-sm font-semibold text-ink-700">
+            <label htmlFor="note-content" className="mb-2 block text-sm font-semibold text-[var(--app-text)]">
               Content
             </label>
             <textarea
@@ -124,9 +124,9 @@ export function NoteEditorModal({ note, isOpen, isSubmitting, onClose, onSubmit 
               rows={10}
               maxLength={10000}
               className={[
-                "w-full resize-y rounded-lg border bg-white px-3 py-3 text-sm leading-6 text-ink-950 outline-none transition",
-                "placeholder:text-ink-500 focus:border-brand-600 focus:ring-4 focus:ring-blue-100",
-                errors.content ? "border-red-300" : "border-line-200",
+                "w-full resize-y rounded-lg border bg-[var(--app-paper)] px-3 py-3 text-sm leading-6 text-[var(--app-text)] outline-none transition",
+                "placeholder:text-[var(--app-muted)] focus:border-[var(--app-primary)] focus:ring-4 focus:ring-[var(--app-ring)]",
+                errors.content ? "border-red-300" : "border-[var(--app-border)]",
               ].join(" ")}
               aria-invalid={Boolean(errors.content)}
               aria-describedby={errors.content ? "note-content-error" : undefined}

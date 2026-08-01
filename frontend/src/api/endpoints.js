@@ -10,7 +10,7 @@ export const apiEndpoints = {
   },
   instagram: {
     connect: "/instagram/connect",
-    callback: "/instagram/oauth/callback",
+    accountStatus: "/dashboard/overview",
     mediaSync: "/instagram/media/sync",
     analyticsSnapshot: "/instagram/analytics/snapshot",
     analyticsLatest: "/instagram/analytics/latest",
@@ -42,5 +42,6 @@ export const apiEndpoints = {
   },
   recommendations: {
     list: "/recommendations",
+    generate: "/recommendations/generate",
   },
 };

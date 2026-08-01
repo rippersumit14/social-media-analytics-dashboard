@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
-import { BrainCircuit, Plus } from "lucide-react";
+import { BrainCircuit, Plus, RotateCcw } from "lucide-react";
 
 import { PageHeader } from "../components/common/PageHeader";
 import { Button } from "../components/ui/Button";
@@ -64,6 +64,7 @@ export default function Notes() {
   const [editingNote, setEditingNote] = useState(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [noteToDelete, setNoteToDelete] = useState(null);
+  const [recentlyDeletedNotes, setRecentlyDeletedNotes] = useState([]);
   const queryClient = useQueryClient();
 
   const notesQuery = useQuery({
@@ -126,13 +127,28 @@ export default function Notes() {
 
   const deleteNote = useMutation({
     mutationFn: (note) => notesService.delete(note._id),
-    onSuccess: () => {
-      toast.success("Note deleted.");
+    onSuccess: (deletedNote) => {
+      if (deletedNote?._id) {
+        setRecentlyDeletedNotes((notes) => [deletedNote, ...notes.filter((note) => note._id !== deletedNote._id)].slice(0, 5));
+      }
+      toast.success("Note deleted. You can restore it from recently deleted.");
       invalidateNotes();
       setNoteToDelete(null);
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, "Unable to delete note."));
+    },
+  });
+
+  const restoreDeletedNote = useMutation({
+    mutationFn: (note) => notesService.restore(note._id),
+    onSuccess: (restoredNote) => {
+      toast.success("Deleted note restored.");
+      setRecentlyDeletedNotes((notes) => notes.filter((note) => note._id !== restoredNote?._id));
+      invalidateNotes();
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, "Unable to restore note."));
     },
   });
 
@@ -169,7 +185,8 @@ export default function Notes() {
     return (
       (togglePin.isPending && togglePin.variables?._id === note._id) ||
       (toggleArchive.isPending && toggleArchive.variables?._id === note._id) ||
-      (deleteNote.isPending && deleteNote.variables?._id === note._id)
+      (deleteNote.isPending && deleteNote.variables?._id === note._id) ||
+      (restoreDeletedNote.isPending && restoreDeletedNote.variables?._id === note._id)
     );
   }
 
@@ -198,20 +215,45 @@ export default function Notes() {
 
       <SectionCard title="Notebook overview" description="Pinned notes stay first in active views. Deleted notes are soft-deleted by the backend.">
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-line-200 bg-cloud-50 p-4">
-            <p className="text-xs font-semibold uppercase text-ink-500">Active notes</p>
-            <p className="mt-2 text-2xl font-semibold text-ink-950">{activeCount}</p>
+          <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-4">
+            <p className="text-xs font-semibold uppercase text-[var(--app-muted)]">Active notes</p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--app-text)]">{activeCount}</p>
           </div>
-          <div className="rounded-lg border border-line-200 bg-cloud-50 p-4">
-            <p className="text-xs font-semibold uppercase text-ink-500">Pinned</p>
-            <p className="mt-2 text-2xl font-semibold text-ink-950">{pinnedCount}</p>
+          <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-4">
+            <p className="text-xs font-semibold uppercase text-[var(--app-muted)]">Pinned</p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--app-text)]">{pinnedCount}</p>
           </div>
-          <div className="rounded-lg border border-line-200 bg-cloud-50 p-4">
-            <p className="text-xs font-semibold uppercase text-ink-500">Archived</p>
-            <p className="mt-2 text-2xl font-semibold text-ink-950">{archivedCount}</p>
+          <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-4">
+            <p className="text-xs font-semibold uppercase text-[var(--app-muted)]">Archived</p>
+            <p className="mt-2 text-2xl font-semibold text-[var(--app-text)]">{archivedCount}</p>
           </div>
         </div>
       </SectionCard>
+
+      {recentlyDeletedNotes.length > 0 ? (
+        <SectionCard title="Recently deleted" description="The backend restore endpoint can recover notes deleted during this browser session.">
+          <div className="space-y-3">
+            {recentlyDeletedNotes.map((note) => (
+              <div key={note._id} className="flex flex-col gap-3 rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-[var(--app-text)]">{note.title || "Untitled note"}</p>
+                  <p className="mt-1 text-xs text-[var(--app-muted)]">Deleted notes are not returned by the list endpoint, so this recovery list is session-based.</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => restoreDeletedNote.mutate(note)}
+                  disabled={getActionLoading(note)}
+                  className="shrink-0"
+                >
+                  <RotateCcw aria-hidden="true" size={17} />
+                  Restore
+                </Button>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      ) : null}
 
       <NotesToolbar search={search} view={view} sort={sort} onSearchChange={setSearch} onViewChange={setView} onSortChange={setSort} />
 
@@ -250,7 +292,7 @@ export default function Notes() {
       <ConfirmDialog
         isOpen={Boolean(noteToDelete)}
         title="Delete note?"
-        description={`"${noteToDelete?.title || "This note"}" will be removed from the active notes list. The backend uses soft delete behavior, but deleted notes are not exposed in the current list endpoint.`}
+        description={`"${noteToDelete?.title || "This note"}" will be soft-deleted. You can restore it from the recently deleted recovery list during this session.`}
         confirmLabel="Delete note"
         isLoading={deleteNote.isPending}
         onClose={() => setNoteToDelete(null)}

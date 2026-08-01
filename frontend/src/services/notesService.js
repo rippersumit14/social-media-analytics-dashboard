@@ -46,6 +46,12 @@ export const notesService = {
     return response.data?.note;
   },
 
+  async restore(noteId) {
+    const response = await http.patch(apiEndpoints.notes.restore(noteId));
+
+    return response.data?.note;
+  },
+
   async pin(noteId) {
     const response = await http.patch(apiEndpoints.notes.pin(noteId));
 

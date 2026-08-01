@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import logger from "../utils/logger.js";
 
 /**
  * --------------------------------------------------
@@ -35,31 +36,16 @@ export const verifyMailConnection = async () => {
   try {
     await transporter.verify();
 
-    console.log(
+    logger.info(
       "Mail server connected successfully"
     );
   } catch (error) {
-    console.error(
-      "Mail server connection failed:",
-      error.message
-    );
-
-    /**
-     * Debug Info
-     * Remove later if desired.
-     */
-    console.log(
-      "EMAIL_USER:",
-      process.env.EMAIL_USER
-        ? "Loaded"
-        : "Missing"
-    );
-
-    console.log(
-      "EMAIL_PASSWORD:",
-      process.env.EMAIL_PASSWORD
-        ? "Loaded"
-        : "Missing"
+    logger.warn(
+      "Mail server connection failed",
+      {
+        message:
+          "Email delivery is unavailable. Check SMTP provider configuration.",
+      }
     );
   }
 };

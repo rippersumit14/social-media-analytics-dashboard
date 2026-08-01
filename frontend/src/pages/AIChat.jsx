@@ -16,7 +16,7 @@ export default function AIChat() {
   );
 
   return (
-    <section className="h-[calc(100vh-7rem)] min-h-[42rem] overflow-hidden rounded-lg border border-line-200 bg-white shadow-sm">
+    <section className="h-[calc(100vh-7rem)] min-h-[42rem] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-paper)] shadow-sm shadow-black/5">
       <div className="flex h-full min-h-0">
         <ChatSidebar
           account={chat.account}
@@ -39,7 +39,7 @@ export default function AIChat() {
           setSearchTerm={chat.setSearchTerm}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col bg-cloud-50">
+        <div className="flex min-w-0 flex-1 flex-col bg-[var(--app-bg)]">
           <ChatHeader
             account={chat.account}
             conversation={activeConversation}

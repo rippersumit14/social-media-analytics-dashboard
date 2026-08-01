@@ -1,6 +1,9 @@
 import express from "express";
 
 import protect from "../middlewares/authMiddleware.js";
+import {
+  aiChatRateLimiter,
+} from "../middlewares/rateLimiter.js";
 
 import {
   generateRecommendationsController,
@@ -37,6 +40,7 @@ const router = express.Router();
 router.post(
   "/generate",  
   protect,
+  aiChatRateLimiter,
   generateRecommendationsController
 );
 

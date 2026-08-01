@@ -6,7 +6,7 @@ import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/TextField";
 import { useAuth } from "../hooks/useAuth";
 import { routePaths } from "../routes/routePaths";
-import { getApiErrorMessage } from "../utils/apiError";
+import { getApiErrorDetails } from "../utils/apiError";
 
 const initialForm = {
   email: "",
@@ -69,7 +69,13 @@ export default function Login() {
       toast.success("Welcome back.");
       navigate(redirectTo, { replace: true });
     } catch (error) {
-      const message = getApiErrorMessage(error, "Unable to log in.");
+      const details = getApiErrorDetails(error, "Unable to log in.");
+      const message =
+        details.status === 403 && details.message.toLowerCase().includes("verify")
+          ? "Please verify your email before logging in."
+          : details.status === 429
+            ? details.message
+            : details.message;
       setFormError(message);
       toast.error(message);
     } finally {
@@ -89,7 +95,10 @@ export default function Login() {
         <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
           {formError}
           {formError.toLowerCase().includes("verify") ? (
-            <Link to={routePaths.verifyEmail} className="ml-1 font-semibold underline">
+            <Link
+              to={`${routePaths.verifyEmail}?email=${encodeURIComponent(form.email.trim().toLowerCase())}`}
+              className="ml-1 font-semibold underline"
+            >
               Verify email
             </Link>
           ) : null}

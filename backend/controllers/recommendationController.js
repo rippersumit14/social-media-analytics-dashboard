@@ -22,18 +22,10 @@ export const generateRecommendationsController =
       res
     ) => {
 
-      console.log(
-        "CONTROLLER START"
-      );
-
       const result =
         await generateRecommendations(
           req.user._id
         );
-
-      console.log(
-        "SERVICE RETURNED"
-      );
 
       return res.status(200).json({
         success: true,

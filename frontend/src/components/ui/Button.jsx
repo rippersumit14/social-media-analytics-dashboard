@@ -1,14 +1,14 @@
 const variants = {
-  primary: "bg-brand-600 text-white hover:bg-brand-700",
-  secondary: "border border-line-200 bg-white text-ink-700 hover:bg-cloud-100",
-  ghost: "text-ink-700 hover:bg-cloud-100",
+  primary: "bg-[var(--app-primary)] text-white shadow-sm shadow-blue-500/15 hover:brightness-95",
+  secondary: "border border-[var(--app-border)] bg-[var(--app-paper)] text-[var(--app-text)] hover:bg-[var(--app-bg)]",
+  ghost: "text-[var(--app-text)] hover:bg-[var(--app-bg)]",
 };
 
 export function Button({ as: Component = "button", variant = "primary", className = "", ...props }) {
   return (
     <Component
       className={[
-        "inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold transition duration-200 active:translate-y-px disabled:cursor-not-allowed disabled:translate-y-0 disabled:opacity-60",
         variants[variant],
         className,
       ].join(" ")}

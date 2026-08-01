@@ -10,7 +10,7 @@ function formatCategory(category) {
 
 export function NoteCategoryBadge({ category }) {
   return (
-    <span className="inline-flex items-center rounded-full border border-line-200 bg-cloud-50 px-2.5 py-1 text-xs font-semibold text-ink-700">
+    <span className="inline-flex items-center rounded-full border border-[var(--app-border)] bg-[var(--app-bg)] px-2.5 py-1 text-xs font-semibold text-[var(--app-muted)]">
       {formatCategory(category)}
     </span>
   );

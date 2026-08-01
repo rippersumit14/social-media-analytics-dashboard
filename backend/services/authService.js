@@ -4,7 +4,102 @@ import EmailVerificationOTP from "../models/EmailVerificationOTP.js";
 import AppError from "../utils/AppError.js";
 import { generateOTP } from "../utils/generateOTP.js";
 
-import { sendVerificationEmail } from "./emailService.js";
+import { deliverVerificationEmail } from "../jobs/emailQueue.js";
+
+const OTP_EXPIRY_MS =
+  10 * 60 * 1000;
+
+const OTP_RESEND_COOLDOWN_MS =
+  Number(
+    process.env.OTP_RESEND_COOLDOWN_MS
+  ) || 60 * 1000;
+
+const normalizeEmail = (email = "") =>
+  email.trim().toLowerCase();
+
+const createAndDeliverOTP = async ({
+  user,
+  purpose,
+  enforceCooldown = false,
+}) => {
+  const latestOtp =
+    await EmailVerificationOTP
+      .findOne({
+        email:
+          user.email,
+      })
+      .sort({
+        createdAt:
+          -1,
+      });
+
+  if (
+    enforceCooldown &&
+    latestOtp?.createdAt &&
+    Date.now() -
+      latestOtp.createdAt.getTime() <
+      OTP_RESEND_COOLDOWN_MS
+  ) {
+    throw new AppError(
+      "Please wait before requesting another verification OTP.",
+      429
+    );
+  }
+
+  const otp = generateOTP();
+
+  const expiresAt = new Date(
+    Date.now() + OTP_EXPIRY_MS
+  );
+
+  const otpRecord =
+    await EmailVerificationOTP.create({
+      user:
+        user._id,
+      email:
+        user.email,
+      otp,
+      expiresAt,
+    });
+
+  try {
+    await deliverVerificationEmail({
+      email:
+        user.email,
+      name:
+        user.name,
+      otp,
+      purpose,
+      userId:
+        user._id.toString(),
+    });
+
+    await EmailVerificationOTP.deleteMany({
+      email:
+        user.email,
+      _id: {
+        $ne:
+          otpRecord._id,
+      },
+    });
+
+    return otpRecord;
+  } catch (error) {
+    await EmailVerificationOTP.deleteOne({
+      _id:
+        otpRecord._id,
+    });
+
+    if (error instanceof AppError) {
+      throw error;
+    }
+
+    throw new AppError(
+      "Verification email could not be delivered. Please try again later.",
+      503
+    );
+  }
+};
 
 /**
  * --------------------------------------------------
@@ -23,48 +118,71 @@ export const registerUser = async ({
   email,
   password,
 }) => {
+  const normalizedEmail =
+    normalizeEmail(email);
+
   const existingUser = await User.findOne({
-    email,
+    email:
+      normalizedEmail,
   });
 
-  if (existingUser) {
+  if (
+    existingUser?.isEmailVerified
+  ) {
     throw new AppError(
       "User already exists with this email",
       409
     );
   }
 
-  const user = await User.create({
-    name,
-    email,
-    password,
-  });
+  if (existingUser) {
+    await createAndDeliverOTP({
+      user:
+        existingUser,
+      purpose:
+        "registration-recovery",
+      enforceCooldown:
+        true,
+    });
 
-  /**
-   * Remove any stale OTP records
-   */
-  await EmailVerificationOTP.deleteMany({
-    email,
-  });
+    return {
+      user:
+        existingUser,
+      verificationPending:
+        true,
+      message:
+        "Email verification is pending. A new verification OTP has been sent.",
+    };
+  }
 
-  const otp = generateOTP();
+  const user =
+    await User.create({
+      name,
+      email:
+        normalizedEmail,
+      password,
+    });
 
-  const expiresAt = new Date(
-    Date.now() + 10 * 60 * 1000
-  );
+  try {
+    await createAndDeliverOTP({
+      user,
+      purpose:
+        "registration",
+    });
+  } catch (error) {
+    await Promise.allSettled([
+      EmailVerificationOTP.deleteMany({
+        user:
+          user._id,
+      }),
+      User.deleteOne({
+        _id:
+          user._id,
+      }),
+    ]);
 
-  await EmailVerificationOTP.create({
-    user: user._id,
-    email: user.email,
-    otp,
-    expiresAt,
-  });
-
-  await sendVerificationEmail({
-    email: user.email,
-    name: user.name,
-    otp,
-  });
+    throw error;
+  }
 
   return {
     user,
@@ -88,13 +206,20 @@ export const verifyEmail = async ({
   email,
   otp,
 }) => {
+  const normalizedEmail =
+    normalizeEmail(email);
+
   const otpRecord =
     await EmailVerificationOTP.findOne({
-      email,
+      email:
+        normalizedEmail,
       otp,
     });
 
-  if (!otpRecord) {
+  if (
+    !otpRecord ||
+    otpRecord.expiresAt <= new Date()
+  ) {
     throw new AppError(
       "Invalid or expired OTP",
       400
@@ -124,7 +249,8 @@ export const verifyEmail = async ({
   await user.save();
 
   await EmailVerificationOTP.deleteMany({
-    email,
+    email:
+      normalizedEmail,
   });
 
   return {
@@ -142,8 +268,12 @@ export const verifyEmail = async ({
 export const resendOTP = async (
   email
 ) => {
+  const normalizedEmail =
+    normalizeEmail(email);
+
   const user = await User.findOne({
-    email,
+    email:
+      normalizedEmail,
   });
 
   if (!user) {
@@ -160,27 +290,12 @@ export const resendOTP = async (
     );
   }
 
-  await EmailVerificationOTP.deleteMany({
-    email,
-  });
-
-  const otp = generateOTP();
-
-  const expiresAt = new Date(
-    Date.now() + 10 * 60 * 1000
-  );
-
-  await EmailVerificationOTP.create({
-    user: user._id,
-    email,
-    otp,
-    expiresAt,
-  });
-
-  await sendVerificationEmail({
-    email,
-    name: user.name,
-    otp,
+  await createAndDeliverOTP({
+    user,
+    purpose:
+      "resend",
+    enforceCooldown:
+      true,
   });
 
   return {
@@ -204,8 +319,12 @@ export const loginUser = async ({
   email,
   password,
 }) => {
+  const normalizedEmail =
+    normalizeEmail(email);
+
   const user = await User.findOne({
-    email,
+    email:
+      normalizedEmail,
   }).select("+password");
 
   if (!user) {
