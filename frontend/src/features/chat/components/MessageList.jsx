@@ -16,6 +16,8 @@ export function MessageList({
   isSending,
   messages,
   onCreateConversation,
+  streamError,
+  streamModel,
 }) {
   const bottomRef = useRef(null);
 
@@ -56,6 +58,14 @@ export function MessageList({
       {messages.map((message) => (
         <MessageBubble key={message._id} message={message} />
       ))}
+      {streamModel && isSending ? (
+        <p className="text-center text-xs text-[var(--app-muted)]">
+          Streaming with {streamModel}
+        </p>
+      ) : null}
+      {streamError ? (
+        <ErrorPanel title="AI response failed" message={streamError} />
+      ) : null}
       {isSending ? <TypingIndicator /> : null}
       <div ref={bottomRef} />
     </div>

@@ -8,14 +8,14 @@ const statusMessages = {
 };
 
 function readRetryAfter(error) {
-  const value = error?.response?.headers?.["retry-after"];
+  const value = error?.response?.headers?.["retry-after"] || error?.headers?.["retry-after"];
   const seconds = Number(value);
 
   return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
 }
 
 export function getApiErrorDetails(error, fallback = "Something went wrong. Please try again.") {
-  const status = error?.response?.status;
+  const status = error?.response?.status || error?.status;
   const retryAfter = readRetryAfter(error);
   const serverMessage = error?.response?.data?.message;
   const message = serverMessage || statusMessages[status] || error?.message || fallback;
@@ -36,5 +36,5 @@ export function getApiErrorMessage(error, fallback = "Something went wrong. Plea
 }
 
 export function isRateLimitError(error) {
-  return error?.response?.status === 429;
+  return (error?.response?.status || error?.status) === 429;
 }

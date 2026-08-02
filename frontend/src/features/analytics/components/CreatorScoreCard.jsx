@@ -26,17 +26,19 @@ function getScoreLabel(score) {
 }
 
 export function CreatorScoreCard({ score, compact = false }) {
-  const totalScore = Number(score?.totalScore || 0);
+  const totalScore = Number(score?.totalScore);
+  const hasScore = Number.isFinite(totalScore);
+  const isEstimated = Boolean(score?.metadata?.hasManualMetrics);
   const scoreMeta = getScoreLabel(totalScore);
   const ringStyle = {
-    background: `conic-gradient(#2563eb ${totalScore * 3.6}deg, #eceff4 0deg)`,
+    background: `conic-gradient(#2563eb ${hasScore ? totalScore * 3.6 : 0}deg, #eceff4 0deg)`,
   };
 
   return (
     <SectionCard
-      title="Creator Score"
-      description="A weighted score across engagement, growth, consistency, and activity."
-      action={<StatusBadge variant={scoreMeta.variant}>{scoreMeta.label}</StatusBadge>}
+      title={isEstimated ? "Estimated Creator Score" : "Creator Score"}
+      description={isEstimated ? "This score uses at least one manually entered account metric and should be treated as an estimate." : "A weighted score across engagement, growth, consistency, and activity."}
+      action={<StatusBadge variant={hasScore ? scoreMeta.variant : "neutral"}>{hasScore ? scoreMeta.label : "Needs data"}</StatusBadge>}
     >
       {score ? (
         <div className={compact ? "space-y-5" : "grid gap-6 lg:grid-cols-[auto_1fr]"}>
@@ -44,8 +46,8 @@ export function CreatorScoreCard({ score, compact = false }) {
             <div className="flex h-32 w-32 shrink-0 items-center justify-center rounded-full p-2" style={ringStyle}>
               <div className="flex h-full w-full items-center justify-center rounded-full bg-white">
                 <div className="text-center">
-                  <p className="text-4xl font-semibold text-ink-950">{Math.round(totalScore)}</p>
-                  <p className="text-xs font-semibold uppercase text-ink-500">out of 100</p>
+                  <p className="text-4xl font-semibold text-ink-950">{hasScore ? Math.round(totalScore) : "--"}</p>
+                  <p className="text-xs font-semibold uppercase text-ink-500">{hasScore ? "out of 100" : "No score"}</p>
                 </div>
               </div>
             </div>

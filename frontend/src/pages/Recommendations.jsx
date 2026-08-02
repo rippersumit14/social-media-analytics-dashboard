@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { BrainCircuit, Lightbulb, RefreshCw, Sparkles, Target } from "lucide-react";
 
 import { PageHeader } from "../components/common/PageHeader";
+import { DataAvailabilityNotice } from "../components/instagram/DataAvailabilityNotice";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorPanel } from "../components/ui/ErrorPanel";
@@ -11,9 +12,11 @@ import { LoadingCard } from "../components/ui/LoadingCard";
 import { SectionCard } from "../components/ui/SectionCard";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { routePaths } from "../routes/routePaths";
+import { dashboardService } from "../services/dashboardService";
 import { recommendationService } from "../services/recommendationService";
 import { getApiErrorMessage } from "../utils/apiError";
 import { formatDateTime, formatNumber } from "../utils/formatters";
+import { hasManualMetrics, hasUnavailableMetrics } from "../utils/metricSources";
 
 const priorityVariant = {
   high: "warning",
@@ -76,6 +79,11 @@ export default function Recommendations() {
     queryFn: recommendationService.list,
     retry: false,
   });
+  const dashboardQuery = useQuery({
+    queryKey: ["dashboard-overview"],
+    queryFn: dashboardService.getOverview,
+    retry: false,
+  });
 
   const generateRecommendations = useMutation({
     mutationFn: recommendationService.generate,
@@ -94,6 +102,7 @@ export default function Recommendations() {
   });
 
   const recommendations = recommendationsQuery.data || [];
+  const account = dashboardQuery.data?.account;
   const isNoAccount = recommendationsQuery.error?.response?.status === 404;
 
   return (
@@ -115,6 +124,9 @@ export default function Recommendations() {
           </>
         }
       />
+
+      {account && hasUnavailableMetrics(account) ? <DataAvailabilityNotice type="lowData" /> : null}
+      {account && hasManualMetrics(account) ? <DataAvailabilityNotice type="manualActive" /> : null}
 
       {recommendationsQuery.isLoading ? (
         <div className="grid gap-4 lg:grid-cols-2">

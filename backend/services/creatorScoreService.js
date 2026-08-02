@@ -1,4 +1,5 @@
 import AppError from "../utils/AppError.js";
+import logger from "../utils/logger.js";
 
 import InstagramAccount from "../models/InstagramAccount.js";
 import InstagramMedia from "../models/InstagramMedia.js";
@@ -72,7 +73,7 @@ export const calculateCreatorScore = async (userId) => {
 
     let engagementScore = 0;
 
-    const avgEngagement = snapshot.averageEngagement || 0;
+    const avgEngagement = Number(snapshot.averageEngagement) || 0;
 
     engagementScore = Math.min(avgEngagement / 5, 40);
 
@@ -84,7 +85,7 @@ export const calculateCreatorScore = async (userId) => {
 
     let activityScore = 0;
 
-    const mediaCount = snapshot.mediaCount || 0;
+    const mediaCount = Number(snapshot.mediaCount) || 0;
 
     activityScore = Math.min(mediaCount, 20);
 
@@ -128,10 +129,15 @@ export const calculateCreatorScore = async (userId) => {
 
     if (previousSnapshot) {
       const engagementGrowth =
-        snapshot.totalEngagement - previousSnapshot.totalEngagement;
+        Number(snapshot.totalEngagement || 0) -
+        Number(previousSnapshot.totalEngagement || 0);
 
       const followerGrowth =
-        snapshot.followers - previousSnapshot.followers;
+        Number.isFinite(Number(snapshot.followers)) &&
+        Number.isFinite(Number(previousSnapshot.followers))
+          ? Number(snapshot.followers) -
+            Number(previousSnapshot.followers)
+          : 0;
 
       growthScore = Math.min(
         (engagementGrowth + followerGrowth) / 5,
@@ -139,6 +145,18 @@ export const calculateCreatorScore = async (userId) => {
       );
 
       growthScore = Math.max(growthScore, 0);
+    }
+
+    const hasEnoughScoreInput =
+      Number.isFinite(Number(snapshot.followers)) ||
+      mediaCount > 0 ||
+      avgEngagement > 0;
+
+    if (!hasEnoughScoreInput) {
+      throw new AppError(
+        "Insufficient analytics data to calculate creator score",
+        422
+      );
     }
 
     /**
@@ -156,18 +174,6 @@ export const calculateCreatorScore = async (userId) => {
      * Save Score History
      * ==========================================
      */
-
-    console.log({
-      avgEngagement,
-      engagementScore,
-      activityScore,
-      consistencyScore,
-      growthScore,
-    });
-
-    console.log({
-      totalScore,
-    });
 
     const creatorScore = await CreatorScore.create({
       instagramAccount: account._id,
@@ -194,6 +200,16 @@ export const calculateCreatorScore = async (userId) => {
       metadata: {
         username: account.username,
         accountType: account.accountType,
+        dataMode:
+          snapshot.metadata?.hasManualMetrics
+            ? "manual-estimate"
+            : "account-aware",
+        hasManualMetrics:
+          Boolean(
+            snapshot.metadata?.hasManualMetrics
+          ),
+        metricSources:
+          snapshot.metadata?.metricSources || {},
       },
 
       scoreVersion: "v1",
@@ -203,13 +219,10 @@ export const calculateCreatorScore = async (userId) => {
 
     return creatorScore;
   } catch (error) {
-    console.log("\n=================================");
-    console.log("CREATOR SCORE FAILED");
-    console.log("=================================");
-    console.log("MESSAGE:", error.message);
-    console.log("STACK:");
-    console.log(error.stack);
-    console.log("=================================\n");
+    logger.warn("Creator score calculation failed", {
+      message: error.message,
+      statusCode: error.statusCode,
+    });
 
     if (error instanceof AppError) {
       throw error;

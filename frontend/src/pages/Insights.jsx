@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { BarChart3, NotebookPen } from "lucide-react";
 
 import { PageHeader } from "../components/common/PageHeader";
+import { DataAvailabilityNotice } from "../components/instagram/DataAvailabilityNotice";
 import { Button } from "../components/ui/Button";
 import { ErrorPanel } from "../components/ui/ErrorPanel";
 import { SectionCard } from "../components/ui/SectionCard";
@@ -18,6 +19,7 @@ import { dashboardService } from "../services/dashboardService";
 import { insightsService } from "../services/insightsService";
 import { getApiErrorMessage } from "../utils/apiError";
 import { formatDateTime } from "../utils/formatters";
+import { hasManualMetrics, hasUnavailableMetrics } from "../utils/metricSources";
 
 const NO_ACCOUNT_MESSAGE = "Instagram account not found";
 const EMPTY_INSIGHTS = [];
@@ -110,6 +112,9 @@ export default function Insights() {
           </>
         }
       />
+
+      {account && hasUnavailableMetrics(account) ? <DataAvailabilityNotice type="lowData" /> : null}
+      {account && hasManualMetrics(account) ? <DataAvailabilityNotice type="manualActive" /> : null}
 
       <SectionCard
         title="Latest insight cycle"

@@ -207,3 +207,80 @@ export const uploadRateLimiter =
       );
     },
   });
+
+/**
+ * ---------------------------------------------------
+ * Public Contact Rate Limiter
+ * ---------------------------------------------------
+ *
+ * Keeps the unauthenticated contact form useful
+ * while limiting spam.
+ */
+
+export const contactRateLimiter =
+  rateLimit({
+    windowMs:
+      15 * 60 * 1000,
+
+    max:
+      5,
+
+    standardHeaders:
+      true,
+
+    legacyHeaders:
+      false,
+
+    handler: (
+      req,
+      res
+    ) => {
+
+      return res.status(429).json(
+
+        new ApiResponse({
+          success: false,
+          statusCode: 429,
+          message:
+            "Too many contact attempts. Please wait before sending another message.",
+        })
+      );
+    },
+  });
+
+/**
+ * ---------------------------------------------------
+ * Instagram Manual Metrics Rate Limiter
+ * ---------------------------------------------------
+ */
+
+export const instagramManualMetricsRateLimiter =
+  rateLimit({
+    windowMs:
+      15 * 60 * 1000,
+
+    max:
+      20,
+
+    standardHeaders:
+      true,
+
+    legacyHeaders:
+      false,
+
+    handler: (
+      req,
+      res
+    ) => {
+
+      return res.status(429).json(
+
+        new ApiResponse({
+          success: false,
+          statusCode: 429,
+          message:
+            "Too many manual metric updates. Please wait before trying again.",
+        })
+      );
+    },
+  });

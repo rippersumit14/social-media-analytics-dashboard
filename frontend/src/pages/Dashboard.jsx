@@ -27,10 +27,12 @@ import { LoadingCard } from "../components/ui/LoadingCard";
 import { SectionCard } from "../components/ui/SectionCard";
 import { StatCard } from "../components/ui/StatCard";
 import { StatusBadge } from "../components/ui/StatusBadge";
+import { DataAvailabilityNotice } from "../components/instagram/DataAvailabilityNotice";
 import { useAuth } from "../hooks/useAuth";
 import { routePaths } from "../routes/routePaths";
 import { dashboardService } from "../services/dashboardService";
-import { formatDateTime, formatNumber, formatPercent } from "../utils/formatters";
+import { formatDateTime, formatMetricValue, formatNumber, formatPercent } from "../utils/formatters";
+import { hasManualMetrics, hasUnavailableMetrics } from "../utils/metricSources";
 
 const quickActions = [
   { label: "Connect Instagram", icon: Camera, to: routePaths.instagram, variant: "primary" },
@@ -88,28 +90,30 @@ export default function Dashboard() {
   const latestInsights = data?.latestInsights || [];
   const topMedia = data?.topMedia || [];
 
-  const score = Number(latestScore?.totalScore || latestSnapshot?.creatorScore || 0);
-  const engagementRate = latestSnapshot?.averageEngagement || topMedia[0]?.analytics?.engagementRate || 0;
+  const scoreValue = latestScore?.totalScore ?? latestSnapshot?.creatorScore;
+  const score = Number(scoreValue);
+  const hasScore = Number.isFinite(score);
+  const engagementRate = latestSnapshot?.averageEngagement ?? topMedia[0]?.analytics?.engagementRate;
 
   const metricCards = useMemo(
     () => [
       {
         label: "Followers",
-        value: formatNumber(account?.followers || latestSnapshot?.followers),
+        value: formatMetricValue(account?.followers ?? latestSnapshot?.followers, account?.metricsAvailability?.followers !== false),
         detail: latestSnapshot ? `${formatNumber(latestSnapshot.followerGrowth)} since last snapshot` : "Connect Instagram to start tracking growth",
         icon: Users,
         tone: "brand",
       },
       {
         label: "Media",
-        value: formatNumber(account?.mediaCount || latestSnapshot?.mediaCount),
+        value: formatMetricValue(account?.mediaCount ?? latestSnapshot?.mediaCount, account?.metricsAvailability?.mediaCount !== false),
         detail: latestSnapshot ? `${formatNumber(latestSnapshot.mediaGrowth)} new media since last snapshot` : "Media sync will populate this card",
         icon: Image,
         tone: "mint",
       },
       {
         label: "Engagement",
-        value: formatPercent(engagementRate),
+        value: Number.isFinite(Number(engagementRate)) ? formatPercent(engagementRate) : "Unavailable",
         detail: latestSnapshot ? `${formatNumber(latestSnapshot.totalEngagement)} total engagements` : "Snapshot data will calculate engagement",
         icon: TrendingUp,
         tone: "amber",
@@ -137,6 +141,10 @@ export default function Dashboard() {
           </>
         }
       />
+
+      {account && hasUnavailableMetrics(account) ? <DataAvailabilityNotice type="noProviderMetric" /> : null}
+      {account && hasManualMetrics(account) ? <DataAvailabilityNotice type="manualActive" /> : null}
+      {account && !account.lastSyncedAt ? <DataAvailabilityNotice type="syncRequired" /> : null}
 
       {isLoading ? (
         <div className="grid gap-4 lg:grid-cols-3">
@@ -206,12 +214,12 @@ export default function Dashboard() {
           <div className="flex items-center gap-5">
             <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full border-8 border-blue-100 bg-white">
               <div className="text-center">
-                <p className="text-3xl font-semibold text-ink-950">{Math.round(score)}</p>
-                <p className="text-xs font-medium text-ink-500">/100</p>
+                <p className="text-3xl font-semibold text-ink-950">{hasScore ? Math.round(score) : "--"}</p>
+                <p className="text-xs font-medium text-ink-500">{hasScore ? "/100" : "No score"}</p>
               </div>
             </div>
             <div>
-              <StatusBadge variant={score ? "success" : "neutral"}>{getScoreLevel(score)}</StatusBadge>
+              <StatusBadge variant={hasScore ? "success" : "neutral"}>{hasScore ? getScoreLevel(score) : "Needs data"}</StatusBadge>
               <p className="mt-3 text-sm leading-6 text-ink-500">
                 {latestScore ? `Calculated ${formatDateTime(latestScore.calculatedAt)}.` : "Calculate a score after connecting analytics data."}
               </p>

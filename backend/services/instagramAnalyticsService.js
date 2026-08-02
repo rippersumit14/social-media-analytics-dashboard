@@ -1,8 +1,14 @@
 import AppError from "../utils/AppError.js";
+import logger from "../utils/logger.js";
 
 import InstagramAccount from "../models/InstagramAccount.js";
 import InstagramMedia from "../models/InstagramMedia.js";
 import AnalyticsSnapshot from "../models/AnalyticsSnapshot.js";
+import {
+  buildAccountMetrics,
+  getMetricValue,
+  hasManualMetrics,
+} from "../utils/instagramMetricSources.js";
 
 /**
  * --------------------------------------------------
@@ -71,16 +77,33 @@ export const createAnalyticsSnapshot = async (userId) => {
       0
     );
 
-    const mediaCount = media.length;
+    const accountMetrics =
+      buildAccountMetrics(
+        account
+      );
+
+    const fallbackMediaCount =
+      getMetricValue(
+        accountMetrics,
+        "mediaCount"
+      );
+
+    const syncedMediaCount =
+      media.length;
+
+    const mediaCount =
+      syncedMediaCount > 0
+        ? syncedMediaCount
+        : fallbackMediaCount || 0;
 
     const averageLikes =
-      mediaCount > 0 ? Math.round(totalLikes / mediaCount) : 0;
+      syncedMediaCount > 0 ? Math.round(totalLikes / syncedMediaCount) : 0;
 
     const averageComments =
-      mediaCount > 0 ? Math.round(totalComments / mediaCount) : 0;
+      syncedMediaCount > 0 ? Math.round(totalComments / syncedMediaCount) : 0;
 
     const averageEngagement =
-      mediaCount > 0 ? Math.round(totalEngagement / mediaCount) : 0;
+      syncedMediaCount > 0 ? Math.round(totalEngagement / syncedMediaCount) : 0;
 
     /**
      * --------------------------------------------------
@@ -100,14 +123,36 @@ export const createAnalyticsSnapshot = async (userId) => {
      * --------------------------------------------------
      */
 
-    let followerGrowth = 0;
+    const followerCount =
+      getMetricValue(
+        accountMetrics,
+        "followers"
+      );
+
+    const followingCount =
+      getMetricValue(
+        accountMetrics,
+        "follows"
+      );
+
+    const followersAvailable =
+      followerCount !== null;
+
+    let followerGrowth = null;
 
     let engagementGrowth = 0;
 
     let mediaGrowth = 0;
 
     if (previousSnapshot) {
-      followerGrowth = account.followers - previousSnapshot.followers;
+      followerGrowth =
+        followersAvailable &&
+        Number.isFinite(
+          Number(previousSnapshot.followers)
+        )
+          ? followerCount -
+            Number(previousSnapshot.followers)
+          : null;
 
       engagementGrowth =
         totalEngagement - previousSnapshot.totalEngagement;
@@ -125,15 +170,23 @@ export const createAnalyticsSnapshot = async (userId) => {
      * weighted scoring engine.
      */
 
-    let creatorScore = 0;
+    let creatorScore = null;
 
-    creatorScore += Math.min(account.followers / 100, 40);
+    if (
+      followersAvailable ||
+      mediaCount > 0 ||
+      averageEngagement > 0
+    ) {
+      creatorScore = 0;
 
-    creatorScore += Math.min(averageEngagement / 10, 40);
+      creatorScore += Math.min((followerCount || 0) / 100, 40);
 
-    creatorScore += Math.min(mediaCount, 20);
+      creatorScore += Math.min(averageEngagement / 10, 40);
 
-    creatorScore = Math.round(Math.min(creatorScore, 100));
+      creatorScore += Math.min(mediaCount, 20);
+
+      creatorScore = Math.round(Math.min(creatorScore, 100));
+    }
 
     /**
      * --------------------------------------------------
@@ -146,9 +199,9 @@ export const createAnalyticsSnapshot = async (userId) => {
 
       snapshotDate: new Date(),
 
-      followers: account.followers,
+      followers: followerCount,
 
-      following: 0,
+      following: followingCount,
 
       mediaCount,
 
@@ -175,18 +228,23 @@ export const createAnalyticsSnapshot = async (userId) => {
       metadata: {
         username: account.username,
         accountType: account.accountType,
+        metricsAvailability:
+          account.metricsAvailability,
+        metricSources:
+          accountMetrics,
+        hasManualMetrics:
+          hasManualMetrics(
+            accountMetrics
+          ),
       },
     });
 
     return snapshot;
   } catch (error) {
-    console.log("\n=================================");
-    console.log("ANALYTICS SNAPSHOT FAILED");
-    console.log("=================================");
-    console.log("MESSAGE:", error.message);
-    console.log("STACK:");
-    console.log(error.stack);
-    console.log("=================================\n");
+    logger.warn("Analytics snapshot failed", {
+      message: error.message,
+      statusCode: error.statusCode,
+    });
 
     if (error instanceof AppError) {
       throw error;

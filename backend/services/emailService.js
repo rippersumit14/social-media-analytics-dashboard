@@ -1,5 +1,13 @@
 import transporter from "../config/mail.js";
 
+const escapeHtml = (value = "") =>
+  String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
 /**
  * ----------------------------------------
  * Send Email Verification OTP
@@ -72,4 +80,77 @@ export const sendVerificationEmail = async ({
   };
 
   await transporter.sendMail(mailOptions);
+};
+
+export const buildContactEmailOptions = ({
+  name,
+  email,
+  category,
+  subject,
+  message,
+}) => {
+  const receiver =
+    process.env.CONTACT_RECEIVER_EMAIL ||
+    process.env.EMAIL_USER;
+
+  return {
+    from:
+      process.env.EMAIL_FROM ||
+      `"Creator Growth AI" <${process.env.EMAIL_USER}>`,
+
+    to: receiver,
+
+    replyTo: email,
+
+    subject:
+      `CreatorIQ contact - ${category}: ${subject || "Website inquiry"}`,
+
+    text:
+      [
+        `Name: ${name}`,
+        `Email: ${email}`,
+        `Category: ${category}`,
+        `Subject: ${subject || "Website inquiry"}`,
+        "",
+        "Message:",
+        message,
+      ].join("\n"),
+
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">
+        <h2>New CreatorIQ Contact Message</h2>
+        <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+        <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+        <p><strong>Category:</strong> ${escapeHtml(category)}</p>
+        <p><strong>Subject:</strong> ${escapeHtml(subject || "Website inquiry")}</p>
+        <hr />
+        <p style="white-space: pre-wrap;">${escapeHtml(message)}</p>
+      </div>
+    `,
+  };
+};
+
+export const sendContactEmail = async ({
+  name,
+  email,
+  category,
+  subject,
+  message,
+}) => {
+  const mailOptions =
+    buildContactEmailOptions({
+      name,
+      email,
+      category,
+      subject,
+      message,
+    });
+
+  await transporter.sendMail(mailOptions);
+
+  return {
+    delivered: true,
+    receiver:
+      mailOptions.to,
+  };
 };

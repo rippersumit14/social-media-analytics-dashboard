@@ -31,6 +31,8 @@ import {
 } from "../../config/landingContent";
 import { env } from "../../config/env";
 import { routePaths } from "../../routes/routePaths";
+import { contactService } from "../../services/contactService";
+import { getApiErrorMessage } from "../../utils/apiError";
 import { ProductPreview } from "./ProductPreview";
 import { Reveal } from "./Reveal";
 import { SectionContainer } from "./SectionContainer";
@@ -60,37 +62,41 @@ function getActionPath(action, isAuthenticated) {
 
 function HeroSection({ isAuthenticated }) {
   return (
-    <section id="overview" className="px-4 pb-16 pt-12 sm:px-6 lg:px-8 lg:pb-24 lg:pt-20">
-      <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[1fr_0.95fr]">
-        <Reveal>
-          <Chip label="AI-powered creator intelligence for smarter growth decisions" color="primary" variant="outlined" />
-          <h1 className="mt-6 max-w-4xl text-4xl font-semibold leading-tight text-[var(--landing-text)] sm:text-5xl lg:text-6xl">
-            Turn creator data into <span className="landing-gradient-text">clear growth decisions.</span>
+    <section id="overview" className="relative overflow-hidden px-4 pb-16 pt-12 sm:px-6 lg:px-8 lg:pb-24 lg:pt-20">
+      <div className="absolute inset-0 -z-10 bg-[linear-gradient(rgba(37,99,235,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(37,99,235,0.06)_1px,transparent_1px)] bg-[size:48px_48px]" />
+      <div className="mx-auto max-w-7xl">
+        <Reveal className="mx-auto max-w-4xl text-center">
+          <Chip label="AI-powered creator analytics and growth guidance" color="primary" variant="outlined" />
+          <h1 className="mt-6 text-4xl font-semibold leading-tight text-[var(--landing-text)] sm:text-5xl lg:text-6xl">
+            Welcome to <span className="landing-gradient-text">Creator Analytics</span>
           </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-[var(--landing-muted)]">
-            CreatorIQ brings your Instagram analytics, Creator Score, AI insights, conversations, recommendations and planning notes into one simple workspace. Instead of only showing you numbers, it helps you understand what those numbers mean and what you can work on next.
+          <h2 className="mx-auto mt-5 max-w-3xl text-2xl font-semibold leading-snug text-[var(--landing-text)] sm:text-3xl">
+            Understand your performance, improve your strategy, and plan your next move with clarity.
+          </h2>
+          <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-[var(--landing-muted)]">
+            CreatorIQ brings Instagram account data, Creator Score, AI insights, recommendations, conversations, and personal planning tools into one creator workspace.
           </p>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-[var(--landing-muted)]">
-            Whether you are trying to improve consistency, understand engagement, repeat stronger content ideas or organize your weekly strategy, CreatorIQ gives you one place to review performance and plan your next move.
+          <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-[var(--landing-muted)]">
+            Connect your account, review available metrics, understand where your data is limited, ask focused questions, and turn observations into practical content decisions.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Button component={Link} to={isAuthenticated ? routePaths.dashboard : routePaths.register} variant="contained" size="large" endIcon={<ArrowRight size={18} />}>
-              {isAuthenticated ? "Open your dashboard" : "Start analyzing for free"}
+              {isAuthenticated ? "Open dashboard" : "Start for free"}
             </Button>
             <Button type="button" variant="outlined" size="large" onClick={() => scrollToSection("workflow")}>
-              See how it works
+              Explore the platform
             </Button>
           </div>
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
             {reassuranceItems.map((item) => (
-              <span key={item} className="inline-flex items-center gap-2 rounded-full border border-[var(--landing-border)] bg-[var(--landing-card)] px-3 py-1.5 text-sm font-semibold text-[var(--landing-muted)]">
+              <span key={item} className="inline-flex items-center gap-2 rounded-full border border-[var(--landing-border)] bg-[var(--landing-card)] px-3 py-1.5 text-sm font-semibold text-[var(--landing-muted)] transition hover:-translate-y-0.5 hover:border-[var(--landing-primary)] hover:text-[var(--landing-text)]">
                 <CheckCircle2 aria-hidden="true" size={15} className="text-[var(--landing-secondary)]" />
                 {item}
               </span>
             ))}
           </div>
         </Reveal>
-        <Reveal>
+        <Reveal className="mx-auto mt-12 max-w-5xl">
           <ProductPreview />
         </Reveal>
       </div>
@@ -409,23 +415,28 @@ function validateContact(values) {
   if (!values.name.trim()) errors.name = "Name is required.";
   if (!/^\S+@\S+\.\S+$/.test(values.email.trim())) errors.email = "Enter a valid email.";
   if (!values.category) errors.category = "Choose a category.";
+  if (!values.subject.trim()) errors.subject = "Subject is required.";
   if (!values.message.trim()) errors.message = "Message is required.";
   if (values.name.length > 80) errors.name = "Name must be 80 characters or less.";
+  if (values.subject.length > 120) errors.subject = "Subject must be 120 characters or less.";
   if (values.message.length > 1200) errors.message = "Message must be 1,200 characters or less.";
 
   return errors;
 }
 
 function createMailto(values) {
-  const subject = encodeURIComponent(`CreatorIQ contact - ${values.category}`);
-  const body = encodeURIComponent(`Name: ${values.name}\nEmail: ${values.email}\nCategory: ${values.category}\n\nMessage:\n${values.message}`);
+  const subject = encodeURIComponent(`CreatorIQ contact - ${values.category}: ${values.subject}`);
+  const body = encodeURIComponent(`Name: ${values.name}\nEmail: ${values.email}\nCategory: ${values.category}\nSubject: ${values.subject}\n\nMessage:\n${values.message}`);
 
   return `mailto:${env.contactEmail}?subject=${subject}&body=${body}`;
 }
 
 export function ContactSection({ initialCategory = "Product question", onCategoryConsumed }) {
-  const [values, setValues] = useState({ name: "", email: "", category: initialCategory, message: "" });
+  const [values, setValues] = useState({ name: "", email: "", category: initialCategory, subject: "", message: "" });
   const [errors, setErrors] = useState({});
+  const [deliveryError, setDeliveryError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const lastAppliedCategory = useRef(initialCategory);
 
@@ -440,9 +451,11 @@ export function ContactSection({ initialCategory = "Product question", onCategor
   function updateField(field, value) {
     setValues((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
+    setDeliveryError("");
+    setSuccessMessage("");
   }
 
-  function submitContact(event) {
+  async function submitContact(event) {
     event.preventDefault();
     const nextErrors = validateContact(values);
     setErrors(nextErrors);
@@ -451,11 +464,30 @@ export function ContactSection({ initialCategory = "Product question", onCategor
       return;
     }
 
-    window.location.href = createMailto(values);
-    setSnackbarOpen(true);
+    setIsSubmitting(true);
+    setDeliveryError("");
+    setSuccessMessage("");
+
+    try {
+      await contactService.submitContact({
+        name: values.name.trim(),
+        email: values.email.trim(),
+        category: values.category,
+        subject: values.subject.trim(),
+        message: values.message.trim(),
+      });
+
+      setSuccessMessage("Message sent successfully. The CreatorIQ team can now follow up using your email address.");
+      setValues({ name: "", email: "", category: initialCategory, subject: "", message: "" });
+      setSnackbarOpen(true);
+    } catch (error) {
+      setDeliveryError(getApiErrorMessage(error, "Contact delivery failed. Please use the public support email below."));
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  const copyText = `Name: ${values.name}\nEmail: ${values.email}\nCategory: ${values.category}\n\nMessage:\n${values.message}`;
+  const copyText = `Name: ${values.name}\nEmail: ${values.email}\nCategory: ${values.category}\nSubject: ${values.subject}\n\nMessage:\n${values.message}`;
 
   return (
     <SectionContainer
@@ -473,15 +505,46 @@ export function ContactSection({ initialCategory = "Product question", onCategor
               <MenuItem key={category} value={category}>{category}</MenuItem>
             ))}
           </TextField>
+          <TextField label="Subject" value={values.subject} onChange={(event) => updateField("subject", event.target.value)} error={Boolean(errors.subject)} helperText={errors.subject} slotProps={{ htmlInput: { maxLength: 120 } }} required />
           <TextField label="Message" value={values.message} onChange={(event) => updateField("message", event.target.value)} error={Boolean(errors.message)} helperText={errors.message} slotProps={{ htmlInput: { maxLength: 1200 } }} required multiline minRows={5} />
+          {successMessage ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              {successMessage}
+            </div>
+          ) : null}
+          {deliveryError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {deliveryError}
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-[var(--landing-muted)]">Public support email: {env.contactEmail}</p>
+            <div className="text-sm text-[var(--landing-muted)]">
+              <p>
+                Public support email:{" "}
+                <a className="font-semibold text-[var(--landing-primary)] hover:underline" href={`mailto:${env.contactEmail}`}>
+                  {env.contactEmail}
+                </a>
+              </p>
+              {env.contactPhone ? (
+                <p>
+                  Public phone:{" "}
+                  <a className="font-semibold text-[var(--landing-primary)] hover:underline" href={`tel:${env.contactPhone}`}>
+                    {env.contactPhone}
+                  </a>
+                </p>
+              ) : null}
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="outlined" onClick={() => navigator.clipboard?.writeText(copyText)}>
                 Copy message
               </Button>
-              <Button type="submit" variant="contained" endIcon={<Send size={16} />}>
-                Send contact message
+              {deliveryError ? (
+                <Button component="a" href={createMailto(values)} type="button" variant="outlined">
+                  Open email fallback
+                </Button>
+              ) : null}
+              <Button type="submit" variant="contained" disabled={isSubmitting} endIcon={<Send size={16} />}>
+                {isSubmitting ? "Sending..." : "Send contact message"}
               </Button>
             </div>
           </div>
@@ -491,7 +554,7 @@ export function ContactSection({ initialCategory = "Product question", onCategor
         open={snackbarOpen}
         autoHideDuration={5500}
         onClose={() => setSnackbarOpen(false)}
-        message="Opening your email app. If it does not open, copy the message and use the public support email shown above."
+        message="Contact message sent successfully."
       />
     </SectionContainer>
   );

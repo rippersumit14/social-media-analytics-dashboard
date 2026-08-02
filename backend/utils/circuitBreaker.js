@@ -4,6 +4,8 @@
  * ---------------------------------------------------
  */
 
+import logger from "./logger.js";
+
 /**
  * Failures before provider disabled
  */
@@ -180,9 +182,11 @@ export const recordProviderFailure =
       state.status =
         "OPEN";
 
-      console.warn(
-
-        `[CIRCUIT_BREAKER] Provider disabled: ${providerName}`
+      logger.warn(
+        "Circuit breaker opened for provider",
+        {
+          providerName,
+        }
       );
     }
   };

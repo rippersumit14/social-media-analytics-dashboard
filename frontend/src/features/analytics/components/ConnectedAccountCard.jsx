@@ -6,7 +6,7 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { SectionCard } from "../../../components/ui/SectionCard";
 import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { routePaths } from "../../../routes/routePaths";
-import { formatDateTime, formatNumber } from "../../../utils/formatters";
+import { formatDateTime, formatMetricValue } from "../../../utils/formatters";
 
 export function ConnectedAccountCard({ account }) {
   return (
@@ -35,7 +35,7 @@ export function ConnectedAccountCard({ account }) {
           <div className="grid gap-3 sm:grid-cols-2 md:min-w-72">
             <div className="rounded-lg border border-line-200 bg-cloud-50 p-3">
               <p className="text-xs font-semibold uppercase text-ink-500">Media</p>
-              <p className="mt-1 text-lg font-semibold text-ink-950">{formatNumber(account.mediaCount)}</p>
+              <p className="mt-1 text-lg font-semibold text-ink-950">{formatMetricValue(account.mediaCount, account.metricsAvailability?.mediaCount !== false)}</p>
             </div>
             <div className="rounded-lg border border-line-200 bg-cloud-50 p-3">
               <p className="flex items-center gap-1 text-xs font-semibold uppercase text-ink-500">

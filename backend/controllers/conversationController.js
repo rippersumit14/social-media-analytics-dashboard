@@ -1,6 +1,7 @@
 import asyncHandler from "../middlewares/asyncHandler.js";
 import ApiResponse from "../utils/ApiResponse.js";
 import AppError from "../utils/AppError.js";
+import logger from "../utils/logger.js";
 
 import {
   createConversation,
@@ -22,6 +23,15 @@ import {
   generateAnalyticsResponse,
   generateStreamingAnalyticsResponse,
 } from "../services/aiService.js";
+
+const writeSSE = (res, event, data = "") => {
+  const payload = String(data)
+    .split(/\r?\n/)
+    .map((line) => `data:${line}`)
+    .join("\n");
+
+  res.write(`event:${event}\n${payload}\n\n`);
+};
 
 /**
  * --------------------------------------------------
@@ -222,19 +232,21 @@ export const streamChatWithAIController = asyncHandler(async (req, res) => {
 
   req.on("close", () => {
     clientDisconnected = true;
-    console.log("SSE Client Disconnected");
+    logger.info("SSE chat client disconnected", {
+      conversationId,
+    });
   });
 
   /**
    * Stream Started
    */
-  res.write(`event:start\ndata:Streaming started\n\n`);
+  writeSSE(res, "start", "Streaming started");
 
   /**
    * Model Event
    * Lets the frontend know which model is responding before chunks arrive.
    */
-  res.write(`event:model\ndata:llama-3.3-70b-versatile\n\n`);
+  writeSSE(res, "model", "llama-3.3-70b-versatile");
 
   /**
    * Start AI Stream
@@ -248,7 +260,15 @@ export const streamChatWithAIController = asyncHandler(async (req, res) => {
       latestUserMessage: message,
     });
   } catch (error) {
-    res.write(`event:error\ndata:${error.message}\n\n`);
+    logger.warn("AI stream initialization failed", {
+      conversationId,
+      statusCode: error.statusCode,
+    });
+    writeSSE(
+      res,
+      "error",
+      "AI response could not be started. Please try again."
+    );
     res.end();
     return;
   }
@@ -275,10 +295,18 @@ export const streamChatWithAIController = asyncHandler(async (req, res) => {
 
       fullResponse += content;
 
-      res.write(`event:chunk\ndata:${content}\n\n`);
+      writeSSE(res, "chunk", content);
     }
   } catch (error) {
-    res.write(`event:error\ndata:${error.message}\n\n`);
+    logger.warn("AI stream failed", {
+      conversationId,
+      statusCode: error.statusCode,
+    });
+    writeSSE(
+      res,
+      "error",
+      "AI response was interrupted. Please try again."
+    );
     res.end();
     return;
   }
@@ -312,7 +340,7 @@ export const streamChatWithAIController = asyncHandler(async (req, res) => {
   /**
    * Complete
    */
-  res.write(`event:complete\ndata:done\n\n`);
+  writeSSE(res, "complete", "done");
   res.end();
 });
 
@@ -416,5 +444,4 @@ export const restoreConversationController = asyncHandler(async (req, res) => {
     })
   );
 });
-
 

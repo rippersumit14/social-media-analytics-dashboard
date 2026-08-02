@@ -1,10 +1,26 @@
 export function formatNumber(value) {
-  const number = Number(value || 0);
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "Unavailable";
+  }
 
   return new Intl.NumberFormat("en", {
     notation: number >= 10000 ? "compact" : "standard",
     maximumFractionDigits: 1,
   }).format(number);
+}
+
+export function isMetricAvailable(value, available = true) {
+  return available && Number.isFinite(Number(value));
+}
+
+export function formatMetricValue(value, available = true) {
+  if (!isMetricAvailable(value, available)) {
+    return "Unavailable";
+  }
+
+  return formatNumber(value);
 }
 
 export function formatPercent(value) {

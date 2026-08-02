@@ -5,6 +5,18 @@ import AnalyticsSnapshot from "../models/AnalyticsSnapshot.js";
 import CreatorScore from "../models/CreatorScore.js";
 import CreatorInsight from "../models/CreatorInsight.js";
 import AppError from "../utils/AppError.js";
+import {
+  buildAccountMetrics,
+  hasManualMetrics,
+} from "../utils/instagramMetricSources.js";
+
+const formatContextMetric = (value, fallback = "Unavailable") => {
+  const number = Number(value);
+
+  return Number.isFinite(number)
+    ? String(number)
+    : fallback;
+};
 
 /**
  * --------------------------------------------------
@@ -218,44 +230,57 @@ export const buildCreatorContext = async (instagramAccountId) => {
    * Build Active Insights Section
    */
 
-  const insightsSection =
-    insights.length > 0
-      ? insights
-          .map(
-            (insight, index) => `
-Insight ${index + 1}
+  const accountMetrics =
+    buildAccountMetrics(
+      account
+    );
 
-Type:
-${insight.type}
+  const dataMode =
+    hasManualMetrics(
+      accountMetrics
+    )
+      ? "Manual-estimate mode"
+      : latestSnapshot
+        ? "Account-aware mode"
+        : "General guidance mode";
 
-Priority:
-${insight.priority}
+  const formatMetricWithSource = (
+    metric
+  ) => {
+    if (metric.source === "unavailable") {
+      return "Unavailable from Meta and not manually provided";
+    }
 
-Title:
-${insight.title}
-
-Description:
-${insight.description}
-
-Recommendation:
-${insight.recommendation || "No recommendation available"}
-`
-          )
-          .join("\n")
-      : "No active insights available.";
+    return `${metric.value} (${metric.source === "meta" ? "Meta-provided" : "manual estimate"})`;
+  };
 
   const context = `
+Data Mode:
+${dataMode}
+
 Creator Username:
 ${account.username || "Unknown"}
 
 Followers:
-${latestSnapshot?.followers || 0}
+${formatMetricWithSource(accountMetrics.followers)}
+
+Following:
+${formatMetricWithSource(accountMetrics.follows)}
 
 Media Count:
-${latestSnapshot?.mediaCount || 0}
+${formatMetricWithSource(accountMetrics.mediaCount)}
 
 Creator Score:
-${latestScore?.totalScore || 0}
+${formatContextMetric(
+  latestScore?.totalScore,
+  "Unavailable until a Creator Score calculation is completed"
+)}
+
+Guidance Rules:
+- Do not claim trends without historical snapshots.
+- Do not claim best-performing content without synced media.
+- Treat manual metrics as estimates, not provider-confirmed data.
+- If account data is sparse, provide general creator strategy guidance and name the missing data.
 
 Insights:
 ${
@@ -264,10 +289,6 @@ ${
     : "No active insights"
 }
 `;
-
-  console.log("\n========== CREATOR CONTEXT ==========");
-  console.log(context);
-  console.log("=====================================\n");
 
   return context;
 };
@@ -462,4 +483,3 @@ export const restoreConversation =
 
     return conversation;
   };
-

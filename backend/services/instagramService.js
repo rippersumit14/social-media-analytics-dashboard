@@ -2,6 +2,14 @@ import AppError from "../utils/AppError.js";
 import logger from "../utils/logger.js";
 import axios from "axios";
 
+const toFiniteNumber = (value) => {
+  const number = Number(value);
+
+  return Number.isFinite(number) && number >= 0
+    ? number
+    : undefined;
+};
+
 /**
  * --------------------------------------------------
  * Generate Instagram OAuth URL
@@ -149,7 +157,16 @@ export const getInstagramAccountInfo =
           {
             params: {
               fields:
-                "id,username,account_type",
+                [
+                  "id",
+                  "username",
+                  "name",
+                  "account_type",
+                  "followers_count",
+                  "follows_count",
+                  "media_count",
+                  "profile_picture_url",
+                ].join(","),
 
               access_token:
                 accessToken,
@@ -159,6 +176,21 @@ export const getInstagramAccountInfo =
           }
         );
 
+      const followers =
+        toFiniteNumber(
+          data.followers_count
+        );
+
+      const follows =
+        toFiniteNumber(
+          data.follows_count
+        );
+
+      const mediaCount =
+        toFiniteNumber(
+          data.media_count
+        );
+
       return {
         instagramUserId:
           data.id,
@@ -166,19 +198,44 @@ export const getInstagramAccountInfo =
         username:
           data.username,
 
+        displayName:
+          data.name || "",
+
         accountType:
           data.account_type ===
           "MEDIA_CREATOR"
             ? "creator"
             : "business",
 
-        followers: 0,
+        followers,
 
-        mediaCount: 0,
+        follows,
+
+        mediaCount,
 
         pageId: null,
 
-        profileImage: "",
+        profileImage:
+          data.profile_picture_url || "",
+
+        metricsAvailability: {
+          followers:
+            followers !== undefined,
+
+          follows:
+            follows !== undefined,
+
+          mediaCount:
+            mediaCount !== undefined,
+
+          profileImage:
+            Boolean(
+              data.profile_picture_url
+            ),
+
+          lastCheckedAt:
+            new Date(),
+        },
       };
 
     } catch (error) {

@@ -45,6 +45,8 @@ import conversationRoutes from "./routes/conversationRoutes.js";
 
 import personalNoteRoutes from "./routes/personalNoteRoutes.js";
 
+import contactRoutes from "./routes/contactRoutes.js";
+
 const app = express();
 
 /**
@@ -205,6 +207,11 @@ app.use("/api/conversation", conversationRoutes);
  * Personal Notes
  */
 app.use("/api/notes", personalNoteRoutes);
+
+/**
+ * Public Contact
+ */
+app.use("/api/contact", contactRoutes);
 
 /**
  * --------------------------------------------------

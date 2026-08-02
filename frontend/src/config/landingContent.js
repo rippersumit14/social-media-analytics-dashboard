@@ -381,5 +381,5 @@ export const contactCategories = [
 ];
 
 export const socialLinks = [
-  { label: "Email", href: "mailto:support@example.com" },
+  { label: "Email", href: "mailto:sumit.pandey.lko14@gmail.com" },
 ];

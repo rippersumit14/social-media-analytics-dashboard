@@ -5,6 +5,7 @@ import { ChatInput } from "../features/chat/components/ChatInput";
 import { ChatSidebar } from "../features/chat/components/ChatSidebar";
 import { MessageList } from "../features/chat/components/MessageList";
 import { useChatWorkspace } from "../features/chat/hooks/useChatWorkspace";
+import { hasManualMetrics, hasUnavailableMetrics } from "../utils/metricSources";
 
 export default function AIChat() {
   const [isConversationDrawerOpen, setIsConversationDrawerOpen] = useState(false);
@@ -48,6 +49,13 @@ export default function AIChat() {
             onOpenSidebar={() => setIsConversationDrawerOpen(true)}
           />
 
+          {chat.account && (hasUnavailableMetrics(chat.account) || hasManualMetrics(chat.account)) ? (
+            <div className="border-b border-[var(--app-border)] bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-500/10 dark:text-amber-100" role="status">
+              <strong>Limited account data.</strong>{" "}
+              Meta did not return enough synchronized data for detailed account-specific analysis. The assistant can still provide general creator strategy guidance and will clearly identify any manually provided metrics.
+            </div>
+          ) : null}
+
           <div className="min-h-0 flex-1 overflow-y-auto">
             <MessageList
               account={chat.account}
@@ -58,6 +66,8 @@ export default function AIChat() {
               isSending={chat.isSendingMessage}
               messages={chat.messages}
               onCreateConversation={chat.createConversation}
+              streamError={chat.streamError}
+              streamModel={chat.streamModel}
             />
           </div>
 
@@ -65,6 +75,7 @@ export default function AIChat() {
             disabled={!chat.activeConversationId || !chat.account}
             isSending={chat.isSendingMessage}
             onSend={chat.sendMessage}
+            onStop={chat.stopStreaming}
           />
         </div>
       </div>

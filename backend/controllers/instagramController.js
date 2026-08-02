@@ -17,6 +17,10 @@ import {
   exchangeCodeForToken,
   getInstagramAccountInfo,
 } from "../services/instagramService.js";
+import {
+  buildAccountMetrics,
+  hasManualMetrics,
+} from "../utils/instagramMetricSources.js";
 
 const getFrontendInstagramRedirect = ({
   status,
@@ -62,6 +66,68 @@ const normalizeOAuthErrorCode = (error) => {
   }
 
   return "oauth_failed";
+};
+
+const definedAccountFields = (accountInfo) => {
+  const fields = {
+    pageId: accountInfo.pageId,
+    username: accountInfo.username,
+    displayName: accountInfo.displayName,
+    profileImage: accountInfo.profileImage,
+    followers: accountInfo.followers,
+    follows: accountInfo.follows,
+    mediaCount: accountInfo.mediaCount,
+    accountType: accountInfo.accountType,
+    metricsAvailability: accountInfo.metricsAvailability,
+  };
+
+  return Object.fromEntries(
+    Object.entries(fields).filter(
+      ([, value]) => value !== undefined
+    )
+  );
+};
+
+const manualMetricFields = [
+  {
+    requestKey:
+      "followersCount",
+    accountKey:
+      "followers",
+    manualKey:
+      "followers",
+  },
+  {
+    requestKey:
+      "followingCount",
+    accountKey:
+      "follows",
+    manualKey:
+      "follows",
+  },
+  {
+    requestKey:
+      "mediaCount",
+    accountKey:
+      "mediaCount",
+    manualKey:
+      "mediaCount",
+  },
+];
+
+const isProviderConfirmedMetric = (
+  account,
+  field
+) => {
+  const value =
+    account[field.accountKey];
+
+  return (
+    account.metricsAvailability?.[field.manualKey] &&
+    Number.isFinite(
+      Number(value)
+    )
+  );
 };
 
 /**
@@ -227,9 +293,48 @@ export const instagramOAuthCallback =
         });
 
       if (existingAccount) {
-        throw new AppError(
-          "Instagram account already connected",
-          409
+        if (
+          existingAccount.user.toString() !==
+          userId.toString()
+        ) {
+          throw new AppError(
+            "Instagram account already connected",
+            409
+          );
+        }
+
+        existingAccount.set({
+          ...definedAccountFields(
+            accountInfo
+          ),
+
+          accessToken,
+
+          isPrimary:
+            true,
+
+          isActive:
+            true,
+
+          lastSyncedAt:
+            new Date(),
+        });
+
+        await existingAccount.save();
+
+        await deleteOAuthState(
+          state
+        );
+
+        return res.redirect(
+          getFrontendInstagramRedirect({
+            status:
+              "success",
+            code:
+              "reconnected",
+            message:
+              "Instagram account reconnected successfully.",
+          })
         );
       }
 
@@ -252,8 +357,20 @@ export const instagramOAuthCallback =
         followers:
           accountInfo.followers,
 
+        follows:
+          accountInfo.follows,
+
         mediaCount:
           accountInfo.mediaCount,
+
+        accountType:
+          accountInfo.accountType,
+
+        displayName:
+          accountInfo.displayName,
+
+        metricsAvailability:
+          accountInfo.metricsAvailability,
 
         accessToken,
 
@@ -307,4 +424,137 @@ export const instagramOAuthCallback =
         })
       );
     }
+  });
+
+/**
+ * --------------------------------------------------
+ * Update Manual Instagram Metrics
+ * --------------------------------------------------
+ * PATCH /api/instagram/manual-metrics
+ */
+export const updateManualInstagramMetrics =
+  asyncHandler(async (req, res) => {
+    const account =
+      await InstagramAccount.findOne({
+        user:
+          req.user._id,
+        isActive:
+          true,
+      });
+
+    if (!account) {
+      throw new AppError(
+        "No connected Instagram account found",
+        404
+      );
+    }
+
+    const now =
+      new Date();
+
+    for (const field of manualMetricFields) {
+      if (
+        !Object.hasOwn(
+          req.body,
+          field.requestKey
+        )
+      ) {
+        continue;
+      }
+
+      const value =
+        req.body[field.requestKey];
+
+      if (
+        value !== null &&
+        isProviderConfirmedMetric(
+          account,
+          field
+        )
+      ) {
+        throw new AppError(
+          "Provider-confirmed metrics cannot be replaced with manual estimates",
+          409
+        );
+      }
+
+      account.set(
+        `manualMetrics.${field.manualKey}.value`,
+        value
+      );
+      account.set(
+        `manualMetrics.${field.manualKey}.updatedAt`,
+        value === null ? null : now
+      );
+      account.set(
+        `manualMetrics.${field.manualKey}.confirmedByUser`,
+        value !== null
+          ? true
+          : false
+      );
+    }
+
+    await account.save();
+
+    const metrics =
+      buildAccountMetrics(
+        account
+      );
+
+    logger.info(
+      "Manual Instagram metrics updated",
+      {
+        userId:
+          req.user._id.toString(),
+        metricKeys:
+          manualMetricFields
+            .filter((field) =>
+              Object.hasOwn(
+                req.body,
+                field.requestKey
+              )
+            )
+            .map((field) => field.manualKey),
+      }
+    );
+
+    return res.status(200).json(
+      new ApiResponse({
+        success: true,
+        statusCode: 200,
+        message:
+          "Manual Instagram metrics updated successfully",
+        data: {
+          account: {
+            id:
+              account._id,
+            username:
+              account.username,
+            displayName:
+              account.displayName,
+            profileImage:
+              account.profileImage,
+            accountType:
+              account.accountType,
+            followers:
+              metrics.followers.value,
+            follows:
+              metrics.follows.value,
+            mediaCount:
+              metrics.mediaCount.value,
+            metrics,
+            metricsAvailability:
+              account.metricsAvailability,
+            manualMetrics:
+              account.manualMetrics,
+            hasManualMetrics:
+              hasManualMetrics(
+                metrics
+              ),
+            lastSyncedAt:
+              account.lastSyncedAt,
+          },
+        },
+      })
+    );
   });

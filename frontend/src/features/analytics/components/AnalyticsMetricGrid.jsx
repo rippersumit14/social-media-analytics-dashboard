@@ -1,13 +1,13 @@
 import { BarChart3, Heart, Image, MessageCircle, MousePointerClick, Percent, UserPlus, Users } from "lucide-react";
 
 import { StatCard } from "../../../components/ui/StatCard";
-import { formatNumber, formatPercent } from "../../../utils/formatters";
+import { formatMetricValue, formatNumber, formatPercent } from "../../../utils/formatters";
 
 export function AnalyticsMetricGrid({ account, snapshot, score }) {
   const cards = [
     {
       label: "Followers",
-      value: formatNumber(snapshot?.followers ?? account?.followers),
+      value: formatMetricValue(snapshot?.followers ?? account?.followers, account?.metricsAvailability?.followers !== false),
       detail: `${formatNumber(snapshot?.followerGrowth)} follower growth`,
       icon: Users,
       tone: "brand",
@@ -21,7 +21,7 @@ export function AnalyticsMetricGrid({ account, snapshot, score }) {
     },
     {
       label: "Media Count",
-      value: formatNumber(snapshot?.mediaCount ?? account?.mediaCount),
+      value: formatMetricValue(snapshot?.mediaCount ?? account?.mediaCount, account?.metricsAvailability?.mediaCount !== false),
       detail: `${formatNumber(snapshot?.mediaGrowth)} media growth`,
       icon: Image,
       tone: "mint",
@@ -56,7 +56,7 @@ export function AnalyticsMetricGrid({ account, snapshot, score }) {
     },
     {
       label: "Creator Score",
-      value: `${Math.round(score?.totalScore ?? snapshot?.creatorScore ?? 0)}/100`,
+      value: Number.isFinite(Number(score?.totalScore ?? snapshot?.creatorScore)) ? `${Math.round(score?.totalScore ?? snapshot?.creatorScore)}/100` : "Unavailable",
       detail: "Latest score engine result",
       icon: BarChart3,
       tone: "brand",

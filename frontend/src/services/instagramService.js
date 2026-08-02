@@ -62,4 +62,10 @@ export const instagramService = {
       message: mediaResponse.message || snapshotResponse.message,
     };
   },
+
+  async updateManualMetrics(payload) {
+    const response = await http.patch(apiEndpoints.instagram.manualMetrics, payload);
+
+    return response.data?.account;
+  },
 };

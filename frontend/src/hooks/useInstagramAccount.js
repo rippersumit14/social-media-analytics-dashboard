@@ -44,6 +44,20 @@ export function useInstagramAccount() {
     },
   });
 
+  const manualMetricsMutation = useMutation({
+    mutationFn: instagramService.updateManualMetrics,
+    onSuccess: (account) => {
+      queryClient.setQueryData(ACCOUNT_QUERY_KEY, (current) => ({
+        ...(current || {}),
+        account,
+      }));
+      queryClient.invalidateQueries({ queryKey: ["dashboard-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["creator-score"] });
+      queryClient.invalidateQueries({ queryKey: ["creator-insights"] });
+    },
+  });
+
   const refreshAccount = useCallback(() => accountQuery.refetch(), [accountQuery]);
 
   const startConnection = useCallback(async () => {
@@ -83,8 +97,10 @@ export function useInstagramAccount() {
     isRefreshing: accountQuery.isFetching && !accountQuery.isLoading,
     isConnecting: connectMutation.isPending,
     isSyncing: syncMutation.isPending,
+    isSavingManualMetrics: manualMetricsMutation.isPending,
     lastSyncResult,
     refreshAccount,
+    saveManualMetrics: manualMetricsMutation.mutateAsync,
     startConnection,
     syncCreatorData,
   };

@@ -7,6 +7,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorPanel } from "../components/ui/ErrorPanel";
 import { LoadingCard } from "../components/ui/LoadingCard";
 import { SectionCard } from "../components/ui/SectionCard";
+import { DataAvailabilityNotice } from "../components/instagram/DataAvailabilityNotice";
 import { AnalyticsActionPanel } from "../features/analytics/components/AnalyticsActionPanel";
 import { AnalyticsMetricGrid } from "../features/analytics/components/AnalyticsMetricGrid";
 import { ConnectedAccountCard } from "../features/analytics/components/ConnectedAccountCard";
@@ -16,6 +17,7 @@ import { ScoreHistoryChart } from "../features/analytics/components/ScoreHistory
 import { useAnalyticsData } from "../features/analytics/hooks/useAnalyticsData";
 import { routePaths } from "../routes/routePaths";
 import { getApiErrorMessage } from "../utils/apiError";
+import { hasManualMetrics, hasUnavailableMetrics } from "../utils/metricSources";
 
 export default function Analytics() {
   const analytics = useAnalyticsData();
@@ -56,6 +58,9 @@ export default function Analytics() {
       ) : null}
 
       <ConnectedAccountCard account={analytics.account} />
+
+      {analytics.account && hasUnavailableMetrics(analytics.account) ? <DataAvailabilityNotice type="noProviderMetric" /> : null}
+      {analytics.account && hasManualMetrics(analytics.account) ? <DataAvailabilityNotice type="manualActive" /> : null}
 
       <AnalyticsMetricGrid account={analytics.account} snapshot={analytics.latestSnapshot} score={analytics.latestScore} />
 

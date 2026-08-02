@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 
 import { dashboardService } from "../../../services/dashboardService";
 import { chatService } from "../../../services/chatService";
+import { streamChatMessage } from "../../../services/chatStreamService";
 import { getApiErrorMessage } from "../../../utils/apiError";
 
 const conversationsKey = ["chat", "conversations"];
@@ -22,6 +23,8 @@ export function useChatWorkspace() {
   const [activeConversationId, setActiveConversationId] = useState(null);
   const [lastDeletedConversationId, setLastDeletedConversationId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [streamState, setStreamState] = useState({ status: "idle", model: "", error: "" });
+  const abortControllerRef = useRef(null);
 
   const dashboardQuery = useQuery({
     queryKey: dashboardOverviewKey,
@@ -117,19 +120,6 @@ export function useChatWorkspace() {
     },
   });
 
-  const sendMessageMutation = useMutation({
-    mutationFn: chatService.sendMessage,
-    onSuccess: (reply, variables) => {
-      queryClient.setQueryData(messagesKey(variables.conversationId), (current = []) => [...current, reply].filter(Boolean));
-      queryClient.invalidateQueries({ queryKey: conversationsKey });
-      queryClient.invalidateQueries({ queryKey: messagesKey(variables.conversationId) });
-    },
-    onError: (error, variables) => {
-      queryClient.setQueryData(messagesKey(variables.conversationId), (current = []) => current.filter((message) => message._id !== variables.localMessageId));
-      toast.error(getApiErrorMessage(error, "Unable to send message."));
-    },
-  });
-
   const createConversation = useCallback(
     (title = "New Chat") => {
       const instagramAccountId = dashboardQuery.data?.account?.id;
@@ -148,22 +138,86 @@ export function useChatWorkspace() {
     async (message) => {
       const content = message.trim();
 
-      if (!content || !activeConversationId || sendMessageMutation.isPending) {
+      if (!content || !activeConversationId || streamState.status === "streaming") {
         return;
       }
 
+      const createdAt = new Date().toISOString();
       const localMessage = {
         _id: `local-${Date.now()}`,
         role: "user",
         content,
-        createdAt: new Date().toISOString(),
+        createdAt,
+      };
+      const assistantMessage = {
+        _id: `stream-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        provider: "groq",
+        model: "",
+        createdAt,
+        isStreaming: true,
       };
 
-      queryClient.setQueryData(messagesKey(activeConversationId), (current = []) => [...current, localMessage]);
-      sendMessageMutation.mutate({ conversationId: activeConversationId, localMessageId: localMessage._id, message: content });
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      queryClient.setQueryData(messagesKey(activeConversationId), (current = []) => [...current, localMessage, assistantMessage]);
+      setStreamState({ status: "streaming", model: "", error: "" });
+
+      try {
+        await streamChatMessage({
+          conversationId: activeConversationId,
+          message: content,
+          signal: controller.signal,
+          onModel: (model) => {
+            setStreamState((current) => ({ ...current, model }));
+            queryClient.setQueryData(messagesKey(activeConversationId), (current = []) =>
+              current.map((item) => (item._id === assistantMessage._id ? { ...item, model } : item)),
+            );
+          },
+          onChunk: (chunk) => {
+            queryClient.setQueryData(messagesKey(activeConversationId), (current = []) =>
+              current.map((item) => (item._id === assistantMessage._id ? { ...item, content: `${item.content || ""}${chunk}` } : item)),
+            );
+          },
+          onError: (streamError) => {
+            throw new Error(streamError || "AI stream failed.");
+          },
+        });
+
+        setStreamState((current) => ({ ...current, status: "complete", error: "" }));
+        queryClient.setQueryData(messagesKey(activeConversationId), (current = []) =>
+          current.map((item) => (item._id === assistantMessage._id ? { ...item, isStreaming: false } : item)),
+        );
+        queryClient.invalidateQueries({ queryKey: conversationsKey });
+        queryClient.invalidateQueries({ queryKey: messagesKey(activeConversationId) });
+      } catch (error) {
+        if (error.name === "AbortError") {
+          setStreamState((current) => ({ ...current, status: "cancelled", error: "" }));
+          queryClient.setQueryData(messagesKey(activeConversationId), (current = []) =>
+            current.map((item) => (item._id === assistantMessage._id ? { ...item, isStreaming: false, wasCancelled: true } : item)),
+          );
+          return;
+        }
+
+        const errorMessage = getApiErrorMessage(error, "Unable to send message.");
+        setStreamState((current) => ({ ...current, status: "error", error: errorMessage }));
+        queryClient.setQueryData(messagesKey(activeConversationId), (current = []) =>
+          current
+            .filter((item) => item._id !== assistantMessage._id),
+        );
+        toast.error(errorMessage);
+      } finally {
+        abortControllerRef.current = null;
+      }
     },
-    [activeConversationId, queryClient, sendMessageMutation],
+    [activeConversationId, queryClient, streamState.status],
   );
+
+  const stopStreaming = useCallback(() => {
+    abortControllerRef.current?.abort();
+  }, []);
 
   return {
     account: dashboardQuery.data?.account,
@@ -177,11 +231,14 @@ export function useChatWorkspace() {
     isLoadingMessages: messagesQuery.isLoading,
     isRenamingConversation: renameConversationMutation.isPending,
     isRestoringConversation: restoreConversationMutation.isPending,
-    isSendingMessage: sendMessageMutation.isPending,
+    isSendingMessage: streamState.status === "streaming",
     lastDeletedConversationId,
     messageError: messagesQuery.error,
     messages: messagesQuery.data || [],
     searchTerm,
+    streamError: streamState.error,
+    streamModel: streamState.model,
+    streamStatus: streamState.status,
     setActiveConversationId,
     setSearchTerm,
     createConversation,
@@ -190,5 +247,6 @@ export function useChatWorkspace() {
     renameConversation: renameConversationMutation.mutate,
     restoreConversation: restoreConversationMutation.mutate,
     sendMessage,
+    stopStreaming,
   };
 }

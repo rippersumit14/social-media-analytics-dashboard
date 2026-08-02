@@ -11,6 +11,8 @@ import cloudinary, {
 
 import AppError
   from "../utils/AppError.js";
+import logger
+  from "../utils/logger.js";
 
 import {
   optimizeImage,
@@ -381,9 +383,9 @@ export const uploadImageToCloudinary =
 
     } catch (error) {
 
-      console.error(
+      logger.error(
 
-        "[CLOUDINARY_UPLOAD_ERROR]",
+        "Cloudinary upload failed",
 
         {
 
@@ -473,9 +475,9 @@ export const deleteImageFromCloudinary =
 
     } catch (error) {
 
-      console.error(
+      logger.error(
 
-        "[CLOUDINARY_DELETE_ERROR]",
+        "Cloudinary delete failed",
 
         {
 

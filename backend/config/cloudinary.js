@@ -1,4 +1,5 @@
 import { v2 as cloudinary } from "cloudinary";
+import logger from "../utils/logger.js";
 
 const requiredEnvVars = [
   "CLOUDINARY_CLOUD_NAME",
@@ -20,11 +21,11 @@ if (missingEnvVars.length === 0) {
     secure: true,
   });
 
-  console.log("[CLOUDINARY_READY]", {
+  logger.info("Cloudinary configured", {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
   });
 } else {
-  console.warn("[CLOUDINARY_NOT_CONFIGURED]", {
+  logger.warn("Cloudinary not configured", {
     missingEnvVars,
   });
 }

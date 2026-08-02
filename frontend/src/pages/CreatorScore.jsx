@@ -9,6 +9,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { ErrorPanel } from "../components/ui/ErrorPanel";
 import { LoadingCard } from "../components/ui/LoadingCard";
 import { SectionCard } from "../components/ui/SectionCard";
+import { DataAvailabilityNotice } from "../components/instagram/DataAvailabilityNotice";
 import { StatCard } from "../components/ui/StatCard";
 import { AnalyticsActionPanel } from "../features/analytics/components/AnalyticsActionPanel";
 import { ConnectedAccountCard } from "../features/analytics/components/ConnectedAccountCard";
@@ -19,6 +20,7 @@ import { routePaths } from "../routes/routePaths";
 import { creatorScoreService } from "../services/creatorScoreService";
 import { getApiErrorMessage } from "../utils/apiError";
 import { formatNumber } from "../utils/formatters";
+import { hasManualMetrics, hasUnavailableMetrics } from "../utils/metricSources";
 
 export default function CreatorScore() {
   const analytics = useAnalyticsData();
@@ -75,6 +77,9 @@ export default function CreatorScore() {
       ) : null}
 
       <ConnectedAccountCard account={analytics.account} />
+
+      {analytics.account && hasUnavailableMetrics(analytics.account) ? <DataAvailabilityNotice type="lowData" /> : null}
+      {analytics.account && hasManualMetrics(analytics.account) ? <DataAvailabilityNotice type="manualActive" /> : null}
 
       <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
         <CreatorScoreCard score={analytics.latestScore} compact />

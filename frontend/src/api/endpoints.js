@@ -15,6 +15,7 @@ export const apiEndpoints = {
     analyticsSnapshot: "/instagram/analytics/snapshot",
     analyticsLatest: "/instagram/analytics/latest",
     analyticsHistory: "/instagram/analytics/history",
+    manualMetrics: "/instagram/manual-metrics",
   },
   dashboard: {
     overview: "/dashboard/overview",
@@ -30,6 +31,10 @@ export const apiEndpoints = {
   },
   conversations: {
     list: "/conversation",
+    stream: (conversationId) => `/conversation/${conversationId}/chat/stream`,
+  },
+  contact: {
+    submit: "/contact",
   },
   notes: {
     list: "/notes",

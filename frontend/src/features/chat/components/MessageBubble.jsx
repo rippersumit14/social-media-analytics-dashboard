@@ -28,7 +28,20 @@ export function MessageBubble({ message }) {
             isUser ? "rounded-br-md bg-[var(--app-primary)] text-white" : "rounded-bl-md border border-[var(--app-border)] bg-[var(--app-paper)] text-[var(--app-text)]",
           ].join(" ")}
         >
-          {isAssistant ? <MarkdownText content={message.content} /> : <p className="whitespace-pre-wrap">{message.content}</p>}
+          {isAssistant ? (
+            message.content ? (
+              <div className={message.isStreaming ? "streaming-cursor" : undefined}>
+                <MarkdownText content={message.content} />
+              </div>
+            ) : (
+              <p className="text-[var(--app-muted)]">Thinking...</p>
+            )
+          ) : (
+            <p className="whitespace-pre-wrap">{message.content}</p>
+          )}
+          {message.isStreaming ? (
+            <span className="mt-2 inline-flex h-2 w-2 rounded-full bg-[var(--app-primary)]" aria-label="Streaming response" />
+          ) : null}
         </div>
         <div className={["mt-2 flex items-center gap-2 text-xs text-[var(--app-muted)]", isUser ? "justify-end" : "justify-start"].join(" ")}>
           <span>{formatDateTime(message.createdAt)}</span>
@@ -43,8 +56,11 @@ export function MessageBubble({ message }) {
         </div>
         {isAssistant && (message.model || message.provider) ? (
           <p className="mt-1 text-xs text-[var(--app-muted)]">
-            {[message.provider, message.model].filter(Boolean).join(" · ")}
+            {[message.provider, message.model].filter(Boolean).join(" | ")}
           </p>
+        ) : null}
+        {message.wasCancelled ? (
+          <p className="mt-1 text-xs text-[var(--app-muted)]">Response stopped before completion.</p>
         ) : null}
       </div>
 

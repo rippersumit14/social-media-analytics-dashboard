@@ -8,12 +8,15 @@ import { InstagramAccountCard } from "../components/instagram/InstagramAccountCa
 import { InstagramAccountSkeleton } from "../components/instagram/InstagramAccountSkeleton";
 import { InstagramBenefitsGrid } from "../components/instagram/InstagramBenefitsGrid";
 import { InstagramConnectEmptyState } from "../components/instagram/InstagramConnectEmptyState";
+import { DataAvailabilityNotice } from "../components/instagram/DataAvailabilityNotice";
 import { InstagramDisconnectDialog } from "../components/instagram/InstagramDisconnectDialog";
 import { InstagramSetupGuide } from "../components/instagram/InstagramSetupGuide";
 import { InstagramStatusBanner } from "../components/instagram/InstagramStatusBanner";
 import { InstagramSyncPanel } from "../components/instagram/InstagramSyncPanel";
+import { ManualMetricsForm } from "../components/instagram/ManualMetricsForm";
 import { PageHeader } from "../components/common/PageHeader";
 import { useInstagramAccount } from "../hooks/useInstagramAccount";
+import { hasManualMetrics, hasUnavailableMetrics } from "../utils/metricSources";
 import { normalizeInstagramRedirectResult } from "../utils/normalizeInstagramError";
 
 function getCallbackNotice(searchParams) {
@@ -73,8 +76,10 @@ export default function Instagram() {
     isRefreshing,
     isConnecting,
     isSyncing,
+    isSavingManualMetrics,
     lastSyncResult,
     refreshAccount,
+    saveManualMetrics,
     startConnection,
     syncCreatorData,
   } = useInstagramAccount();
@@ -133,6 +138,19 @@ export default function Instagram() {
     toast("Connect Instagram first to unlock this workspace.");
   }
 
+  async function handleSaveManualMetrics(values) {
+    try {
+      toast.loading("Saving manual Instagram estimates...", { id: "manual-metrics" });
+      await saveManualMetrics(values);
+      toast.success("Manual Instagram estimates saved.", { id: "manual-metrics" });
+    } catch (manualError) {
+      toast.error(manualError?.response?.data?.message || manualError?.message || "Manual estimates could not be saved.", { id: "manual-metrics" });
+    }
+  }
+
+  const shouldShowManualForm = Boolean(account && hasUnavailableMetrics(account));
+  const shouldShowManualNotice = Boolean(account && hasManualMetrics(account));
+
   return (
     <section className="space-y-6 text-[var(--app-text)]">
       <PageHeader
@@ -177,10 +195,33 @@ export default function Instagram() {
       {!isLoading && !account ? <InstagramConnectEmptyState onConnect={handleConnect} onLearn={scrollToGuide} isConnecting={isConnecting} /> : null}
 
       {!isLoading && account ? (
-        <div className="grid gap-6 xl:grid-cols-[1.25fr_0.85fr]">
-          <InstagramAccountCard account={account} onSync={handleSync} isSyncing={isSyncing} />
-          <InstagramSyncPanel account={account} onSync={handleSync} isSyncing={isSyncing} lastSyncResult={lastSyncResult} />
-        </div>
+        <>
+          {hasUnavailableMetrics(account) ? (
+            <DataAvailabilityNotice
+              type="noProviderMetric"
+              actions={
+                <>
+                  <Button variant="outlined" onClick={handleSync} disabled={isSyncing}>Synchronize again</Button>
+                  <Button variant="outlined" onClick={handleConnect} disabled={isConnecting}>Reconnect Instagram</Button>
+                  <Button variant="text" onClick={scrollToGuide}>Review supported-account requirements</Button>
+                </>
+              }
+            />
+          ) : null}
+
+          {shouldShowManualNotice ? <DataAvailabilityNotice type="manualActive" /> : null}
+
+          <div className="grid gap-6 xl:grid-cols-[1.25fr_0.85fr]">
+            <InstagramAccountCard account={account} onSync={handleSync} isSyncing={isSyncing} />
+            <InstagramSyncPanel account={account} onSync={handleSync} isSyncing={isSyncing} lastSyncResult={lastSyncResult} />
+          </div>
+
+          {!account.lastSyncedAt ? <DataAvailabilityNotice type="syncRequired" /> : null}
+
+          {shouldShowManualForm ? (
+            <ManualMetricsForm account={account} isSaving={isSavingManualMetrics} onSave={handleSaveManualMetrics} />
+          ) : null}
+        </>
       ) : null}
 
       <InstagramBenefitsGrid isConnected={Boolean(account)} onConnectFirst={handleConnectFirst} />

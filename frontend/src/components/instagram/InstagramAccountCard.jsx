@@ -1,17 +1,26 @@
 import { Avatar, Button, Chip } from "@mui/material";
 import { Camera, Clock, RefreshCw, ShieldCheck, UserRound } from "lucide-react";
 
-import { formatDateTime, formatNumber } from "../../utils/formatters";
+import { formatDateTime, formatMetricValue } from "../../utils/formatters";
+import { getMetricSourceLabel } from "../../utils/metricSources";
 
-function Metric({ label, value }) {
+function Metric({ label, value, available = true, source }) {
   if (value === undefined || value === null || value === "") {
-    return null;
+    value = "Unavailable";
   }
 
   return (
     <div className="rounded-lg border border-[var(--app-border)] bg-[var(--app-elevated)] p-4">
-      <p className="text-xs font-semibold uppercase text-[var(--app-muted)]">{label}</p>
-      <p className="mt-2 text-xl font-semibold text-[var(--app-text)]">{typeof value === "number" ? formatNumber(value) : value}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold uppercase text-[var(--app-muted)]">{label}</p>
+        {source ? (
+          <span className="rounded-full border border-[var(--app-border)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--app-muted)]">
+            {getMetricSourceLabel(source)}
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-2 text-xl font-semibold text-[var(--app-text)]">{typeof value === "number" ? formatMetricValue(value, available) : value}</p>
+      {!available ? <p className="mt-1 text-xs text-[var(--app-muted)]">Not returned by Meta for this connection.</p> : null}
     </div>
   );
 }
@@ -52,8 +61,8 @@ export function InstagramAccountCard({ account, onSync, isSyncing }) {
       </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Followers" value={account.followers} />
-        <Metric label="Media" value={account.mediaCount} />
+        <Metric label="Followers" value={account.metrics?.followers?.value ?? account.followers} available={account.metrics?.followers?.source !== "unavailable"} source={account.metrics?.followers?.source} />
+        <Metric label="Media" value={account.metrics?.mediaCount?.value ?? account.mediaCount} available={account.metrics?.mediaCount?.source !== "unavailable"} source={account.metrics?.mediaCount?.source} />
         <Metric label="Account type" value={account.accountType || "Connected professional account"} />
         <Metric label="Last sync" value={formatDateTime(account.lastSyncedAt)} />
       </div>

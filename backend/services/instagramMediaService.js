@@ -1,6 +1,7 @@
 import axios from "axios";
 
 import AppError from "../utils/AppError.js";
+import logger from "../utils/logger.js";
 
 import InstagramMedia from "../models/InstagramMedia.js";
 
@@ -174,18 +175,6 @@ export const syncInstagramMedia =
 
     try {
 
-      console.log(
-        "\n================================="
-      );
-
-      console.log(
-        "INSTAGRAM MEDIA SYNC START"
-      );
-
-      console.log(
-        "================================="
-      );
-
       /**
        * --------------------------------
        * Fetch Media List
@@ -197,10 +186,12 @@ export const syncInstagramMedia =
           accessToken
         );
 
-      console.log(
-        "MEDIA FOUND:",
-        mediaList.length
-      );
+      logger.info("Instagram media sync started", {
+        instagramAccountId:
+          instagramAccountId.toString(),
+        mediaFound:
+          mediaList.length,
+      });
 
       if (
         mediaList.length === 0
@@ -284,37 +275,16 @@ export const syncInstagramMedia =
           }
         );
 
-      console.log(
-        "\nSYNC RESULT:"
-      );
-
-      console.dir(
-        {
-          matched:
-            result.matchedCount,
-
-          modified:
-            result.modifiedCount,
-
-          inserted:
-            result.upsertedCount,
-        },
-        {
-          depth: null,
-        }
-      );
-
-      console.log(
-        "\n================================="
-      );
-
-      console.log(
-        "INSTAGRAM MEDIA SYNC COMPLETE"
-      );
-
-      console.log(
-        "=================================\n"
-      );
+      logger.info("Instagram media sync completed", {
+        instagramAccountId:
+          instagramAccountId.toString(),
+        matched:
+          result.matchedCount,
+        modified:
+          result.modifiedCount,
+        inserted:
+          result.upsertedCount || 0,
+      });
 
       return {
 
@@ -330,42 +300,15 @@ export const syncInstagramMedia =
 
     } catch (error) {
 
-      console.error(
-        "\n================================="
-      );
-
-      console.error(
-        "INSTAGRAM MEDIA SYNC FAILED"
-      );
-
-      console.error(
-        "================================="
-      );
-
-      console.error(
-        "MESSAGE:",
-        error.message
-      );
-
-      console.error(
-        "STATUS:",
-        error.response?.status
-      );
-
-      console.error(
-        "DATA:"
-      );
-
-      console.dir(
-        error.response?.data,
-        {
-          depth: null,
-        }
-      );
-
-      console.error(
-        "\n=================================\n"
-      );
+      logger.warn("Instagram media sync failed", {
+        instagramAccountId:
+          instagramAccountId.toString(),
+        status:
+          error.response?.status,
+        providerError:
+          error.response?.data?.error?.type ||
+          error.response?.data?.error,
+      });
 
       throw new AppError(
         "Failed to sync Instagram media",
