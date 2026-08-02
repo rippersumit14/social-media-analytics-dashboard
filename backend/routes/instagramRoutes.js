@@ -1,11 +1,19 @@
 import express from "express";
 
 import protect from "../middlewares/authMiddleware.js";
+import validateRequest from "../middlewares/validateRequest.js";
+import {
+  instagramManualMetricsRateLimiter,
+} from "../middlewares/rateLimiter.js";
 
 import {
   connectInstagram,
   instagramOAuthCallback,
+  updateManualInstagramMetrics,
 } from "../controllers/instagramController.js";
+import {
+  manualInstagramMetricsSchema,
+} from "../validators/instagramMetricValidators.js";
 
 const router = express.Router();
 
@@ -25,6 +33,16 @@ router.get(
   "/connect",
   protect,
   connectInstagram
+);
+
+router.patch(
+  "/manual-metrics",
+  protect,
+  instagramManualMetricsRateLimiter,
+  validateRequest(
+    manualInstagramMetricsSchema
+  ),
+  updateManualInstagramMetrics
 );
 
 /**

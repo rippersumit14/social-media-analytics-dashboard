@@ -1,4 +1,5 @@
 import Redis from "ioredis";
+import logger from "../utils/logger.js";
 
 /**
  * Redis client config
@@ -28,7 +29,7 @@ const redis = new Redis(
 //is established successfully
 
 redis.on("connect", () => {
-  console.log(
+  logger.info(
     "Redis connected successfully"
   );
 });
@@ -36,9 +37,12 @@ redis.on("connect", () => {
 //Fired when Redis encounters
 //A connection error
 redis.on("error", (error) => {
-  console.error(
-    "Redis connection error:",
-    error.message
+  logger.error(
+    "Redis connection error",
+    {
+      message:
+        error.message,
+    }
   );
 });
 

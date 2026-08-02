@@ -83,7 +83,7 @@ const analyticsSnapshotSchema =
       followers: {
         type: Number,
 
-        default: 0,
+        default: null,
 
         min: 0,
       },
@@ -91,7 +91,7 @@ const analyticsSnapshotSchema =
       following: {
         type: Number,
 
-        default: 0,
+        default: null,
 
         min: 0,
       },
@@ -201,7 +201,7 @@ const analyticsSnapshotSchema =
       creatorScore: {
         type: Number,
 
-        default: 0,
+        default: null,
 
         min: 0,
 

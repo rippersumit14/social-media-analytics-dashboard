@@ -2,6 +2,7 @@ import multer from "multer";
 
 import AppError from "../utils/AppError.js";
 import ApiResponse from "../utils/ApiResponse.js";
+import logger from "../utils/logger.js";
 
 /**
  * --------------------------------------------------
@@ -169,8 +170,8 @@ const errorMiddleware = (
    * --------------------------------------------------
    */
 
-  console.error(
-    "[GLOBAL_ERROR]",
+  logger.error(
+    "Global request error",
     {
       route:
         req.originalUrl,

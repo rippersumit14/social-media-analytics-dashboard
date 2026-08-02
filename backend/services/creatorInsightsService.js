@@ -1,4 +1,5 @@
 import AppError from "../utils/AppError.js";
+import logger from "../utils/logger.js";
 
 import InstagramAccount from "../models/InstagramAccount.js";
 import AnalyticsSnapshot from "../models/AnalyticsSnapshot.js";
@@ -106,9 +107,14 @@ export const generateCreatorInsights = async (userId) => {
      * ==================================================
      */
 
-    if (previousSnapshot) {
+    if (
+      previousSnapshot &&
+      Number.isFinite(Number(currentSnapshot.followers)) &&
+      Number.isFinite(Number(previousSnapshot.followers))
+    ) {
       const followerGrowth =
-        currentSnapshot.followers - previousSnapshot.followers;
+        Number(currentSnapshot.followers) -
+        Number(previousSnapshot.followers);
 
       if (followerGrowth > 0) {
         insights.push({
@@ -173,9 +179,15 @@ export const generateCreatorInsights = async (userId) => {
      * ==================================================
      */
 
-    if (currentScore && previousScore) {
+    if (
+      currentScore &&
+      previousScore &&
+      Number.isFinite(Number(currentScore.totalScore)) &&
+      Number.isFinite(Number(previousScore.totalScore))
+    ) {
       const scoreDifference =
-        currentScore.totalScore - previousScore.totalScore;
+        Number(currentScore.totalScore) -
+        Number(previousScore.totalScore);
 
       if (scoreDifference > 5) {
         insights.push({
@@ -269,7 +281,10 @@ export const generateCreatorInsights = async (userId) => {
      * ==================================================
      */
 
-    if (currentSnapshot.mediaCount <= 3) {
+    if (
+      Number.isFinite(Number(currentSnapshot.mediaCount)) &&
+      currentSnapshot.mediaCount <= 3
+    ) {
       insights.push({
         instagramAccount: account._id,
 
@@ -311,11 +326,10 @@ export const generateCreatorInsights = async (userId) => {
       insights: createdInsights,
     };
   } catch (error) {
-    console.log("\n=================================");
-    console.log("CREATOR INSIGHTS FAILED");
-    console.log("=================================");
-    console.log(error.message);
-    console.log("=================================\n");
+    logger.warn("Creator insights generation failed", {
+      message: error.message,
+      statusCode: error.statusCode,
+    });
 
     if (error instanceof AppError) {
       throw error;

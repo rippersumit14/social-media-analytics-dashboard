@@ -1,613 +1,339 @@
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { Link } from "react-router-dom";
 import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+  BarChart3,
+  Bot,
+  BrainCircuit,
+  Camera,
+  Clock,
+  Gauge,
+  Image,
+  Lightbulb,
+  RefreshCw,
+  Sparkles,
+  Target,
+  TrendingUp,
+  Users,
+  Zap,
+} from "lucide-react";
 
-import {
-  getSocialAccounts,
-  getAnalyticsSnapshots,
-} from "../services/socialAnalyticsService.js";
+import { PageHeader } from "../components/common/PageHeader";
+import { Button } from "../components/ui/Button";
+import { EmptyState } from "../components/ui/EmptyState";
+import { ErrorPanel } from "../components/ui/ErrorPanel";
+import { LoadingCard } from "../components/ui/LoadingCard";
+import { SectionCard } from "../components/ui/SectionCard";
+import { StatCard } from "../components/ui/StatCard";
+import { StatusBadge } from "../components/ui/StatusBadge";
+import { DataAvailabilityNotice } from "../components/instagram/DataAvailabilityNotice";
+import { useAuth } from "../hooks/useAuth";
+import { routePaths } from "../routes/routePaths";
+import { dashboardService } from "../services/dashboardService";
+import { formatDateTime, formatMetricValue, formatNumber, formatPercent } from "../utils/formatters";
+import { hasManualMetrics, hasUnavailableMetrics } from "../utils/metricSources";
 
-import StatsCard from "../components/dashboard/StatsCard.jsx";
+const quickActions = [
+  { label: "Connect Instagram", icon: Camera, to: routePaths.instagram, variant: "primary" },
+  { label: "Open AI Chat", icon: Bot, to: routePaths.chat, variant: "secondary" },
+  { label: "Sync Instagram", icon: RefreshCw, to: routePaths.instagram, variant: "secondary" },
+  { label: "Generate Snapshot", icon: BarChart3, toast: "Snapshot generation is reserved for the analytics milestone." },
+  { label: "Calculate Creator Score", icon: Gauge, toast: "Score calculation will be activated in the creator score milestone." },
+  { label: "Generate Insights", icon: BrainCircuit, toast: "Insight generation will be activated in the insights milestone." },
+  { label: "Recommendations", icon: Lightbulb, to: routePaths.recommendations, variant: "secondary" },
+];
 
-/**
- * -------------------------------------------------------
- * Safe datetime formatter.
- * -------------------------------------------------------
- */
-const formatDateTime = (
-  value
-) => {
-  if (!value) {
-    return "Never synced";
+function getScoreLevel(score) {
+  if (score >= 75) {
+    return "Strong";
   }
 
-  try {
-    return new Date(
-      value
-    ).toLocaleString(
-      "en-US",
-      {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      }
+  if (score >= 50) {
+    return "Improving";
+  }
+
+  return "Needs data";
+}
+
+function QuickActionButton({ action }) {
+  const Icon = action.icon;
+
+  if (action.to) {
+    return (
+      <Button as={Link} to={action.to} variant={action.variant || "secondary"} className="w-full justify-start">
+        <Icon aria-hidden="true" size={18} />
+        {action.label}
+      </Button>
     );
-  } catch {
-    return "Unknown";
   }
-};
-
-/**
- * -------------------------------------------------------
- * Safe metric extractor.
- * -------------------------------------------------------
- *
- * Includes demo fallback values
- * to stabilize frontend testing.
- */
-const extractMetrics = (
-  snapshot
-) => {
-  /**
-   * Safe fallback.
-   */
-  if (!snapshot) {
-    return {
-      followers: 12840,
-      following: 421,
-      posts: 94,
-      likes: 3820,
-      comments: 642,
-      engagementRate: 7.8,
-    };
-  }
-
-  const metrics =
-    snapshot.metrics ||
-    snapshot;
-
-  return {
-    followers:
-      Number(
-        metrics?.followers ||
-          12840
-      ),
-
-    following:
-      Number(
-        metrics?.following ||
-          421
-      ),
-
-    posts:
-      Number(
-        metrics?.posts || 94
-      ),
-
-    likes:
-      Number(
-        metrics?.likes ||
-          3820
-      ),
-
-    comments:
-      Number(
-        metrics?.comments ||
-          642
-      ),
-
-    engagementRate:
-      Number(
-        metrics?.engagementRate ||
-          7.8
-      ),
-  };
-};
-
-/**
- * -------------------------------------------------------
- * Production-grade Dashboard page.
- * -------------------------------------------------------
- */
-const Dashboard = () => {
-  /**
-   * -------------------------------------------------------
-   * Accounts lifecycle.
-   * -------------------------------------------------------
-   */
-  const [
-    socialAccounts,
-    setSocialAccounts,
-  ] = useState([]);
-
-  const [
-    selectedAccount,
-    setSelectedAccount,
-  ] = useState(null);
-
-  /**
-   * -------------------------------------------------------
-   * Analytics lifecycle.
-   * -------------------------------------------------------
-   */
-  const [snapshots, setSnapshots] =
-    useState([]);
-
-  /**
-   * -------------------------------------------------------
-   * Page lifecycle.
-   * -------------------------------------------------------
-   */
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  /**
-   * -------------------------------------------------------
-   * Load accounts.
-   * -------------------------------------------------------
-   */
-  useEffect(() => {
-    const loadAccounts =
-      async () => {
-        try {
-          setLoading(true);
-
-          setError("");
-
-          const response =
-            await getSocialAccounts();
-
-          const accounts =
-            response.accounts ||
-            [];
-
-          setSocialAccounts(
-            accounts
-          );
-
-          if (
-            accounts.length > 0
-          ) {
-            setSelectedAccount(
-              accounts[0]
-            );
-          }
-        } catch (error) {
-          console.error(
-            "[DASHBOARD ACCOUNTS ERROR]",
-            error
-          );
-
-          setError(
-            error.message ||
-              "Failed to load dashboard."
-          );
-        } finally {
-          setLoading(false);
-        }
-      };
-
-    loadAccounts();
-  }, []);
-
-  /**
-   * -------------------------------------------------------
-   * Load analytics snapshots.
-   * -------------------------------------------------------
-   */
-  useEffect(() => {
-    if (
-      !selectedAccount?._id
-    ) {
-      return;
-    }
-
-    const loadSnapshots =
-      async () => {
-        try {
-          const response =
-            await getAnalyticsSnapshots(
-              {
-                socialAccountId:
-                  selectedAccount._id,
-              }
-            );
-
-          setSnapshots(
-            response.snapshots ||
-              []
-          );
-        } catch (error) {
-          console.error(
-            "[DASHBOARD SNAPSHOTS ERROR]",
-            error
-          );
-
-          /**
-           * Keep dashboard alive.
-           */
-          setSnapshots([]);
-        }
-      };
-
-    loadSnapshots();
-  }, [selectedAccount]);
-
-  /**
-   * -------------------------------------------------------
-   * Latest snapshot.
-   * -------------------------------------------------------
-   */
-  const latestSnapshot =
-    useMemo(() => {
-      if (
-        snapshots.length === 0
-      ) {
-        return null;
-      }
-
-      return snapshots[
-        snapshots.length - 1
-      ];
-    }, [snapshots]);
-
-  /**
-   * -------------------------------------------------------
-   * Stable metrics.
-   * -------------------------------------------------------
-   */
-  const metrics =
-    useMemo(() => {
-      return extractMetrics(
-        latestSnapshot
-      );
-    }, [latestSnapshot]);
-
-  /**
-   * -------------------------------------------------------
-   * Stats cards.
-   * -------------------------------------------------------
-   */
-  const overviewStats =
-    useMemo(() => {
-      return [
-        {
-          id: 1,
-          title:
-            "Followers",
-          value: String(
-            metrics.followers
-          ),
-          color:
-            "purple",
-        },
-
-        {
-          id: 2,
-          title:
-            "Following",
-          value: String(
-            metrics.following
-          ),
-          color: "blue",
-        },
-
-        {
-          id: 3,
-          title: "Posts",
-          value: String(
-            metrics.posts
-          ),
-          color:
-            "green",
-        },
-
-        {
-          id: 4,
-          title: "Likes",
-          value: String(
-            metrics.likes
-          ),
-          color:
-            "purple",
-        },
-
-        {
-          id: 5,
-          title:
-            "Comments",
-          value: String(
-            metrics.comments
-          ),
-          color: "blue",
-        },
-
-        {
-          id: 6,
-          title:
-            "Engagement",
-          value: `${metrics.engagementRate}%`,
-          color:
-            "green",
-        },
-      ];
-    }, [metrics]);
-
-  /**
-   * -------------------------------------------------------
-   * Account switch lifecycle.
-   * -------------------------------------------------------
-   */
-  const handleAccountChange =
-    (event) => {
-      const nextAccountId =
-        event.target.value;
-
-      const matchedAccount =
-        socialAccounts.find(
-          (
-            account
-          ) =>
-            account._id ===
-            nextAccountId
-        );
-
-      if (
-        !matchedAccount
-      ) {
-        return;
-      }
-
-      setSelectedAccount(
-        matchedAccount
-      );
-    };
 
   return (
-    <div className="space-y-6">
-      {/* ------------------------------------------------ */}
-      {/* Header */}
-      {/* ------------------------------------------------ */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-800">
-          Dashboard
-        </h1>
+    <Button type="button" variant="secondary" className="w-full justify-start" onClick={() => toast(action.toast)}>
+      <Icon aria-hidden="true" size={18} />
+      {action.label}
+    </Button>
+  );
+}
 
-        <p className="mt-2 text-gray-600">
-          Monitor your social
-          media analytics,
-          engagement, growth,
-          and AI activity.
-        </p>
+export default function Dashboard() {
+  const { user } = useAuth();
+  const { data, error, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["dashboard-overview"],
+    queryFn: dashboardService.getOverview,
+    retry: false,
+  });
+
+  const account = data?.account;
+  const latestSnapshot = data?.latestSnapshot;
+  const latestScore = data?.latestScore;
+  const latestInsights = data?.latestInsights || [];
+  const topMedia = data?.topMedia || [];
+
+  const scoreValue = latestScore?.totalScore ?? latestSnapshot?.creatorScore;
+  const score = Number(scoreValue);
+  const hasScore = Number.isFinite(score);
+  const engagementRate = latestSnapshot?.averageEngagement ?? topMedia[0]?.analytics?.engagementRate;
+
+  const metricCards = useMemo(
+    () => [
+      {
+        label: "Followers",
+        value: formatMetricValue(account?.followers ?? latestSnapshot?.followers, account?.metricsAvailability?.followers !== false),
+        detail: latestSnapshot ? `${formatNumber(latestSnapshot.followerGrowth)} since last snapshot` : "Connect Instagram to start tracking growth",
+        icon: Users,
+        tone: "brand",
+      },
+      {
+        label: "Media",
+        value: formatMetricValue(account?.mediaCount ?? latestSnapshot?.mediaCount, account?.metricsAvailability?.mediaCount !== false),
+        detail: latestSnapshot ? `${formatNumber(latestSnapshot.mediaGrowth)} new media since last snapshot` : "Media sync will populate this card",
+        icon: Image,
+        tone: "mint",
+      },
+      {
+        label: "Engagement",
+        value: Number.isFinite(Number(engagementRate)) ? formatPercent(engagementRate) : "Unavailable",
+        detail: latestSnapshot ? `${formatNumber(latestSnapshot.totalEngagement)} total engagements` : "Snapshot data will calculate engagement",
+        icon: TrendingUp,
+        tone: "amber",
+      },
+    ],
+    [account, engagementRate, latestSnapshot],
+  );
+
+  return (
+    <section className="space-y-6">
+      <PageHeader
+        eyebrow="Dashboard"
+        title={`Welcome${user?.name ? `, ${user.name}` : ""}`}
+        description="Track your connected Instagram account, creator score, AI insights, and next best actions from one focused workspace."
+        actions={
+          <>
+            <Button as={Link} to={routePaths.chat} variant="secondary">
+              <Bot aria-hidden="true" size={18} />
+              AI Chat
+            </Button>
+            <Button as={Link} to={routePaths.instagram}>
+              <Camera aria-hidden="true" size={18} />
+              {account ? "Instagram" : "Connect"}
+            </Button>
+          </>
+        }
+      />
+
+      {account && hasUnavailableMetrics(account) ? <DataAvailabilityNotice type="noProviderMetric" /> : null}
+      {account && hasManualMetrics(account) ? <DataAvailabilityNotice type="manualActive" /> : null}
+      {account && !account.lastSyncedAt ? <DataAvailabilityNotice type="syncRequired" /> : null}
+
+      {isLoading ? (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <LoadingCard rows={4} />
+          <LoadingCard rows={4} />
+          <LoadingCard rows={4} />
+        </div>
+      ) : null}
+
+      {!isLoading && error ? (
+        <ErrorPanel
+          title="Dashboard data is not ready yet"
+          message={error?.response?.status === 404 ? "Connect an Instagram account to unlock your overview." : "The dashboard API is unavailable right now. The workspace shell is still ready."}
+          action={
+            <Button type="button" variant="secondary" onClick={() => refetch()} disabled={isFetching}>
+              <RefreshCw aria-hidden="true" size={18} />
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-[1.4fr_0.9fr]">
+        <SectionCard
+          title="Connected account"
+          description="Instagram account status and most recent sync details."
+          action={<StatusBadge variant={account ? "success" : "warning"}>{account ? "Connected" : "Not connected"}</StatusBadge>}
+        >
+          {account ? (
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-cloud-100 text-brand-700">
+                  {account.profileImage ? (
+                    <img src={account.profileImage} alt="" className="h-14 w-14 rounded-lg object-cover" />
+                  ) : (
+                    <Camera aria-hidden="true" size={24} />
+                  )}
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-ink-950">{account.displayName || account.username || "Instagram account"}</h2>
+                  <p className="text-sm text-ink-500">{account.username ? `@${account.username}` : "Username unavailable"}</p>
+                </div>
+              </div>
+              <div className="rounded-lg border border-line-200 bg-cloud-50 px-4 py-3">
+                <p className="flex items-center gap-2 text-sm font-medium text-ink-700">
+                  <Clock aria-hidden="true" size={16} />
+                  Last synced
+                </p>
+                <p className="mt-1 text-sm text-ink-500">{formatDateTime(account.lastSyncedAt)}</p>
+              </div>
+            </div>
+          ) : (
+            <EmptyState
+              title="No Instagram account connected"
+              description="Connect Instagram to unlock snapshots, media sync, creator score, and AI insights."
+              action={
+                <Button as={Link} to={routePaths.instagram}>
+                  <Camera aria-hidden="true" size={18} />
+                  Connect Instagram
+                </Button>
+              }
+            />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Creator score" description="A weekly signal based on engagement, growth, consistency, and activity.">
+          <div className="flex items-center gap-5">
+            <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full border-8 border-blue-100 bg-white">
+              <div className="text-center">
+                <p className="text-3xl font-semibold text-ink-950">{hasScore ? Math.round(score) : "--"}</p>
+                <p className="text-xs font-medium text-ink-500">{hasScore ? "/100" : "No score"}</p>
+              </div>
+            </div>
+            <div>
+              <StatusBadge variant={hasScore ? "success" : "neutral"}>{hasScore ? getScoreLevel(score) : "Needs data"}</StatusBadge>
+              <p className="mt-3 text-sm leading-6 text-ink-500">
+                {latestScore ? `Calculated ${formatDateTime(latestScore.calculatedAt)}.` : "Calculate a score after connecting analytics data."}
+              </p>
+              <Button as={Link} to={routePaths.creatorScore} variant="secondary" className="mt-4">
+                <Target aria-hidden="true" size={18} />
+                View score
+              </Button>
+            </div>
+          </div>
+        </SectionCard>
       </div>
 
-      {/* ------------------------------------------------ */}
-      {/* Error */}
-      {/* ------------------------------------------------ */}
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
+      <div className="grid gap-4 md:grid-cols-3">
+        {metricCards.map((card) => (
+          <StatCard key={card.label} {...card} />
+        ))}
+      </div>
 
-      {/* ------------------------------------------------ */}
-      {/* No Accounts */}
-      {/* ------------------------------------------------ */}
-      {!loading &&
-        socialAccounts.length ===
-          0 && (
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-700">
-              No Connected
-              Accounts
-            </h2>
-
-            <p className="mt-2 text-gray-600">
-              Connect a social
-              account to start
-              analytics syncing
-              and AI workflows.
-            </p>
-          </div>
-        )}
-
-      {/* ------------------------------------------------ */}
-      {/* Account Selector */}
-      {/* ------------------------------------------------ */}
-      {selectedAccount && (
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-700">
-                Connected
-                Account
-              </h2>
-
-              <p className="mt-1 text-sm text-gray-500">
-                Switch between
-                connected social
-                accounts.
-              </p>
+      <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+        <SectionCard
+          title="Recent insights"
+          description="Latest AI or system-generated recommendations for your creator growth."
+          action={
+            <Button as={Link} to={routePaths.insights} variant="ghost">
+              View all
+            </Button>
+          }
+        >
+          {latestInsights.length > 0 ? (
+            <div className="space-y-3">
+              {latestInsights.slice(0, 3).map((insight) => (
+                <div key={insight._id || insight.id || insight.title} className="rounded-lg border border-line-200 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-ink-950">{insight.title}</p>
+                      <p className="mt-1 line-clamp-2 text-sm leading-6 text-ink-500">{insight.description}</p>
+                    </div>
+                    <StatusBadge variant={insight.priority === "high" || insight.priority === "critical" ? "warning" : "neutral"}>
+                      {insight.priority || "medium"}
+                    </StatusBadge>
+                  </div>
+                </div>
+              ))}
             </div>
-
-            <div className="w-full lg:w-80">
-              <label className="mb-2 block text-sm text-gray-600">
-                Select Account
-              </label>
-
-              <select
-                value={
-                  selectedAccount._id
-                }
-                onChange={
-                  handleAccountChange
-                }
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 outline-none focus:border-blue-500"
-              >
-                {socialAccounts.map(
-                  (
-                    account
-                  ) => (
-                    <option
-                      key={
-                        account._id
-                      }
-                      value={
-                        account._id
-                      }
-                    >
-                      @
-                      {
-                        account.username
-                      }{" "}
-                      (
-                      {
-                        account.platform
-                      }
-                      )
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
-          </div>
-
-          {/* Metadata */}
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <div>
-              <p className="text-sm text-gray-500">
-                Username
-              </p>
-
-              <p className="font-medium text-gray-800">
-                @
-                {
-                  selectedAccount.username
-                }
-              </p>
-            </div>
-
-            <div>
-              <p className="text-sm text-gray-500">
-                Platform
-              </p>
-
-              <p className="font-medium capitalize text-gray-800">
-                {
-                  selectedAccount.platform
-                }
-              </p>
-            </div>
-
-            <div>
-              <p className="text-sm text-gray-500">
-                Last Synced
-              </p>
-
-              <p className="font-medium text-gray-800">
-                {formatDateTime(
-                  selectedAccount.lastSyncedAt
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ------------------------------------------------ */}
-      {/* Loading */}
-      {/* ------------------------------------------------ */}
-      {loading && (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({
-            length: 6,
-          }).map(
-            (
-              _,
-              index
-            ) => (
-              <div
-                key={index}
-                className="h-28 animate-pulse rounded-2xl bg-gray-200"
-              />
-            )
+          ) : (
+            <EmptyState
+              title="No insights yet"
+              description="Generate insights after analytics snapshots and creator score data are available."
+              action={
+                <Button as={Link} to={routePaths.insights} variant="secondary">
+                  <BrainCircuit aria-hidden="true" size={18} />
+                  Open insights
+                </Button>
+              }
+            />
           )}
-        </div>
-      )}
+        </SectionCard>
 
-      {/* ------------------------------------------------ */}
-      {/* Statistics */}
-      {/* ------------------------------------------------ */}
-      {!loading &&
-        selectedAccount && (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {overviewStats.map(
-              (stat) => (
-                <StatsCard
-                  key={
-                    stat.id
-                  }
-                  {...stat}
-                />
-              )
-            )}
+        <SectionCard title="Quick actions" description="Shortcuts for the workflows that will power the main dashboard.">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            {quickActions.map((action) => (
+              <QuickActionButton key={action.label} action={action} />
+            ))}
           </div>
-        )}
+        </SectionCard>
+      </div>
 
-      {/* ------------------------------------------------ */}
-      {/* Overview */}
-      {/* ------------------------------------------------ */}
-      {!loading &&
-        selectedAccount && (
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-gray-800">
-              Quick Overview
-            </h2>
-
-            <p className="mt-3 leading-7 text-gray-600">
-              Your AI analytics
-              workspace is now
-              connected with
-              session-aware AI
-              streaming,
-              multimodal image
-              analysis, OCR
-              extraction, and
-              advanced engagement
-              tracking.
-            </p>
-
-            <div className="mt-5 rounded-xl border border-gray-100 bg-gray-50 p-4">
-              <p className="text-sm text-gray-600">
-                Active account:
-                <span className="ml-2 font-medium text-gray-800">
-                  @
-                  {
-                    selectedAccount.username
-                  }
-                </span>
-              </p>
-
-              <p className="mt-2 text-sm text-gray-600">
-                Total snapshots:
-                <span className="ml-2 font-medium text-gray-800">
-                  {
-                    snapshots.length
-                  }
-                </span>
-              </p>
+      <div className="grid gap-4 xl:grid-cols-[0.9fr_1fr]">
+        <SectionCard title="AI assistant" description="Use the assistant for content ideas, performance questions, and planning support.">
+          <div className="rounded-lg bg-ink-950 p-5 text-white">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/10">
+              <Sparkles aria-hidden="true" size={20} />
             </div>
+            <h2 className="mt-5 text-lg font-semibold">Ask what to post next</h2>
+            <p className="mt-2 text-sm leading-6 text-white/70">
+              The chat workspace will use memory, notes, and performance context when the AI milestone begins.
+            </p>
+            <Button as={Link} to={routePaths.chat} className="mt-5 bg-white text-ink-950 hover:bg-cloud-100">
+              <Bot aria-hidden="true" size={18} />
+              Open AI Chat
+            </Button>
           </div>
-        )}
-    </div>
-  );
-};
+        </SectionCard>
 
-export default Dashboard;
+        <SectionCard title="Top content preview" description="Highest-engagement media from the latest sync.">
+          {topMedia.length > 0 ? (
+            <div className="space-y-3">
+              {topMedia.slice(0, 4).map((media) => (
+                <div key={media._id || media.mediaId} className="flex items-center gap-3 rounded-lg border border-line-200 p-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-cloud-100 text-ink-500">
+                    <Zap aria-hidden="true" size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-ink-950">{media.caption || media.mediaType || "Instagram media"}</p>
+                    <p className="text-xs text-ink-500">{formatNumber(media.analytics?.engagementCount)} engagements</p>
+                  </div>
+                  <StatusBadge>{media.mediaType || "MEDIA"}</StatusBadge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No media synced yet"
+              description="Synced posts and reels will appear here as the analytics foundation grows."
+              action={
+                <Button as={Link} to={routePaths.analytics} variant="secondary">
+                  <BarChart3 aria-hidden="true" size={18} />
+                  View analytics
+                </Button>
+              }
+            />
+          )}
+        </SectionCard>
+      </div>
+    </section>
+  );
+}

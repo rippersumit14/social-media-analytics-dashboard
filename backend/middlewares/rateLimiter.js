@@ -55,10 +55,12 @@ export const globalRateLimiter =
 
       return res.status(429).json(
 
-        new ApiResponse(
-          false,
-          "Too many requests. Please try again later."
-        )
+        new ApiResponse({
+          success: false,
+          statusCode: 429,
+          message:
+            "Too many requests. Please try again later.",
+        })
       );
     },
   });
@@ -101,10 +103,12 @@ export const aiChatRateLimiter =
 
       return res.status(429).json(
 
-        new ApiResponse(
-          false,
-          "AI request limit exceeded. Please slow down."
-        )
+        new ApiResponse({
+          success: false,
+          statusCode: 429,
+          message:
+            "AI request limit exceeded. Please slow down.",
+        })
       );
     },
   });
@@ -146,10 +150,12 @@ export const authRateLimiter =
 
       return res.status(429).json(
 
-        new ApiResponse(
-          false,
-          "Too many authentication attempts. Please try again later."
-        )
+        new ApiResponse({
+          success: false,
+          statusCode: 429,
+          message:
+            "Too many authentication attempts. Please try again later.",
+        })
       );
     },
   });
@@ -192,10 +198,89 @@ export const uploadRateLimiter =
 
       return res.status(429).json(
 
-        new ApiResponse(
-          false,
-          "Upload limit exceeded. Please try again later."
-        )
+        new ApiResponse({
+          success: false,
+          statusCode: 429,
+          message:
+            "Upload limit exceeded. Please try again later.",
+        })
+      );
+    },
+  });
+
+/**
+ * ---------------------------------------------------
+ * Public Contact Rate Limiter
+ * ---------------------------------------------------
+ *
+ * Keeps the unauthenticated contact form useful
+ * while limiting spam.
+ */
+
+export const contactRateLimiter =
+  rateLimit({
+    windowMs:
+      15 * 60 * 1000,
+
+    max:
+      5,
+
+    standardHeaders:
+      true,
+
+    legacyHeaders:
+      false,
+
+    handler: (
+      req,
+      res
+    ) => {
+
+      return res.status(429).json(
+
+        new ApiResponse({
+          success: false,
+          statusCode: 429,
+          message:
+            "Too many contact attempts. Please wait before sending another message.",
+        })
+      );
+    },
+  });
+
+/**
+ * ---------------------------------------------------
+ * Instagram Manual Metrics Rate Limiter
+ * ---------------------------------------------------
+ */
+
+export const instagramManualMetricsRateLimiter =
+  rateLimit({
+    windowMs:
+      15 * 60 * 1000,
+
+    max:
+      20,
+
+    standardHeaders:
+      true,
+
+    legacyHeaders:
+      false,
+
+    handler: (
+      req,
+      res
+    ) => {
+
+      return res.status(429).json(
+
+        new ApiResponse({
+          success: false,
+          statusCode: 429,
+          message:
+            "Too many manual metric updates. Please wait before trying again.",
+        })
       );
     },
   });

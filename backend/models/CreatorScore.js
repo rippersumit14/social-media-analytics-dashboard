@@ -162,6 +162,26 @@ const creatorScoreSchema =
           type: String,
           default: "",
         },
+
+        dataMode: {
+          type: String,
+          enum: [
+            "account-aware",
+            "manual-estimate",
+            "limited",
+          ],
+          default: "limited",
+        },
+
+        hasManualMetrics: {
+          type: Boolean,
+          default: false,
+        },
+
+        metricSources: {
+          type: mongoose.Schema.Types.Mixed,
+          default: {},
+        },
       },
 
       /**

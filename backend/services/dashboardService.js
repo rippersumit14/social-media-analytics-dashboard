@@ -5,6 +5,10 @@ import AnalyticsSnapshot from "../models/AnalyticsSnapshot.js";
 import CreatorScore from "../models/CreatorScore.js";
 import CreatorInsight from "../models/CreatorInsight.js";
 import InstagramMedia from "../models/InstagramMedia.js";
+import {
+  buildAccountMetrics,
+  hasManualMetrics,
+} from "../utils/instagramMetricSources.js";
 
 /**
  * --------------------------------------------------
@@ -87,6 +91,11 @@ export const getDashboardOverview =
         .limit(5),
     ]);
 
+    const metrics =
+      buildAccountMetrics(
+        account
+      );
+
     return {
 
       account: {
@@ -102,10 +111,26 @@ export const getDashboardOverview =
           account.profileImage,
 
         followers:
-          account.followers,
+          metrics.followers.value,
+
+        follows:
+          metrics.follows.value,
 
         mediaCount:
-          account.mediaCount,
+          metrics.mediaCount.value,
+
+        metricsAvailability:
+          account.metricsAvailability,
+
+        metrics,
+
+        hasManualMetrics:
+          hasManualMetrics(
+            metrics
+          ),
+
+        manualMetrics:
+          account.manualMetrics,
 
         accountType:
           account.accountType,

@@ -5,6 +5,7 @@
  */
 
 import "./config/env.js";
+import mongoose from "mongoose";
 
 /**
  * --------------------------------------------------
@@ -53,6 +54,13 @@ import redis from "./config/redis.js";
  */
 
 import startAutomationRunner from "./jobs/automationRunner.js";
+import {
+  startEmailWorker,
+  closeEmailWorker,
+} from "./jobs/emailWorker.js";
+import {
+  closeEmailQueue,
+} from "./jobs/emailQueue.js";
 
 /**
  * --------------------------------------------------
@@ -114,6 +122,7 @@ const startServer = async () => {
       });
 
       startAutomationRunner();
+      startEmailWorker();
 
       logger.info("Automation scheduler initialized successfully");
     });
@@ -148,18 +157,22 @@ const gracefulShutdown = async (signal) => {
   logger.warn("Graceful shutdown initiated", { signal });
 
   try {
+    const closeSharedResources = async () => {
+      await Promise.allSettled([
+        closeEmailWorker(),
+        closeEmailQueue(),
+        redis.quit(),
+        mongoose.connection.close(),
+      ]);
+
+      logger.info("Shared backend resources closed");
+    };
+
     if (server) {
       server.close(async () => {
         logger.info("HTTP server closed successfully");
 
-        try {
-          await redis.quit();
-          logger.info("Redis connection closed");
-        } catch (redisError) {
-          logger.error("Error closing Redis connection", {
-            message: redisError.message,
-          });
-        }
+        await closeSharedResources();
 
         process.exit(0);
       });
@@ -169,6 +182,7 @@ const gracefulShutdown = async (signal) => {
        * instance is created (e.g. startup fails mid-way).
        * Without this else branch, shutdown would hang indefinitely.
        */
+      await closeSharedResources();
       process.exit(0);
     }
   } catch (error) {

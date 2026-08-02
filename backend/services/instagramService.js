@@ -1,5 +1,14 @@
 import AppError from "../utils/AppError.js";
+import logger from "../utils/logger.js";
 import axios from "axios";
+
+const toFiniteNumber = (value) => {
+  const number = Number(value);
+
+  return Number.isFinite(number) && number >= 0
+    ? number
+    : undefined;
+};
 
 /**
  * --------------------------------------------------
@@ -46,30 +55,13 @@ export const generateInstagramAuthURL = (state) => {
     `&scope=${encodeURIComponent(scopes)}` +
     `&state=${state}`;
 
-  console.log("\n=================================");
-  console.log("INSTAGRAM AUTH URL GENERATED");
-  console.log("=================================");
-
-  console.log(
-    "INSTAGRAM_APP_ID:",
-    INSTAGRAM_APP_ID
+  logger.info(
+    "Instagram OAuth URL generated",
+    {
+      redirectConfigured:
+        Boolean(INSTAGRAM_REDIRECT_URI),
+    }
   );
-
-  console.log(
-    "INSTAGRAM_REDIRECT_URI:",
-    INSTAGRAM_REDIRECT_URI
-  );
-
-  console.log(
-    "STATE:",
-    state
-  );
-
-  console.log("AUTH URL:");
-
-  console.log(authURL);
-
-  console.log("=================================\n");
 
   return authURL;
 };
@@ -126,35 +118,21 @@ export const exchangeCodeForToken = async (
 
   } catch (error) {
 
-    console.log(
-      "\n================================="
-    );
-
-    console.log(
-      "INSTAGRAM TOKEN EXCHANGE FAILED"
-    );
-
-    console.log(
-      "================================="
-    );
-
-    console.dir(
+    logger.warn(
+      "Instagram token exchange failed",
       {
         status:
           error.response?.status,
 
-        data:
-          error.response?.data,
+        providerError:
+          error.response?.data?.error_type ||
+          error.response?.data?.error,
       },
-      {
-        depth: null,
-      }
     );
 
     throw new AppError(
-      error.response?.data?.error_message ||
       "Instagram token exchange failed",
-      500
+      502
     );
   }
 };
@@ -179,7 +157,16 @@ export const getInstagramAccountInfo =
           {
             params: {
               fields:
-                "id,username,account_type",
+                [
+                  "id",
+                  "username",
+                  "name",
+                  "account_type",
+                  "followers_count",
+                  "follows_count",
+                  "media_count",
+                  "profile_picture_url",
+                ].join(","),
 
               access_token:
                 accessToken,
@@ -189,6 +176,21 @@ export const getInstagramAccountInfo =
           }
         );
 
+      const followers =
+        toFiniteNumber(
+          data.followers_count
+        );
+
+      const follows =
+        toFiniteNumber(
+          data.follows_count
+        );
+
+      const mediaCount =
+        toFiniteNumber(
+          data.media_count
+        );
+
       return {
         instagramUserId:
           data.id,
@@ -196,51 +198,63 @@ export const getInstagramAccountInfo =
         username:
           data.username,
 
+        displayName:
+          data.name || "",
+
         accountType:
           data.account_type ===
           "MEDIA_CREATOR"
             ? "creator"
             : "business",
 
-        followers: 0,
+        followers,
 
-        mediaCount: 0,
+        follows,
+
+        mediaCount,
 
         pageId: null,
 
-        profileImage: "",
+        profileImage:
+          data.profile_picture_url || "",
+
+        metricsAvailability: {
+          followers:
+            followers !== undefined,
+
+          follows:
+            follows !== undefined,
+
+          mediaCount:
+            mediaCount !== undefined,
+
+          profileImage:
+            Boolean(
+              data.profile_picture_url
+            ),
+
+          lastCheckedAt:
+            new Date(),
+        },
       };
 
     } catch (error) {
 
-      console.log(
-        "\n================================="
-      );
-
-      console.log(
-        "INSTAGRAM PROFILE FETCH FAILED"
-      );
-
-      console.log(
-        "================================="
-      );
-
-      console.dir(
+      logger.warn(
+        "Instagram profile fetch failed",
         {
           status:
             error.response?.status,
 
-          data:
-            error.response?.data,
+          providerError:
+            error.response?.data?.error?.type ||
+            error.response?.data?.error,
         },
-        {
-          depth: null,
-        }
       );
 
       throw new AppError(
         "Failed to fetch Instagram profile",
-        500
+        502
       );
     }
   };

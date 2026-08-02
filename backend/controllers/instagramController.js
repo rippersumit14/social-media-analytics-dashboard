@@ -2,6 +2,7 @@ import asyncHandler from "../middlewares/asyncHandler.js";
 
 import ApiResponse from "../utils/ApiResponse.js";
 import AppError from "../utils/AppError.js";
+import logger from "../utils/logger.js";
 
 import InstagramAccount from "../models/InstagramAccount.js";
 
@@ -16,6 +17,118 @@ import {
   exchangeCodeForToken,
   getInstagramAccountInfo,
 } from "../services/instagramService.js";
+import {
+  buildAccountMetrics,
+  hasManualMetrics,
+} from "../utils/instagramMetricSources.js";
+
+const getFrontendInstagramRedirect = ({
+  status,
+  code,
+  message,
+}) => {
+  const baseUrl =
+    process.env.INSTAGRAM_FRONTEND_CALLBACK_URL ||
+    `${process.env.FRONTEND_URL}/instagram/callback`;
+
+  const url = new URL(baseUrl);
+
+  url.searchParams.set(
+    status === "success" ? "connected" : "error",
+    code
+  );
+
+  if (message) {
+    url.searchParams.set(
+      "message",
+      message
+    );
+  }
+
+  return url.toString();
+};
+
+const normalizeOAuthErrorCode = (error) => {
+  if (error?.message?.includes("already connected")) {
+    return "account_already_connected";
+  }
+
+  if (error?.message?.includes("OAuth state")) {
+    return "invalid_state";
+  }
+
+  if (error?.message?.includes("access token")) {
+    return "token_exchange_failed";
+  }
+
+  if (error?.message?.includes("Instagram profile")) {
+    return "account_fetch_failed";
+  }
+
+  return "oauth_failed";
+};
+
+const definedAccountFields = (accountInfo) => {
+  const fields = {
+    pageId: accountInfo.pageId,
+    username: accountInfo.username,
+    displayName: accountInfo.displayName,
+    profileImage: accountInfo.profileImage,
+    followers: accountInfo.followers,
+    follows: accountInfo.follows,
+    mediaCount: accountInfo.mediaCount,
+    accountType: accountInfo.accountType,
+    metricsAvailability: accountInfo.metricsAvailability,
+  };
+
+  return Object.fromEntries(
+    Object.entries(fields).filter(
+      ([, value]) => value !== undefined
+    )
+  );
+};
+
+const manualMetricFields = [
+  {
+    requestKey:
+      "followersCount",
+    accountKey:
+      "followers",
+    manualKey:
+      "followers",
+  },
+  {
+    requestKey:
+      "followingCount",
+    accountKey:
+      "follows",
+    manualKey:
+      "follows",
+  },
+  {
+    requestKey:
+      "mediaCount",
+    accountKey:
+      "mediaCount",
+    manualKey:
+      "mediaCount",
+  },
+];
+
+const isProviderConfirmedMetric = (
+  account,
+  field
+) => {
+  const value =
+    account[field.accountKey];
+
+  return (
+    account.metricsAvailability?.[field.manualKey] &&
+    Number.isFinite(
+      Number(value)
+    )
+  );
+};
 
 /**
  * --------------------------------------------------
@@ -106,110 +219,128 @@ export const connectInstagram = asyncHandler(
  */
 export const instagramOAuthCallback =
   asyncHandler(async (req, res) => {
-    console.log(
-      "\n================================="
-    );
-
-    console.log(
-      "INSTAGRAM CALLBACK HIT"
-    );
-
-    console.log(
-      "FULL QUERY:"
-    );
-
-    console.dir(
-      req.query,
-      { depth: null }
-    );
-
-    console.log(
-      "FULL URL:"
-    );
-
-    console.log(
-      req.originalUrl
-    );
-
-    console.log(
-      "=================================\n"
-    );
-
-    /**
-     * Meta sends:
-     * ?code=
-     * ?state=
-     */
     const {
       code,
       state,
+      error,
+      error_reason,
     } = req.query;
 
+    if (error) {
+      logger.warn(
+        "Instagram OAuth cancelled or rejected by provider",
+        {
+          reason:
+            error_reason || error,
+        }
+      );
+
+      return res.redirect(
+        getFrontendInstagramRedirect({
+          status:
+            "error",
+          code:
+            "oauth_cancelled",
+          message:
+            "Instagram authorization was not completed.",
+        })
+      );
+    }
+
     if (!code || !state) {
-      throw new AppError(
-        "Missing OAuth callback parameters",
-        400
+      return res.redirect(
+        getFrontendInstagramRedirect({
+          status:
+            "error",
+          code:
+            "missing_callback_params",
+          message:
+            "Instagram did not return the required OAuth parameters.",
+        })
       );
     }
 
-    /**
-     * Resolve UserId
-     * From Redis State
-     */
-    const userId =
-      await getUserIdFromState(
-        state
-      );
+    try {
+      const userId =
+        await getUserIdFromState(
+          state
+        );
 
-    /**
-     * Exchange OAuth Code
-     * For Access Token
-     */
-    const tokenData =
-      await exchangeCodeForToken(
-        code
-      );
+      const tokenData =
+        await exchangeCodeForToken(
+          code
+        );
 
-    const accessToken =
-      tokenData.access_token;
+      const accessToken =
+        tokenData.access_token;
 
-    if (!accessToken) {
-      throw new AppError(
-        "Failed to obtain access token",
-        500
-      );
-    }
+      if (!accessToken) {
+        throw new AppError(
+          "Failed to obtain access token",
+          502
+        );
+      }
 
-    /**
-     * Fetch Instagram Profile
-     */
-    const accountInfo =
-      await getInstagramAccountInfo(
-        accessToken
-      );
+      const accountInfo =
+        await getInstagramAccountInfo(
+          accessToken
+        );
 
-    /**
-     * Prevent Duplicate Connections
-     */
-    const existingAccount =
-      await InstagramAccount.findOne({
-        instagramUserId:
-          accountInfo.instagramUserId,
-      });
+      const existingAccount =
+        await InstagramAccount.findOne({
+          instagramUserId:
+            accountInfo.instagramUserId,
+        });
 
-    if (existingAccount) {
-      throw new AppError(
-        "Instagram account already connected",
-        409
-      );
-    }
+      if (existingAccount) {
+        if (
+          existingAccount.user.toString() !==
+          userId.toString()
+        ) {
+          throw new AppError(
+            "Instagram account already connected",
+            409
+          );
+        }
 
-    /**
-     * Save Instagram Account
-     */
-    const account =
+        existingAccount.set({
+          ...definedAccountFields(
+            accountInfo
+          ),
+
+          accessToken,
+
+          isPrimary:
+            true,
+
+          isActive:
+            true,
+
+          lastSyncedAt:
+            new Date(),
+        });
+
+        await existingAccount.save();
+
+        await deleteOAuthState(
+          state
+        );
+
+        return res.redirect(
+          getFrontendInstagramRedirect({
+            status:
+              "success",
+            code:
+              "reconnected",
+            message:
+              "Instagram account reconnected successfully.",
+          })
+        );
+      }
+
       await InstagramAccount.create({
-        user: userId,
+        user:
+          userId,
 
         instagramUserId:
           accountInfo.instagramUserId,
@@ -226,24 +357,165 @@ export const instagramOAuthCallback =
         followers:
           accountInfo.followers,
 
+        follows:
+          accountInfo.follows,
+
         mediaCount:
           accountInfo.mediaCount,
 
+        accountType:
+          accountInfo.accountType,
+
+        displayName:
+          accountInfo.displayName,
+
+        metricsAvailability:
+          accountInfo.metricsAvailability,
+
         accessToken,
 
-        isPrimary: true,
+        isPrimary:
+          true,
 
         lastSyncedAt:
           new Date(),
       });
 
-    /**
-     * OAuth completed successfully.
-     *
-     * Remove temporary Redis state.
-     */
-    await deleteOAuthState(
-      state
+      await deleteOAuthState(
+        state
+      );
+
+      return res.redirect(
+        getFrontendInstagramRedirect({
+          status:
+            "success",
+          code:
+            "success",
+          message:
+            "Instagram account connected successfully.",
+        })
+      );
+    } catch (callbackError) {
+      await deleteOAuthState(
+        state
+      ).catch(() => {});
+
+      const code =
+        normalizeOAuthErrorCode(
+          callbackError
+        );
+
+      logger.warn(
+        "Instagram OAuth callback failed",
+        {
+          code,
+          statusCode:
+            callbackError.statusCode,
+        }
+      );
+
+      return res.redirect(
+        getFrontendInstagramRedirect({
+          status:
+            "error",
+          code,
+          message:
+            "Instagram connection could not be completed.",
+        })
+      );
+    }
+  });
+
+/**
+ * --------------------------------------------------
+ * Update Manual Instagram Metrics
+ * --------------------------------------------------
+ * PATCH /api/instagram/manual-metrics
+ */
+export const updateManualInstagramMetrics =
+  asyncHandler(async (req, res) => {
+    const account =
+      await InstagramAccount.findOne({
+        user:
+          req.user._id,
+        isActive:
+          true,
+      });
+
+    if (!account) {
+      throw new AppError(
+        "No connected Instagram account found",
+        404
+      );
+    }
+
+    const now =
+      new Date();
+
+    for (const field of manualMetricFields) {
+      if (
+        !Object.hasOwn(
+          req.body,
+          field.requestKey
+        )
+      ) {
+        continue;
+      }
+
+      const value =
+        req.body[field.requestKey];
+
+      if (
+        value !== null &&
+        isProviderConfirmedMetric(
+          account,
+          field
+        )
+      ) {
+        throw new AppError(
+          "Provider-confirmed metrics cannot be replaced with manual estimates",
+          409
+        );
+      }
+
+      account.set(
+        `manualMetrics.${field.manualKey}.value`,
+        value
+      );
+      account.set(
+        `manualMetrics.${field.manualKey}.updatedAt`,
+        value === null ? null : now
+      );
+      account.set(
+        `manualMetrics.${field.manualKey}.confirmedByUser`,
+        value !== null
+          ? true
+          : false
+      );
+    }
+
+    await account.save();
+
+    const metrics =
+      buildAccountMetrics(
+        account
+      );
+
+    logger.info(
+      "Manual Instagram metrics updated",
+      {
+        userId:
+          req.user._id.toString(),
+        metricKeys:
+          manualMetricFields
+            .filter((field) =>
+              Object.hasOwn(
+                req.body,
+                field.requestKey
+              )
+            )
+            .map((field) => field.manualKey),
+      }
     );
 
     return res.status(200).json(
@@ -251,8 +523,38 @@ export const instagramOAuthCallback =
         success: true,
         statusCode: 200,
         message:
-          "Instagram account connected successfully",
-        data: account,
+          "Manual Instagram metrics updated successfully",
+        data: {
+          account: {
+            id:
+              account._id,
+            username:
+              account.username,
+            displayName:
+              account.displayName,
+            profileImage:
+              account.profileImage,
+            accountType:
+              account.accountType,
+            followers:
+              metrics.followers.value,
+            follows:
+              metrics.follows.value,
+            mediaCount:
+              metrics.mediaCount.value,
+            metrics,
+            metricsAvailability:
+              account.metricsAvailability,
+            manualMetrics:
+              account.manualMetrics,
+            hasManualMetrics:
+              hasManualMetrics(
+                metrics
+              ),
+            lastSyncedAt:
+              account.lastSyncedAt,
+          },
+        },
       })
     );
   });

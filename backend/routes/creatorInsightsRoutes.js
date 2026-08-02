@@ -1,6 +1,9 @@
 import express from "express";
 
 import protect from "../middlewares/authMiddleware.js";
+import {
+  aiChatRateLimiter,
+} from "../middlewares/rateLimiter.js";
 
 import {
   generateInsights,
@@ -25,6 +28,7 @@ router.use(protect);
 
 router.post(
   "/generate",
+  aiChatRateLimiter,
   generateInsights
 );
 

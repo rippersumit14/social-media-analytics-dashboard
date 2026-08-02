@@ -24,6 +24,27 @@ const REQUIRED_ENV_VARS = [
   "CLOUDINARY_API_SECRET",
 ];
 
+const PRODUCTION_ENV_VARS = [
+
+  "FRONTEND_URL",
+
+  "REDIS_URL",
+
+  "EMAIL_USER",
+
+  "EMAIL_PASSWORD",
+
+  "EMAIL_FROM",
+
+  "CONTACT_RECEIVER_EMAIL",
+
+  "INSTAGRAM_APP_ID",
+
+  "INSTAGRAM_APP_SECRET",
+
+  "INSTAGRAM_REDIRECT_URI",
+];
+
 /**
  * ---------------------------------------------------
  * AI Provider Environment Variables
@@ -72,6 +93,27 @@ const validateEnv =
         missingEnvVars.push(
           envVar
         );
+      }
+    }
+
+    if (
+      process.env.NODE_ENV ===
+      "production"
+    ) {
+
+      for (
+        const envVar
+        of PRODUCTION_ENV_VARS
+      ) {
+
+        if (
+          !process.env[envVar]
+        ) {
+
+          missingEnvVars.push(
+            envVar
+          );
+        }
       }
     }
 

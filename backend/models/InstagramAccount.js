@@ -99,7 +99,16 @@ const instagramAccountSchema = new mongoose.Schema(
      */
     followers: {
       type: Number,
-      default: 0,
+      default: null,
+      min: 0,
+    },
+
+    /**
+     * Latest following count when the provider exposes it.
+     */
+    follows: {
+      type: Number,
+      default: null,
       min: 0,
     },
 
@@ -110,8 +119,87 @@ const instagramAccountSchema = new mongoose.Schema(
      */
     mediaCount: {
       type: Number,
-      default: 0,
+      default: null,
       min: 0,
+    },
+
+    /**
+     * Tracks which public profile metrics were actually returned by Meta.
+     */
+    metricsAvailability: {
+      followers: {
+        type: Boolean,
+        default: false,
+      },
+      follows: {
+        type: Boolean,
+        default: false,
+      },
+      mediaCount: {
+        type: Boolean,
+        default: false,
+      },
+      profileImage: {
+        type: Boolean,
+        default: false,
+      },
+      lastCheckedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+
+    /**
+     * User-provided fallback values.
+     *
+     * These are never treated as Meta-provided metrics.
+     */
+    manualMetrics: {
+      followers: {
+        value: {
+          type: Number,
+          default: null,
+          min: 0,
+        },
+        updatedAt: {
+          type: Date,
+          default: null,
+        },
+        confirmedByUser: {
+          type: Boolean,
+          default: false,
+        },
+      },
+      follows: {
+        value: {
+          type: Number,
+          default: null,
+          min: 0,
+        },
+        updatedAt: {
+          type: Date,
+          default: null,
+        },
+        confirmedByUser: {
+          type: Boolean,
+          default: false,
+        },
+      },
+      mediaCount: {
+        value: {
+          type: Number,
+          default: null,
+          min: 0,
+        },
+        updatedAt: {
+          type: Date,
+          default: null,
+        },
+        confirmedByUser: {
+          type: Boolean,
+          default: false,
+        },
+      },
     },
 
     /**
