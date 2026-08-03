@@ -528,11 +528,11 @@ export function ContactSection({ initialCategory = "Product question", onCategor
                   {env.contactEmail}
                 </a>
               </p>
-              {env.contactPhone ? (
+              {env.contactPhoneDisplay ? (
                 <p>
                   Public phone:{" "}
-                  <a className="font-semibold text-[var(--landing-primary)] hover:underline" href={`tel:${env.contactPhone}`}>
-                    {env.contactPhone}
+                  <a className="font-semibold text-[var(--landing-primary)] hover:underline" href={env.contactPhoneLink}>
+                    {env.contactPhoneDisplay}
                   </a>
                 </p>
               ) : null}

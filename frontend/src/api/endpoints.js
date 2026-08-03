@@ -49,4 +49,8 @@ export const apiEndpoints = {
     list: "/recommendations",
     generate: "/recommendations/generate",
   },
+  creatorNews: {
+    list: "/creator-news",
+    refresh: "/creator-news/refresh",
+  },
 };

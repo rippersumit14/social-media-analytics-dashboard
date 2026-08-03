@@ -1,87 +1,76 @@
 # Creator Growth Analytics
 
-AI-powered creator analytics SaaS for Instagram creators. The app helps users register, verify email, connect Instagram through Meta OAuth, sync available creator data, manually add missing Instagram metrics when Meta does not return them, calculate creator score, generate insights/recommendations, chat with an AI assistant, manage personal notes, and submit public contact requests.
+AI-powered creator analytics SaaS for Instagram creators. The platform helps creators register and verify email, connect Instagram through Meta OAuth, sync analytics when Meta returns data, enter manual fallback metrics when Meta data is limited, calculate a Creator Score, generate insights and recommendations, chat with an AI assistant, manage notes, track creator-market news, and receive public contact submissions.
 
-This README is written as a deployment handoff document for both backend and frontend.
-
----
-
-# Deployment Chat Handoff
-
-Use this README as the first message/context for the deployment chat. It explains what the application does, how the backend and frontend are connected, which public and protected APIs exist, which environment variables are required, and what still depends on production services such as Meta OAuth, SMTP, Redis, MongoDB, and AI provider keys.
-
-Recommended files to read first during deployment:
-
-1. `README.md` for the complete product and deployment overview.
-2. `backend/app.js` for route mounting, health checks, security middleware, CORS, and error handling.
-3. `backend/config/validateEnv.js` and `backend/.env.example` for required backend environment variables.
-4. `backend/config/security.js` for CORS origins and production security behavior.
-5. `backend/routes/*.js` for API contracts.
-6. `backend/services/instagramAnalyticsService.js`, `backend/services/creatorScoreService.js`, and `backend/utils/instagramMetricSources.js` for Meta/manual metric behavior.
-7. `frontend/src/routes/router.jsx` for frontend pages.
-8. `frontend/src/config/env.js` and `frontend/.env.example` for frontend environment configuration.
-9. `frontend/src/services/*.js` for frontend-to-backend API calls.
-10. `FINAL_UI_AND_MANUAL_METRICS_UPDATE_REPORT.md` for the latest UI/manual-metrics update.
-
-Current code state:
-
-- Main branch contains the deployable full-stack app.
-- Local validation passed after the latest update: backend tests, frontend lint, frontend build, and `git diff --check`.
-- `.env` files with real secrets must not be committed or pasted publicly.
-- `.idea/` is local IDE metadata and should remain uncommitted.
+This README is the final deployment handoff for the backend and frontend.
 
 ---
 
-# Tech Stack
+## Current Status
 
-- Backend: Node.js, Express 5, MongoDB/Mongoose, Redis/ioredis, BullMQ, JWT, Zod, Nodemailer, Cloudinary, Meta Graph API, AI providers.
-- Frontend: React 19, Vite, React Router, TanStack Query, Axios, Recharts, MUI, lucide-react, react-hot-toast, Tailwind/PostCSS CSS pipeline.
-- Testing: Jest, Supertest, mongodb-memory-server, oxlint, Vite production build.
-- External services: MongoDB Atlas, Redis, Gmail/SMTP app password, Meta Instagram OAuth, Cloudinary, AI provider keys.
-
----
-
-# Current Project Status
-
-Overall status: pre-production ready after local QA.
+Overall status: pre-production ready for final manual E2E and live deployment.
 
 Completed:
 
-- Backend authentication with email OTP verification and resend OTP.
-- JWT protected API flow.
-- Frontend authentication pages and protected route handling.
-- SaaS dashboard shell and product pages.
-- AI chat workspace with conversation CRUD and streaming-ready SSE flow.
-- Analytics, creator score, creator insights, recommendations, notes, profile/settings UI.
-- Instagram OAuth connection flow.
-- Instagram media sync and analytics snapshot flow.
-- Manual Instagram metrics fallback when Meta does not return metrics.
-- Public SaaS landing page with contact form.
-- Dynamic public product story page for resume/demo links.
-- Public contact API with email delivery.
-- Light/dark compatible UI states, loading states, empty states, and error states.
-- Backend and frontend README/report documentation.
-- Dead placeholder backend files removed.
+- Full backend API with auth, OTP verification, Instagram OAuth, analytics, Creator Score, AI insights, recommendations, AI chat, notes, contact, manual metrics, and creator news.
+- Full React frontend with public landing page, product story page, auth pages, protected app shell, dashboard, Instagram workspace, analytics, Creator Score, insights, recommendations, AI chat, notes, profile/settings, and Creator News.
+- Manual metrics fallback for cases where Meta does not return follower/following/media values.
+- Manual metrics graph on dashboard, analytics, and Creator Score pages.
+- Creator News feed using 29 public no-key source paths: GDELT category searches plus RSS/Atom feeds.
+- Creator News cover extraction from RSS media fields, article `og:image`, and Twitter image metadata.
+- Optional Cloudinary upload for extracted Creator News covers.
+- Daily backend cron job for creator-market news refresh.
+- Email OTP and resend OTP flow.
+- Public contact form with backend email delivery.
+- Frontend lint and production build passing.
+- Backend Jest tests passing.
 
-In progress / deployment validation:
+Production-dependent:
 
-- Real hosted OAuth redirect URI validation.
-- Production domain CORS validation.
-- Real Meta app review/live-mode verification.
-- Production email delivery verification.
-
-Pending:
-
-- Final deployment to hosting providers.
-- Production smoke test on live URL.
-- Optional payment/subscription backend if the SaaS becomes paid.
-- Optional sync-status polling endpoint for long-running Instagram jobs.
-- Optional backend disconnect route for Instagram.
-- Optional production analytics polling/status endpoint.
+- Meta app live mode / app review for public Instagram OAuth.
+- Production MongoDB, Redis, SMTP, Cloudinary, and AI provider credentials.
+- Production CORS and OAuth redirect URLs.
+- Live smoke testing after deployment.
 
 ---
 
-# Folder Structure
+## Tech Stack
+
+Backend:
+
+- Node.js
+- Express 5
+- MongoDB / Mongoose
+- Redis / ioredis
+- BullMQ
+- JWT
+- Zod
+- Nodemailer
+- Cloudinary
+- Meta Graph API
+- AI providers
+- GDELT public news API
+- RSS/Atom feeds
+- fast-xml-parser
+- node-cron
+- Jest / Supertest
+
+Frontend:
+
+- React 19
+- Vite
+- React Router
+- TanStack Query
+- Axios
+- Recharts
+- MUI
+- lucide-react
+- react-hot-toast
+- Tailwind/PostCSS CSS pipeline
+
+---
+
+## Repository Structure
 
 ```text
 social-media-analytics-dashboard/
@@ -104,190 +93,45 @@ social-media-analytics-dashboard/
       api/
       components/
       config/
+      context/
       features/
       hooks/
       layouts/
       pages/
       routes/
       services/
+      theme/
       utils/
   README.md
-  *_REPORT.md
-  *_CHECKLIST.md
+  FINAL_DEPLOYMENT_MANUAL_CHECKLIST.md
+  FINAL_REPOSITORY_READINESS_REPORT.md
+  DEAD_CODE_CLEANUP_REPORT.md
 ```
 
-Important folders:
+Important backend folders:
 
-- `backend/config`: environment validation, security, Redis, MongoDB, Cloudinary, AI provider setup.
-- `backend/controllers`: request handlers for auth, Instagram, analytics, chat, notes, contact, and scoring.
-- `backend/middlewares`: auth protection, validation, rate limiting, logging, error handling.
-- `backend/models`: MongoDB schemas for users, Instagram accounts, snapshots, scores, insights, conversations, notes, and recommendations.
-- `backend/routes`: Express API contracts mounted from `backend/app.js`.
-- `backend/services`: business logic and external service integration.
-- `backend/tests`: backend unit/integration tests.
-- `backend/validators`: Zod request validation.
+- `backend/config`: environment loading, validation, security, Redis, MongoDB, Cloudinary, mail setup.
+- `backend/controllers`: HTTP request handlers.
+- `backend/routes`: Express API route contracts.
+- `backend/services`: business logic and external integrations.
+- `backend/models`: MongoDB schemas.
+- `backend/middlewares`: auth, validation, rate limiting, logging, error handling.
+- `backend/jobs`: cron jobs and email queue/worker logic.
+- `backend/tests`: Jest test suite.
+
+Important frontend folders:
+
+- `frontend/src/pages`: route-level app pages.
+- `frontend/src/routes`: React Router tree and auth guards.
+- `frontend/src/services`: API service wrappers.
 - `frontend/src/components`: reusable UI components.
-- `frontend/src/features`: feature-specific modules such as analytics and chat.
-- `frontend/src/pages`: route-level product pages.
-- `frontend/src/services`: frontend API wrappers.
-- `frontend/src/routes`: React Router route tree and auth guards.
-- `frontend/src/utils`: formatting, API error handling, metric source helpers, SSE parser.
+- `frontend/src/features`: feature-specific UI/hooks.
+- `frontend/src/config`: frontend env/config helpers.
+- `frontend/src/utils`: formatting, API error, metrics, SSE helpers.
 
 ---
 
-# Application Pages
-
-Public frontend pages:
-
-- `/` landing page
-- `/product` dynamic product story page for resume/demo links
-- `/privacy`
-- `/terms`
-- `/login`
-- `/register`
-- `/verify-email`
-
-Protected frontend pages:
-
-- `/dashboard`
-- `/analytics`
-- `/creator-score`
-- `/insights`
-- `/recommendations`
-- `/ai-chat`
-- `/notes`
-- `/instagram`
-- `/instagram/callback`
-- `/profile`
-- `/settings`
-
----
-
-# Public API Endpoints
-
-These endpoints do not require a JWT:
-
-| Method | Endpoint | Purpose | Status |
-|---|---|---|---|
-| GET | `/` | API root health message | Complete |
-| GET | `/api/health` | Basic service health | Complete |
-| GET | `/api/ready` | MongoDB and Redis readiness check | Complete |
-| POST | `/api/contact` | Public landing-page contact form | Complete |
-| POST | `/api/auth/register` | Register user and send OTP | Complete |
-| POST | `/api/auth/verify-email` | Verify email OTP | Complete |
-| POST | `/api/auth/resend-otp` | Resend email OTP | Complete |
-| POST | `/api/auth/login` | Login after email verification | Complete |
-| GET | `/api/instagram/oauth/callback` | Meta OAuth callback URL | Complete |
-
-Protected endpoints require `Authorization: Bearer <token>`:
-
-| Method | Endpoint | Purpose | Status |
-|---|---|---|---|
-| GET | `/api/auth/me` | Get current user | Complete |
-| PATCH | `/api/auth/password` | Update user password | Complete |
-| GET | `/api/dashboard/overview` | Dashboard summary | Complete |
-| GET | `/api/instagram/connect` | Create Meta OAuth URL | Complete |
-| PATCH | `/api/instagram/manual-metrics` | Add manual fallback metrics | Complete |
-| POST | `/api/instagram/media/sync` | Sync Instagram media | Complete |
-| POST | `/api/instagram/analytics/snapshot` | Create analytics snapshot | Complete |
-| GET | `/api/instagram/analytics/latest` | Latest analytics snapshot | Complete |
-| GET | `/api/instagram/analytics/history` | Analytics history | Complete |
-| POST | `/api/creator-score/calculate` | Calculate creator score | Complete |
-| GET | `/api/creator-score/latest` | Latest creator score | Complete |
-| GET | `/api/creator-score/history` | Creator score history | Complete |
-| POST | `/api/creator-insights/generate` | Generate AI insights | Complete |
-| GET | `/api/creator-insights` | List insights | Complete |
-| POST | `/api/recommendations/generate` | Generate recommendations | Complete |
-| GET | `/api/recommendations` | List recommendations | Complete |
-| POST | `/api/conversation` | Create conversation | Complete |
-| GET | `/api/conversation` | List conversations | Complete |
-| GET | `/api/conversation/:conversationId/messages` | Load message history | Complete |
-| POST | `/api/conversation/:conversationId/chat` | Send normal AI chat message | Complete |
-| POST | `/api/conversation/:conversationId/chat/stream` | Stream AI chat response over SSE | Complete |
-| PATCH | `/api/conversation/:conversationId` | Rename conversation | Complete |
-| PATCH | `/api/conversation/:conversationId/archive` | Archive conversation | Complete |
-| DELETE | `/api/conversation/:conversationId` | Soft-delete conversation | Complete |
-| PATCH | `/api/conversation/:conversationId/restore` | Restore conversation | Complete |
-| POST | `/api/notes` | Create note | Complete |
-| GET | `/api/notes` | List notes | Complete |
-| PATCH | `/api/notes/:noteId` | Update note | Complete |
-| DELETE | `/api/notes/:noteId` | Soft-delete note | Complete |
-| PATCH | `/api/notes/:noteId/restore` | Restore note | Complete |
-| PATCH | `/api/notes/:noteId/archive` | Archive note | Complete |
-| PATCH | `/api/notes/:noteId/unarchive` | Unarchive note | Complete |
-| PATCH | `/api/notes/:noteId/pin` | Pin note | Complete |
-| PATCH | `/api/notes/:noteId/unpin` | Unpin note | Complete |
-
----
-
-# Data Availability Policy
-
-Meta may not return every Instagram metric for every connected account, especially in development mode, with newly converted creator accounts, or without the required app permissions/review.
-
-The app now handles this honestly:
-
-- Meta-confirmed values are labeled as provider data.
-- User-entered values are labeled as manual data.
-- Missing values show a clear unavailable message instead of fake zeros.
-- Manual metrics can support limited estimates, and the UI, score metadata, AI chat, insights, and recommendations explain when analytics are limited.
-- If a user has manual metrics but no analytics snapshot yet, the Creator Score engine can create a snapshot automatically and continue in limited estimate mode.
-- Creator score and insights avoid claiming precision when engagement data is unavailable.
-
-Manual metric flow:
-
-1. User connects Instagram.
-2. Meta returns available profile/media data.
-3. If Meta does not return complete metrics, frontend shows a clear apology/explanation.
-4. User may enter public follower count, following count, and post/media count manually.
-5. Backend saves these values under `manualMetrics` and returns `analysisMode`.
-6. Analytics snapshot and Creator Score use those values as manual estimates.
-7. AI chat and UI pages continue with transparent limited-data messaging.
-
----
-
-# Environment Variables
-
-Backend variables in `backend/.env`:
-
-- `PORT`: backend port, usually `5000`.
-- `NODE_ENV`: `development`, `test`, or `production`.
-- `MONGO_URI`: MongoDB connection string.
-- `JWT_SECRET`: JWT signing secret.
-- `JWT_EXPIRES_IN`: JWT expiry, for example `7d`.
-- `REDIS_URL`: Redis connection URL.
-- `GROQ_API_KEY`: Groq AI key if used.
-- `OPENAI_API_KEY`: OpenAI key if configured in backend providers.
-- `GEMINI_API_KEY`: Gemini key if configured in backend providers.
-- `CLOUDINARY_CLOUD_NAME`: Cloudinary cloud name.
-- `CLOUDINARY_API_KEY`: Cloudinary API key.
-- `CLOUDINARY_API_SECRET`: Cloudinary API secret.
-- `CLOUDINARY_AI_CHAT_FOLDER`: Cloudinary folder for chat uploads.
-- `EMAIL_USER`: SMTP username.
-- `EMAIL_PASSWORD`: SMTP app password.
-- `EMAIL_FROM`: sender label and address.
-- `CONTACT_RECEIVER_EMAIL`: contact-form receiver email.
-- `EMAIL_QUEUE_CONCURRENCY`: email worker concurrency.
-- `EMAIL_DELIVERY_TIMEOUT_MS`: email send timeout.
-- `OTP_RESEND_COOLDOWN_MS`: OTP resend cooldown.
-- `INSTAGRAM_APP_ID`: Meta app ID.
-- `INSTAGRAM_APP_SECRET`: Meta app secret.
-- `INSTAGRAM_REDIRECT_URI`: backend OAuth callback URL.
-- `INSTAGRAM_FRONTEND_CALLBACK_URL`: frontend callback route.
-- `META_GRAPH_VERSION`: Meta Graph API version.
-- `FRONTEND_URL`: frontend app origin.
-- `FRONTEND_ALLOWED_ORIGINS`: comma-separated CORS origins.
-
-Frontend variables in `frontend/.env`:
-
-- `VITE_API_BASE_URL`: backend API base, for example `http://localhost:5000/api`.
-- `VITE_CONTACT_EMAIL`: public contact email shown in the landing page.
-- `VITE_CONTACT_PHONE`: public contact phone shown in the landing page.
-
-Never commit real `.env` values.
-
----
-
-# Local Development
+## Local Development
 
 Run backend:
 
@@ -295,6 +139,12 @@ Run backend:
 cd ~/Downloads/social-media-analytics-dashboard/backend
 npm install
 npm run dev
+```
+
+Backend local URL:
+
+```text
+http://localhost:5000
 ```
 
 Run frontend:
@@ -305,37 +155,456 @@ npm install
 npm run dev -- --host 0.0.0.0 --port 5173 --strictPort
 ```
 
-Local URLs:
+Frontend local URL:
 
-- Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:5000/api`
-- Backend health: `http://localhost:5000/api/health`
-- Backend readiness: `http://localhost:5000/api/ready`
+```text
+http://localhost:5173
+```
 
-For local Instagram OAuth with a real phone/browser flow, expose the backend with ngrok and set:
+Optional ngrok for local Instagram OAuth:
 
-- `INSTAGRAM_REDIRECT_URI=https://your-ngrok-url.ngrok-free.app/api/instagram/oauth/callback`
-- Meta app Valid OAuth Redirect URI to the same backend callback.
-- `FRONTEND_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173`
-- `FRONTEND_URL=http://localhost:5173`
-- `INSTAGRAM_FRONTEND_CALLBACK_URL=http://localhost:5173/instagram/callback`
+```bash
+ngrok http 5000
+```
+
+Then set the backend callback URL in both `.env` and Meta Developer Dashboard:
+
+```env
+INSTAGRAM_REDIRECT_URI=https://your-ngrok-url.ngrok-free.app/api/instagram/oauth/callback
+```
 
 ---
 
-# Validation Commands
+## Backend Environment Variables
 
-Backend:
+Create `backend/.env` from `backend/.env.example`.
+
+Required core:
+
+```env
+PORT=5000
+NODE_ENV=production
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_long_random_jwt_secret
+JWT_EXPIRES_IN=7d
+REDIS_URL=your_redis_url
+```
+
+AI provider keys:
+
+```env
+GROQ_API_KEY=your_groq_key
+OPENAI_API_KEY=your_openai_key
+GEMINI_API_KEY=your_gemini_key
+OPENROUTER_API_KEY=your_openrouter_key
+TOGETHER_API_KEY=your_together_key
+```
+
+At least one supported AI provider key must be configured.
+
+Cloudinary:
+
+```env
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+CLOUDINARY_AI_CHAT_FOLDER=creator-growth/ai-chat
+```
+
+Email / OTP / contact:
+
+```env
+EMAIL_USER=your_smtp_username
+EMAIL_PASSWORD=your_smtp_app_password
+EMAIL_FROM="Creator Growth Analytics <no-reply@your-domain.com>"
+CONTACT_RECEIVER_EMAIL=your_receiver_email
+EMAIL_QUEUE_CONCURRENCY=3
+EMAIL_DELIVERY_TIMEOUT_MS=15000
+OTP_RESEND_COOLDOWN_MS=60000
+```
+
+Meta / Instagram OAuth:
+
+```env
+INSTAGRAM_APP_ID=your_meta_app_id
+INSTAGRAM_APP_SECRET=your_meta_app_secret
+INSTAGRAM_REDIRECT_URI=https://api.your-domain.com/api/instagram/oauth/callback
+INSTAGRAM_FRONTEND_CALLBACK_URL=https://your-frontend-domain.com/instagram/callback
+META_GRAPH_VERSION=v23.0
+```
+
+Frontend and CORS:
+
+```env
+FRONTEND_URL=https://your-frontend-domain.com
+FRONTEND_ALLOWED_ORIGINS=https://your-frontend-domain.com
+```
+
+Creator News:
+
+```env
+CREATOR_NEWS_REFRESH_CRON="15 8 * * *"
+CREATOR_NEWS_COVER_FETCH_LIMIT=4
+CREATOR_NEWS_UPLOAD_IMAGES=false
+CREATOR_NEWS_IMAGE_FOLDER=creator-growth/news-covers
+```
+
+Set `CREATOR_NEWS_UPLOAD_IMAGES=true` only if you want extracted news cover images uploaded to Cloudinary. Leave it `false` to use external image URLs directly and avoid Cloudinary upload usage.
+
+Never commit real `.env` files.
+
+---
+
+## Frontend Environment Variables
+
+Create `frontend/.env` from `frontend/.env.example`.
+
+```env
+VITE_API_BASE_URL=https://api.your-domain.com/api
+VITE_CONTACT_EMAIL=your_public_contact_email
+VITE_CONTACT_PHONE_DISPLAY=+91 70076 28757
+VITE_CONTACT_PHONE_LINK=tel:+917007628757
+```
+
+Do not put backend secrets, SMTP credentials, OAuth secrets, JWT secrets, Cloudinary secrets, or AI provider keys in frontend env.
+
+---
+
+## Public Frontend Pages
+
+| Route | Purpose |
+|---|---|
+| `/` | Public SaaS landing page |
+| `/product` | Dynamic product story/demo page for resume and portfolio links |
+| `/privacy` | Privacy page |
+| `/terms` | Terms page |
+| `/login` | Login |
+| `/register` | Register |
+| `/verify-email` | OTP verification |
+
+---
+
+## Protected Frontend Pages
+
+| Route | Purpose |
+|---|---|
+| `/dashboard` | SaaS dashboard overview |
+| `/instagram` | Instagram connection, sync, manual metrics |
+| `/instagram/callback` | Frontend OAuth callback result page |
+| `/analytics` | Analytics dashboard and metric graphs |
+| `/creator-score` | Creator Score calculation and breakdown |
+| `/insights` | Creator insights |
+| `/recommendations` | AI recommendations |
+| `/creator-news` | Reddit-style creator-market news feed |
+| `/ai-chat` | AI chat workspace |
+| `/notes` | Personal notes |
+| `/profile` | User profile |
+| `/settings` | Settings, password, theme, plan/usage UI |
+
+---
+
+## Public Backend APIs
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/` | API root message |
+| GET | `/api/health` | Health check |
+| GET | `/api/ready` | MongoDB/Redis readiness check |
+| POST | `/api/contact` | Public contact form |
+| POST | `/api/auth/register` | Register user and send OTP |
+| POST | `/api/auth/verify-email` | Verify OTP |
+| POST | `/api/auth/resend-otp` | Resend OTP |
+| POST | `/api/auth/login` | Login verified user |
+| GET | `/api/instagram/oauth/callback` | Meta OAuth callback |
+
+---
+
+## Protected Backend APIs
+
+Protected APIs require:
+
+```http
+Authorization: Bearer <token>
+```
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/auth/me` | Current user |
+| PATCH | `/api/auth/password` | Update password |
+| GET | `/api/dashboard/overview` | Dashboard summary |
+| GET | `/api/instagram/connect` | Generate Meta OAuth URL |
+| PATCH | `/api/instagram/manual-metrics` | Save manual Instagram metrics |
+| POST | `/api/instagram/media/sync` | Sync Instagram media |
+| POST | `/api/instagram/analytics/snapshot` | Create analytics snapshot |
+| GET | `/api/instagram/analytics/latest` | Latest analytics snapshot |
+| GET | `/api/instagram/analytics/history` | Analytics history |
+| POST | `/api/creator-score/calculate` | Calculate Creator Score |
+| GET | `/api/creator-score/latest` | Latest Creator Score |
+| GET | `/api/creator-score/history` | Creator Score history |
+| POST | `/api/creator-insights/generate` | Generate insights |
+| GET | `/api/creator-insights` | List insights |
+| POST | `/api/recommendations/generate` | Generate recommendations |
+| GET | `/api/recommendations` | List recommendations |
+| GET | `/api/creator-news` | List cached creator-market news |
+| POST | `/api/creator-news/refresh` | Refresh creator-market news from public sources |
+| POST | `/api/conversation` | Create conversation |
+| GET | `/api/conversation` | List conversations |
+| GET | `/api/conversation/:conversationId/messages` | Message history |
+| POST | `/api/conversation/:conversationId/chat` | Non-streaming AI chat |
+| POST | `/api/conversation/:conversationId/chat/stream` | SSE AI chat stream |
+| PATCH | `/api/conversation/:conversationId` | Rename conversation |
+| PATCH | `/api/conversation/:conversationId/archive` | Archive conversation |
+| DELETE | `/api/conversation/:conversationId` | Soft-delete conversation |
+| PATCH | `/api/conversation/:conversationId/restore` | Restore conversation |
+| POST | `/api/notes` | Create note |
+| GET | `/api/notes` | List notes |
+| PATCH | `/api/notes/:noteId` | Update note |
+| DELETE | `/api/notes/:noteId` | Soft-delete note |
+| PATCH | `/api/notes/:noteId/restore` | Restore note |
+| PATCH | `/api/notes/:noteId/archive` | Archive note |
+| PATCH | `/api/notes/:noteId/unarchive` | Unarchive note |
+| PATCH | `/api/notes/:noteId/pin` | Pin note |
+| PATCH | `/api/notes/:noteId/unpin` | Unpin note |
+
+---
+
+## Database Models
+
+- `User`: registered users, password auth, email verification, plan/usage.
+- `EmailVerificationOTP`: OTP verification records.
+- `InstagramAccount`: connected Instagram account, tokens, provider/manual metrics.
+- `InstagramMedia`: synced Instagram media records.
+- `AnalyticsSnapshot`: analytics snapshots.
+- `CreatorScore`: Creator Score records and metadata.
+- `CreatorInsight`: AI insight records.
+- `Recommendation`: AI recommendation records.
+- `Conversation`: AI chat conversation metadata.
+- `Message`: AI chat user/assistant messages.
+- `PersonalNote`: notes, archive, pin, delete/restore state.
+- `Memory`: AI contextual memory.
+- `CreatorNewsItem`: cached creator-market news articles and cover image URLs.
+
+---
+
+## Manual Metrics Behavior
+
+Meta may not return all metrics for every account, especially in development mode, with new creator accounts, or before app review. The app handles this honestly.
+
+Metric source states:
+
+- `meta`: provider-confirmed value from Meta.
+- `manual`: user-confirmed value entered manually.
+- `unavailable`: no provider or manual value available.
+
+Manual metrics support:
+
+- Followers
+- Following
+- Media/post count
+
+When manual metrics exist:
+
+- The frontend labels values as manual estimates.
+- Dashboard, Analytics, and Creator Score render a responsive graph.
+- Creator Score can calculate in limited estimate mode.
+- Insights, recommendations, and AI chat explain data limitations.
+- Provider-confirmed Meta values are preferred over manual values when available.
+
+---
+
+## Creator News Feature
+
+The Creator News system gives logged-in users daily updates about the creator economy, Instagram creators, influencer marketing, AI tools, and platform updates.
+
+Backend behavior:
+
+- Uses 29 public no-key source paths.
+- Uses GDELT category searches.
+- Uses RSS/Atom feeds.
+- Parses feeds with `fast-xml-parser`.
+- Caches results in MongoDB.
+- Auto-warms the cache if the news collection is empty.
+- Runs a daily cron job controlled by `CREATOR_NEWS_REFRESH_CRON`.
+- Supports manual refresh through `POST /api/creator-news/refresh`.
+- Rate limits refresh requests.
+- Extracts cover images from RSS media fields and article metadata.
+- Optionally uploads extracted covers to Cloudinary.
+
+Frontend behavior:
+
+- `/creator-news` renders a Reddit-style scrolling feed.
+- Shows category sections.
+- Shows source/category/date badges.
+- Shows cover image thumbnails or fallback visual cards.
+- Shows source engine sidebar and trending section counts.
+- Supports manual refresh from the UI.
+
+Known dependency:
+
+- Public news source availability can vary.
+- Some articles may not expose usable cover images.
+- Cloudinary cover upload is optional and disabled by default.
+
+---
+
+## AI Chat / SSE
+
+Streaming endpoint:
+
+```http
+POST /api/conversation/:conversationId/chat/stream
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+Events:
+
+- `start`
+- `model`
+- `chunk`
+- `error`
+- `complete`
+
+Frontend support:
+
+- Fetch streaming
+- Auth header
+- `AbortController`
+- Stop generation
+- Buffered SSE parsing
+- Persisted message refresh after completion
+
+---
+
+## Deployment Order
+
+1. Review `git status --short`.
+2. Confirm no real `.env` files are staged.
+3. Push code to GitHub.
+4. Create production MongoDB database.
+5. Create production Redis instance.
+6. Configure production SMTP/app password.
+7. Configure Cloudinary credentials.
+8. Configure AI provider keys.
+9. Configure Meta app credentials.
+10. Deploy backend first.
+11. Verify backend `/api/health`.
+12. Verify backend `/api/ready`.
+13. Configure frontend `VITE_API_BASE_URL` to production backend `/api`.
+14. Deploy frontend.
+15. Configure production frontend URL in backend CORS env.
+16. Configure production backend OAuth callback in Meta Developer Dashboard.
+17. Run live E2E tests.
+
+---
+
+## Backend Deployment Notes
+
+Backend start command:
+
+```bash
+npm install
+npm start
+```
+
+Backend production health checks:
+
+```text
+https://api.your-domain.com/api/health
+https://api.your-domain.com/api/ready
+```
+
+Backend host must support:
+
+- Node.js 18+
+- Long-running process
+- Outbound HTTPS requests
+- MongoDB access
+- Redis access
+- SMTP access
+- Meta Graph API access
+- Public RSS/GDELT requests
+
+If using a platform with sleeping/free instances, first requests may be slow.
+
+---
+
+## Frontend Deployment Notes
+
+Frontend build command:
+
+```bash
+npm install
+npm run build
+```
+
+Frontend output:
+
+```text
+frontend/dist
+```
+
+Frontend host must configure:
+
+```env
+VITE_API_BASE_URL=https://api.your-domain.com/api
+```
+
+For single-page app routing, configure rewrite fallback:
+
+```text
+/* -> /index.html
+```
+
+Without SPA fallback, routes like `/dashboard`, `/creator-news`, and `/ai-chat` may 404 on browser refresh.
+
+---
+
+## Meta OAuth Production Setup
+
+In Meta Developer Dashboard:
+
+1. Set app domains.
+2. Configure Instagram product.
+3. Configure valid OAuth redirect URI:
+
+```text
+https://api.your-domain.com/api/instagram/oauth/callback
+```
+
+4. Ensure backend env matches exactly:
+
+```env
+INSTAGRAM_REDIRECT_URI=https://api.your-domain.com/api/instagram/oauth/callback
+INSTAGRAM_FRONTEND_CALLBACK_URL=https://your-frontend-domain.com/instagram/callback
+```
+
+5. In development mode, only app admins/developers/testers can complete OAuth.
+6. For public users, switch app to Live mode and complete Meta app review for required permissions.
+7. Users need an Instagram professional/creator/business account for meaningful Graph API data.
+
+---
+
+## Validation Commands
+
+Backend tests:
 
 ```bash
 cd ~/Downloads/social-media-analytics-dashboard/backend
 npm test -- --runInBand
 ```
 
-Frontend:
+Frontend lint:
 
 ```bash
 cd ~/Downloads/social-media-analytics-dashboard/frontend
 npm run lint
+```
+
+Frontend production build:
+
+```bash
+cd ~/Downloads/social-media-analytics-dashboard/frontend
 npm run build
 ```
 
@@ -346,122 +615,102 @@ cd ~/Downloads/social-media-analytics-dashboard
 git diff --check
 ```
 
-Recent local QA status:
+Direct Creator News service check:
 
-- Backend tests passed: 13 test suites, 71 tests.
-- Frontend lint passed.
-- Frontend production build passed.
-- Backend `/api/health` smoke test passed.
-- Frontend `/` smoke test passed.
+```bash
+cd ~/Downloads/social-media-analytics-dashboard/backend
+node --check services/creatorNewsService.js
+```
 
 ---
 
-# Deployment Notes
+## Manual E2E Checklist
 
 Before deployment:
 
-1. Create production MongoDB, Redis, Cloudinary, SMTP, Meta, and AI provider credentials.
-2. Set backend production env variables on the backend host.
-3. Set frontend `VITE_API_BASE_URL` to the production backend `/api` URL before building.
-4. Set backend `FRONTEND_ALLOWED_ORIGINS` to the production frontend domain.
-5. Set Meta OAuth redirect URI to the production backend callback:
-   `https://api.your-domain.com/api/instagram/oauth/callback`
-6. Set `INSTAGRAM_FRONTEND_CALLBACK_URL` to:
-   `https://your-frontend-domain.com/instagram/callback`
-7. Build frontend with `npm run build`.
-8. Start backend with `npm start`.
-9. Verify `/api/health`, `/api/ready`, register, OTP email, login, `/product`, dashboard, Instagram OAuth, manual metrics, contact form, and AI chat.
+- Register user.
+- Verify OTP.
+- Resend OTP.
+- Login.
+- Logout.
+- Confirm protected routes redirect when logged out.
+- Connect Instagram with test/admin account.
+- Confirm OAuth callback returns to frontend.
+- Sync media.
+- Create analytics snapshot.
+- Enter manual metrics if Meta data is missing.
+- Confirm manual metrics graph renders.
+- Calculate Creator Score.
+- Generate insights.
+- Generate recommendations.
+- Open AI Chat.
+- Create conversation.
+- Send streaming AI message.
+- Stop streaming message.
+- Create/edit/archive/pin/restore/delete notes.
+- Open Creator News.
+- Refresh Creator News.
+- Confirm news category sections render.
+- Confirm news cover images or fallback visuals render.
+- Submit contact form.
+- Confirm email delivery.
+- Check light/dark theme.
+- Check mobile responsive layout.
 
-Important OAuth limitation:
+After deployment:
 
-- In Meta development mode, only app admins/developers/testers can complete OAuth.
-- External users need the app in Live mode and required permissions approved by Meta review.
-- Connected Instagram accounts must be professional/creator/business accounts for meaningful Graph API data.
-
----
-
-# Database Models
-
-- `User`: registered users, email verification, password auth.
-- `InstagramAccount`: connected Instagram account, tokens, account metadata, Meta metrics, manual metrics.
-- `InstagramMedia`: synced media/post data.
-- `AnalyticsSnapshot`: point-in-time analytics summary.
-- `CreatorScore`: creator score values and metadata.
-- `CreatorInsight`: AI-generated insight records.
-- `Recommendation`: AI-generated recommendation records.
-- `Conversation`: AI chat conversation metadata.
-- `Message`: user/assistant chat messages.
-- `PersonalNote`: personal creator planning notes.
-- `Memory`: contextual memory for AI personalization.
-
----
-
-# Important Files
-
-- `backend/app.js`: Express app, middleware, health checks, and route mounting.
-- `backend/server.js`: backend startup.
-- `backend/config/security.js`: CORS, Helmet, payload limits.
-- `backend/config/validateEnv.js`: required environment validation.
-- `backend/routes/*.js`: backend API contracts.
-- `backend/controllers/instagramController.js`: OAuth and manual metrics controller.
-- `backend/services/instagramAnalyticsService.js`: snapshot and metric-source-aware analytics.
-- `backend/services/creatorScoreService.js`: creator score engine.
-- `backend/services/conversationService.js`: AI chat business logic and context.
-- `backend/services/emailService.js`: OTP/contact email delivery.
-- `backend/utils/instagramMetricSources.js`: Meta/manual/unavailable metric source logic.
-- `frontend/src/routes/router.jsx`: frontend route tree.
-- `frontend/src/services/*.js`: frontend API services.
-- `frontend/src/pages/Instagram.jsx`: Instagram account management and manual metrics UI.
-- `frontend/src/pages/ProductStory.jsx`: dynamic public product story page for resume/demo links.
-- `frontend/src/pages/AIChat.jsx`: AI chat workspace.
-- `frontend/src/components/landing/LandingSections.jsx`: public landing/contact UI.
-- `frontend/src/utils/metricSources.js`: frontend metric-source helpers.
-- `frontend/src/utils/sseParser.js`: SSE parsing helper.
+- Verify live `/`.
+- Verify live `/product`.
+- Verify live auth/OTP/login.
+- Verify live `/dashboard`.
+- Verify live Instagram OAuth.
+- Verify live manual metrics.
+- Verify live `/analytics`.
+- Verify live `/creator-score`.
+- Verify live `/creator-news`.
+- Verify live AI chat.
+- Verify live contact delivery.
 
 ---
 
-# Current Progress
+## Known Limitations
 
-- Backend completion: 96%
-- API completion: 96%
-- Database completion: 95%
-- Authentication: 100%
-- Email/OTP: 100% locally verified after SMTP app password setup
-- AI features: 92%
-- Instagram integration: 88% locally verified, production depends on Meta app/live review
-- Manual metrics fallback: 100%
-- Frontend completion: 97%
-- Testing: 92%
-- Documentation: 94%
-- Deployment readiness: 88%
+- Public Instagram OAuth depends on Meta app review/live mode.
+- Meta may not return every metric for every account.
+- Manual metrics are estimates and are labeled as such.
+- No backend Instagram disconnect endpoint exists yet.
+- No sync-status polling endpoint exists yet.
+- Public news source availability and cover-image quality can vary.
+- Cloudinary news-cover upload is optional and off by default.
+- Production email delivery depends on SMTP configuration.
+- AI features depend on provider keys and rate limits.
 
 ---
 
-# Next Tasks
+## Suggested Production Smoke Test Accounts
 
-1. Push the final committed code to GitHub `main`.
-2. Choose backend host and configure production backend environment variables.
-3. Choose frontend host and configure `VITE_API_BASE_URL`.
-4. Configure production CORS origins in backend env.
-5. Configure production Meta OAuth redirect URI in both Meta dashboard and backend env.
-6. Run backend tests and frontend lint/build in the deployment environment.
-7. Deploy backend.
-8. Verify backend `/api/health` and `/api/ready`.
-9. Deploy frontend.
-10. Run live smoke tests for landing, `/product`, auth, OTP, dashboard, contact, AI chat, Instagram OAuth, and manual metrics.
-11. Submit Meta app review / switch to live mode when ready for public users.
+Use:
+
+- One verified app user.
+- One Instagram professional/creator/business account that is allowed in Meta app mode.
+- One contact-form receiver email.
+- One AI provider key with enough quota.
+
+Do not use real customer accounts for first deployment tests.
 
 ---
 
-# Suggested Deployment Chat Prompt
+## Deployment Chat Prompt
 
 Paste this README into the deployment chat and ask it to:
 
-1. Review the backend and frontend deployment requirements.
-2. Select hosting targets.
-3. Create production environment-variable checklist.
+1. Review backend and frontend deployment requirements.
+2. Choose hosting platforms.
+3. Create production env-variable checklist.
 4. Deploy backend first.
-5. Deploy frontend second.
-6. Verify live CORS and OAuth redirect URLs.
-7. Verify public pages including `/` and `/product`.
-8. Run the final production smoke-test checklist.
+5. Verify backend health/readiness.
+6. Deploy frontend second.
+7. Configure CORS and OAuth redirect URLs.
+8. Verify SPA route fallback.
+9. Run live E2E smoke tests.
+10. Prepare final production launch checklist.

@@ -3,6 +3,7 @@ import { lazy } from "react";
 export const AIChat = lazy(() => import("../pages/AIChat"));
 export const Analytics = lazy(() => import("../pages/Analytics"));
 export const CreatorScore = lazy(() => import("../pages/CreatorScore"));
+export const CreatorNews = lazy(() => import("../pages/CreatorNews"));
 export const Dashboard = lazy(() => import("../pages/Dashboard"));
 export const Instagram = lazy(() => import("../pages/Instagram"));
 export const InstagramCallback = lazy(() => import("../pages/InstagramCallback"));

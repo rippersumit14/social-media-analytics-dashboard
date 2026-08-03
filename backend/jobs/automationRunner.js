@@ -12,6 +12,9 @@ import runCreatorScoreJob
 import runCreatorInsightsJob
   from "./creatorInsights.job.js";
 
+import runCreatorNewsJob
+  from "./creatorNews.job.js";
+
 /**
  * --------------------------------------------------
  * Automation Runner
@@ -127,6 +130,28 @@ export const startAutomationRunner =
         );
 
         await runAutomationPipeline();
+      }
+    );
+
+    /**
+     * Daily creator market update
+     */
+
+    cron.schedule(
+      process.env.CREATOR_NEWS_REFRESH_CRON ||
+        "15 8 * * *",
+      async () => {
+        try {
+          await runCreatorNewsJob();
+        } catch (error) {
+          logger.warn(
+            "Scheduled creator news refresh failed",
+            {
+              message:
+                error.message,
+            }
+          );
+        }
       }
     );
 

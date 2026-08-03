@@ -284,3 +284,40 @@ export const instagramManualMetricsRateLimiter =
       );
     },
   });
+
+/**
+ * ---------------------------------------------------
+ * Creator News Refresh Rate Limiter
+ * ---------------------------------------------------
+ */
+
+export const creatorNewsRefreshRateLimiter =
+  rateLimit({
+    windowMs:
+      15 * 60 * 1000,
+
+    max:
+      6,
+
+    standardHeaders:
+      true,
+
+    legacyHeaders:
+      false,
+
+    handler: (
+      req,
+      res
+    ) => {
+
+      return res.status(429).json(
+
+        new ApiResponse({
+          success: false,
+          statusCode: 429,
+          message:
+            "Creator news refresh limit exceeded. Please wait before refreshing again.",
+        })
+      );
+    },
+  });

@@ -4,6 +4,7 @@ export const routePaths = {
   creatorScore: "/creator-score",
   insights: "/insights",
   recommendations: "/recommendations",
+  creatorNews: "/creator-news",
   chat: "/ai-chat",
   notes: "/notes",
   instagram: "/instagram",

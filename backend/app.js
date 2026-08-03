@@ -47,6 +47,8 @@ import personalNoteRoutes from "./routes/personalNoteRoutes.js";
 
 import contactRoutes from "./routes/contactRoutes.js";
 
+import creatorNewsRoutes from "./routes/creatorNewsRoutes.js";
+
 const app = express();
 
 /**
@@ -197,6 +199,11 @@ app.use("/api/creator-insights", creatorInsightsRoutes);
  * Recommendation Engine
  */
 app.use("/api/recommendations", recommendationRoutes);
+
+/**
+ * Creator Market News
+ */
+app.use("/api/creator-news", creatorNewsRoutes);
 
 /**
  * Conversation

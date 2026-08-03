@@ -14,6 +14,7 @@ import { StatCard } from "../components/ui/StatCard";
 import { AnalyticsActionPanel } from "../features/analytics/components/AnalyticsActionPanel";
 import { ConnectedAccountCard } from "../features/analytics/components/ConnectedAccountCard";
 import { CreatorScoreCard } from "../features/analytics/components/CreatorScoreCard";
+import { ManualMetricsChart } from "../features/analytics/components/ManualMetricsChart";
 import { ScoreHistoryChart } from "../features/analytics/components/ScoreHistoryChart";
 import { useAnalyticsData } from "../features/analytics/hooks/useAnalyticsData";
 import { routePaths } from "../routes/routePaths";
@@ -94,6 +95,8 @@ export default function CreatorScore() {
         <CreatorScoreCard score={analytics.latestScore} compact />
         <AnalyticsActionPanel hasAccount={Boolean(analytics.account)} />
       </div>
+
+      <ManualMetricsChart account={analytics.account} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Followers Used" value={formatNumber(breakdown.followers)} detail="Audience size in scoring input" icon={Gauge} tone="brand" />

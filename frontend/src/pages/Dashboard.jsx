@@ -28,8 +28,10 @@ import { SectionCard } from "../components/ui/SectionCard";
 import { StatCard } from "../components/ui/StatCard";
 import { StatusBadge } from "../components/ui/StatusBadge";
 import { DataAvailabilityNotice } from "../components/instagram/DataAvailabilityNotice";
+import { ManualMetricsChart } from "../features/analytics/components/ManualMetricsChart";
 import { useAuth } from "../hooks/useAuth";
 import { routePaths } from "../routes/routePaths";
+import { creatorNewsService } from "../services/creatorNewsService";
 import { dashboardService } from "../services/dashboardService";
 import { formatDateTime, formatMetricValue, formatNumber, formatPercent } from "../utils/formatters";
 import { hasManualMetrics, hasUnavailableMetrics } from "../utils/metricSources";
@@ -81,6 +83,15 @@ export default function Dashboard() {
   const { data, error, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["dashboard-overview"],
     queryFn: dashboardService.getOverview,
+    retry: false,
+  });
+  const newsQuery = useQuery({
+    queryKey: ["creator-news", "dashboard"],
+    queryFn: () =>
+      creatorNewsService.list({
+        category: "all",
+        limit: 3,
+      }),
     retry: false,
   });
 
@@ -238,6 +249,8 @@ export default function Dashboard() {
         ))}
       </div>
 
+      <ManualMetricsChart account={account} />
+
       <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <SectionCard
           title="Recent insights"
@@ -286,6 +299,46 @@ export default function Dashboard() {
           </div>
         </SectionCard>
       </div>
+
+      <SectionCard
+        title="Creator market updates"
+        description="Daily creator economy, Instagram, AI tools, and platform updates refreshed by the backend news job."
+        action={
+          <Button as={Link} to={routePaths.creatorNews} variant="ghost">
+            View news
+          </Button>
+        }
+      >
+        {newsQuery.isLoading ? (
+          <LoadingCard rows={4} />
+        ) : null}
+        {!newsQuery.isLoading && newsQuery.error ? (
+          <ErrorPanel
+            title="Creator news unavailable"
+            message="The daily creator-market feed could not be loaded. This does not affect analytics or AI features."
+          />
+        ) : null}
+        {!newsQuery.isLoading && !newsQuery.error && (newsQuery.data?.items || []).length === 0 ? (
+          <EmptyState
+            title="No creator-market updates cached yet"
+            description="Open Creator News and refresh the public news feed, or wait for the daily backend automation."
+          />
+        ) : null}
+        {(newsQuery.data?.items || []).length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-3">
+            {newsQuery.data.items.map((item) => (
+              <Link
+                key={item._id || item.url}
+                to={routePaths.creatorNews}
+                className="rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-4 transition hover:-translate-y-0.5 hover:bg-[var(--app-paper)]"
+              >
+                <p className="text-xs font-semibold uppercase text-[var(--app-muted)]">{item.sourceName || "Creator news"}</p>
+                <h3 className="mt-2 line-clamp-3 text-sm font-semibold leading-6 text-[var(--app-text)]">{item.title}</h3>
+              </Link>
+            ))}
+          </div>
+        ) : null}
+      </SectionCard>
 
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1fr]">
         <SectionCard title="AI assistant" description="Use the assistant for content ideas, performance questions, and planning support.">

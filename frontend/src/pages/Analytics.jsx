@@ -12,6 +12,7 @@ import { AnalyticsActionPanel } from "../features/analytics/components/Analytics
 import { AnalyticsMetricGrid } from "../features/analytics/components/AnalyticsMetricGrid";
 import { ConnectedAccountCard } from "../features/analytics/components/ConnectedAccountCard";
 import { CreatorScoreCard } from "../features/analytics/components/CreatorScoreCard";
+import { ManualMetricsChart } from "../features/analytics/components/ManualMetricsChart";
 import { RecentSnapshotCard } from "../features/analytics/components/RecentSnapshotCard";
 import { ScoreHistoryChart } from "../features/analytics/components/ScoreHistoryChart";
 import { useAnalyticsData } from "../features/analytics/hooks/useAnalyticsData";
@@ -63,6 +64,8 @@ export default function Analytics() {
       {analytics.account && hasManualMetrics(analytics.account) ? <DataAvailabilityNotice type="manualActive" /> : null}
 
       <AnalyticsMetricGrid account={analytics.account} snapshot={analytics.latestSnapshot} score={analytics.latestScore} />
+
+      <ManualMetricsChart account={analytics.account} />
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <CreatorScoreCard score={analytics.latestScore} />
