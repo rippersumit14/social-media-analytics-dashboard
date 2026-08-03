@@ -1,6 +1,8 @@
 import { Worker } from "bullmq";
-import Redis from "ioredis";
 
+import {
+  createRedisConnection,
+} from "../config/redisConnection.js";
 import {
   EMAIL_QUEUE_NAME,
   SEND_VERIFICATION_EMAIL_JOB,
@@ -13,7 +15,9 @@ let emailWorker;
 let workerConnection;
 
 function createWorkerConnection() {
-  return new Redis(process.env.REDIS_URL, {
+  return createRedisConnection({
+    connectionName:
+      "creator-growth-email-worker",
     maxRetriesPerRequest: null,
   });
 }

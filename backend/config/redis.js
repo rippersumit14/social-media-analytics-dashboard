@@ -1,5 +1,7 @@
-import Redis from "ioredis";
 import logger from "../utils/logger.js";
+import {
+  createRedisConnection,
+} from "./redisConnection.js";
 
 /**
  * Redis client config
@@ -19,9 +21,11 @@ import logger from "../utils/logger.js";
  * client and share it throughout the app.
  */
 
-const redis = new Redis(
-  process.env.REDIS_URL
-);
+const redis =
+  createRedisConnection({
+    connectionName:
+      "creator-growth-api",
+  });
 
 //Connection Events
 

@@ -1,6 +1,8 @@
 import { Queue, QueueEvents } from "bullmq";
-import Redis from "ioredis";
 
+import {
+  createRedisConnection,
+} from "../config/redisConnection.js";
 import { sendVerificationEmail } from "../services/emailService.js";
 import AppError from "../utils/AppError.js";
 import logger from "../utils/logger.js";
@@ -17,7 +19,9 @@ let queueConnection;
 let eventsConnection;
 
 function createBullConnection() {
-  return new Redis(process.env.REDIS_URL, {
+  return createRedisConnection({
+    connectionName:
+      "creator-growth-email-queue",
     maxRetriesPerRequest: null,
   });
 }
