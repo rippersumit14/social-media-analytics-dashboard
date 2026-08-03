@@ -15,8 +15,28 @@ import logger from "../utils/logger.js";
  * - Password Reset (Future)
  */
 
+const smtpHost =
+  process.env.SMTP_HOST || "smtp.gmail.com";
+
+const smtpPort =
+  Number(process.env.SMTP_PORT) || 587;
+
+const smtpSecure =
+  String(process.env.SMTP_SECURE || "false")
+    .toLowerCase() === "true";
+
+logger.info("Mail transport configuration loaded", {
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpSecure,
+  userConfigured: Boolean(process.env.EMAIL_USER),
+});
+
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpSecure,
+  requireTLS: !smtpSecure,
   connectionTimeout: 15000,
   greetingTimeout: 15000,
   socketTimeout: 15000,
