@@ -122,9 +122,10 @@ export function ManualMetricsForm({ account, isSaving, onSave }) {
         <p className="text-xs font-semibold uppercase text-[var(--app-primary)]">Manual fallback</p>
         <h2 className="mt-2 text-xl font-semibold text-[var(--app-text)]">Add your current account numbers manually</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
-          Meta did not return all account metrics for this connection. This may depend on your account type, permissions,
-          app configuration, or available account activity. You can enter current public counts manually so CreatorIQ can
-          provide a limited estimate.
+          Sorry for the inconvenience. Meta did not return every account metric for this connection. This can happen because
+          of account type, app review status, permissions, newly converted creator accounts, or unavailable activity. Enter
+          your current public counts here so CreatorIQ can keep the dashboard, Creator Score, recommendations, and AI chat
+          usable in a clearly labeled limited estimate mode.
         </p>
         {manualUpdatedAt ? (
           <p className="mt-2 text-xs font-medium text-[var(--app-muted)]">Manual values last updated {formatDateTime(manualUpdatedAt)}.</p>

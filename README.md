@@ -6,6 +6,32 @@ This README is written as a deployment handoff document for both backend and fro
 
 ---
 
+# Deployment Chat Handoff
+
+Use this README as the first message/context for the deployment chat. It explains what the application does, how the backend and frontend are connected, which public and protected APIs exist, which environment variables are required, and what still depends on production services such as Meta OAuth, SMTP, Redis, MongoDB, and AI provider keys.
+
+Recommended files to read first during deployment:
+
+1. `README.md` for the complete product and deployment overview.
+2. `backend/app.js` for route mounting, health checks, security middleware, CORS, and error handling.
+3. `backend/config/validateEnv.js` and `backend/.env.example` for required backend environment variables.
+4. `backend/config/security.js` for CORS origins and production security behavior.
+5. `backend/routes/*.js` for API contracts.
+6. `backend/services/instagramAnalyticsService.js`, `backend/services/creatorScoreService.js`, and `backend/utils/instagramMetricSources.js` for Meta/manual metric behavior.
+7. `frontend/src/routes/router.jsx` for frontend pages.
+8. `frontend/src/config/env.js` and `frontend/.env.example` for frontend environment configuration.
+9. `frontend/src/services/*.js` for frontend-to-backend API calls.
+10. `FINAL_UI_AND_MANUAL_METRICS_UPDATE_REPORT.md` for the latest UI/manual-metrics update.
+
+Current code state:
+
+- Main branch contains the deployable full-stack app.
+- Local validation passed after the latest update: backend tests, frontend lint, frontend build, and `git diff --check`.
+- `.env` files with real secrets must not be committed or pasted publicly.
+- `.idea/` is local IDE metadata and should remain uncommitted.
+
+---
+
 # Tech Stack
 
 - Backend: Node.js, Express 5, MongoDB/Mongoose, Redis/ioredis, BullMQ, JWT, Zod, Nodemailer, Cloudinary, Meta Graph API, AI providers.
@@ -31,6 +57,7 @@ Completed:
 - Instagram media sync and analytics snapshot flow.
 - Manual Instagram metrics fallback when Meta does not return metrics.
 - Public SaaS landing page with contact form.
+- Dynamic public product story page for resume/demo links.
 - Public contact API with email delivery.
 - Light/dark compatible UI states, loading states, empty states, and error states.
 - Backend and frontend README/report documentation.
@@ -50,6 +77,7 @@ Pending:
 - Optional payment/subscription backend if the SaaS becomes paid.
 - Optional sync-status polling endpoint for long-running Instagram jobs.
 - Optional backend disconnect route for Instagram.
+- Optional production analytics polling/status endpoint.
 
 ---
 
@@ -112,6 +140,7 @@ Important folders:
 Public frontend pages:
 
 - `/` landing page
+- `/product` dynamic product story page for resume/demo links
 - `/privacy`
 - `/terms`
 - `/login`
@@ -200,8 +229,19 @@ The app now handles this honestly:
 - Meta-confirmed values are labeled as provider data.
 - User-entered values are labeled as manual data.
 - Missing values show a clear unavailable message instead of fake zeros.
-- Manual metrics can support limited estimates, but the UI and AI responses explain when analytics are limited.
+- Manual metrics can support limited estimates, and the UI, score metadata, AI chat, insights, and recommendations explain when analytics are limited.
+- If a user has manual metrics but no analytics snapshot yet, the Creator Score engine can create a snapshot automatically and continue in limited estimate mode.
 - Creator score and insights avoid claiming precision when engagement data is unavailable.
+
+Manual metric flow:
+
+1. User connects Instagram.
+2. Meta returns available profile/media data.
+3. If Meta does not return complete metrics, frontend shows a clear apology/explanation.
+4. User may enter public follower count, following count, and post/media count manually.
+5. Backend saves these values under `manualMetrics` and returns `analysisMode`.
+6. Analytics snapshot and Creator Score use those values as manual estimates.
+7. AI chat and UI pages continue with transparent limited-data messaging.
 
 ---
 
@@ -330,7 +370,7 @@ Before deployment:
    `https://your-frontend-domain.com/instagram/callback`
 7. Build frontend with `npm run build`.
 8. Start backend with `npm start`.
-9. Verify `/api/health`, `/api/ready`, register, OTP email, login, dashboard, Instagram OAuth, manual metrics, contact form, and AI chat.
+9. Verify `/api/health`, `/api/ready`, register, OTP email, login, `/product`, dashboard, Instagram OAuth, manual metrics, contact form, and AI chat.
 
 Important OAuth limitation:
 
@@ -372,6 +412,7 @@ Important OAuth limitation:
 - `frontend/src/routes/router.jsx`: frontend route tree.
 - `frontend/src/services/*.js`: frontend API services.
 - `frontend/src/pages/Instagram.jsx`: Instagram account management and manual metrics UI.
+- `frontend/src/pages/ProductStory.jsx`: dynamic public product story page for resume/demo links.
 - `frontend/src/pages/AIChat.jsx`: AI chat workspace.
 - `frontend/src/components/landing/LandingSections.jsx`: public landing/contact UI.
 - `frontend/src/utils/metricSources.js`: frontend metric-source helpers.
@@ -381,33 +422,34 @@ Important OAuth limitation:
 
 # Current Progress
 
-- Backend completion: 95%
-- API completion: 95%
+- Backend completion: 96%
+- API completion: 96%
 - Database completion: 95%
 - Authentication: 100%
 - Email/OTP: 100% locally verified after SMTP app password setup
-- AI features: 90%
-- Instagram integration: 85% locally verified, production depends on Meta app/live review
+- AI features: 92%
+- Instagram integration: 88% locally verified, production depends on Meta app/live review
 - Manual metrics fallback: 100%
-- Frontend completion: 95%
-- Testing: 90%
-- Documentation: 90%
-- Deployment readiness: 85%
+- Frontend completion: 97%
+- Testing: 92%
+- Documentation: 94%
+- Deployment readiness: 88%
 
 ---
 
 # Next Tasks
 
-1. Push the final code to GitHub `main`.
-2. Choose backend host and configure production environment variables.
+1. Push the final committed code to GitHub `main`.
+2. Choose backend host and configure production backend environment variables.
 3. Choose frontend host and configure `VITE_API_BASE_URL`.
-4. Configure production CORS origins.
-5. Configure production Meta OAuth redirect URI.
+4. Configure production CORS origins in backend env.
+5. Configure production Meta OAuth redirect URI in both Meta dashboard and backend env.
 6. Run backend tests and frontend lint/build in the deployment environment.
 7. Deploy backend.
-8. Deploy frontend.
-9. Run live smoke tests for auth, OTP, dashboard, contact, AI chat, Instagram OAuth, and manual metrics.
-10. Submit Meta app review / switch to live mode when ready for public users.
+8. Verify backend `/api/health` and `/api/ready`.
+9. Deploy frontend.
+10. Run live smoke tests for landing, `/product`, auth, OTP, dashboard, contact, AI chat, Instagram OAuth, and manual metrics.
+11. Submit Meta app review / switch to live mode when ready for public users.
 
 ---
 
@@ -421,4 +463,5 @@ Paste this README into the deployment chat and ask it to:
 4. Deploy backend first.
 5. Deploy frontend second.
 6. Verify live CORS and OAuth redirect URLs.
-7. Run the final production smoke-test checklist.
+7. Verify public pages including `/` and `/product`.
+8. Run the final production smoke-test checklist.

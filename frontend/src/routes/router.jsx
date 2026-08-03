@@ -18,6 +18,7 @@ import {
   Notes,
   Profile,
   Privacy,
+  ProductStory,
   Recommendations,
   Settings,
   Signup,
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: withSuspense(<Landing />) },
       { path: "landing", element: <Navigate to="/" replace /> },
+      { path: "product", element: withSuspense(<ProductStory />) },
       { path: "privacy", element: withSuspense(<Privacy />) },
       { path: "terms", element: withSuspense(<Terms />) },
       {

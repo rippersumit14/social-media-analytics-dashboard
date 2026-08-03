@@ -86,6 +86,9 @@ function HeroSection({ isAuthenticated }) {
             <Button type="button" variant="outlined" size="large" onClick={() => scrollToSection("workflow")}>
               Explore the platform
             </Button>
+            <Button component={Link} to={routePaths.product} variant="outlined" size="large">
+              View product story
+            </Button>
           </div>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             {reassuranceItems.map((item) => (

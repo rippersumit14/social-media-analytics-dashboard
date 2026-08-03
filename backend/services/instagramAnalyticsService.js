@@ -228,6 +228,10 @@ export const createAnalyticsSnapshot = async (userId) => {
       metadata: {
         username: account.username,
         accountType: account.accountType,
+        dataLimitationMessage:
+          hasManualMetrics(accountMetrics)
+            ? "This snapshot uses manually entered Instagram metrics because Meta did not return complete provider-confirmed data."
+            : null,
         metricsAvailability:
           account.metricsAvailability,
         metricSources:

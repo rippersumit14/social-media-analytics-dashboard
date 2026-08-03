@@ -79,6 +79,9 @@ export function PublicNavbar({ isAuthenticated }) {
 
         <div className="hidden items-center gap-2 lg:flex">
           <ThemeToggle />
+          <Button component={Link} to={routePaths.product} variant="outlined">
+            Product story
+          </Button>
           {!isAuthenticated ? (
             <Button component={Link} to={routePaths.login} variant="text" sx={{ color: "var(--landing-text)" }}>
               Log in
@@ -127,6 +130,9 @@ export function PublicNavbar({ isAuthenticated }) {
 
           <div className="mt-auto grid gap-3 border-t border-[var(--landing-border)] pt-5">
             <ThemeToggle />
+            <Button component={Link} to={routePaths.product} variant="outlined" onClick={() => setIsDrawerOpen(false)}>
+              Product story
+            </Button>
             {!isAuthenticated ? (
               <Button component={Link} to={routePaths.login} variant="outlined" onClick={() => setIsDrawerOpen(false)}>
                 Log in

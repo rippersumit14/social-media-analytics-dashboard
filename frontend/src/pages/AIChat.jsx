@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { ChatHeader } from "../features/chat/components/ChatHeader";
 import { ChatInput } from "../features/chat/components/ChatInput";
@@ -6,6 +7,7 @@ import { ChatSidebar } from "../features/chat/components/ChatSidebar";
 import { MessageList } from "../features/chat/components/MessageList";
 import { useChatWorkspace } from "../features/chat/hooks/useChatWorkspace";
 import { hasManualMetrics, hasUnavailableMetrics } from "../utils/metricSources";
+import { routePaths } from "../routes/routePaths";
 
 export default function AIChat() {
   const [isConversationDrawerOpen, setIsConversationDrawerOpen] = useState(false);
@@ -51,8 +53,11 @@ export default function AIChat() {
 
           {chat.account && (hasUnavailableMetrics(chat.account) || hasManualMetrics(chat.account)) ? (
             <div className="border-b border-[var(--app-border)] bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-500/10 dark:text-amber-100" role="status">
-              <strong>Limited account data.</strong>{" "}
-              Meta did not return enough synchronized data for detailed account-specific analysis. The assistant can still provide general creator strategy guidance and will clearly identify any manually provided metrics.
+              <strong>Sorry for the inconvenience. Meta did not return complete account data.</strong>{" "}
+              The assistant can still help with creator strategy, but it will avoid fake precision and clearly label manual estimates. Add your public follower, following, and post counts to unlock more useful limited scoring and planning guidance.{" "}
+              <Link to={routePaths.instagram} className="font-semibold underline">
+                Add manual metrics
+              </Link>
             </div>
           ) : null}
 

@@ -13,7 +13,7 @@ export function EmptyChatState({ hasAccount, hasConversation, onCreateConversati
         </div>
         <h2 className="mt-5 text-xl font-semibold text-[var(--app-text)]">Connect Instagram to start chatting</h2>
         <p className="mt-2 text-sm leading-6 text-[var(--app-muted)]">
-          The AI assistant needs creator context before it can answer performance and planning questions.
+          The AI assistant needs creator context before it can answer performance and planning questions. If Meta does not return complete metrics after connection, you can still enter your public follower and post counts manually.
         </p>
         <Button as={Link} to={routePaths.instagram} className="mt-5">
           <Camera aria-hidden="true" size={18} />

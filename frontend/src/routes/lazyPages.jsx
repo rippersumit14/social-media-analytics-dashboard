@@ -13,6 +13,7 @@ export const NotFound = lazy(() => import("../pages/NotFound"));
 export const Notes = lazy(() => import("../pages/Notes"));
 export const Profile = lazy(() => import("../pages/Profile"));
 export const Privacy = lazy(() => import("../pages/Privacy"));
+export const ProductStory = lazy(() => import("../pages/ProductStory"));
 export const Recommendations = lazy(() => import("../pages/Recommendations"));
 export const Settings = lazy(() => import("../pages/Settings"));
 export const Signup = lazy(() => import("../pages/Signup"));

@@ -5,6 +5,7 @@ import InstagramAccount from "../models/InstagramAccount.js";
 import InstagramMedia from "../models/InstagramMedia.js";
 import AnalyticsSnapshot from "../models/AnalyticsSnapshot.js";
 import CreatorScore from "../models/CreatorScore.js";
+import { createAnalyticsSnapshot } from "./instagramAnalyticsService.js";
 
 /**
  * --------------------------------------------------
@@ -44,14 +45,21 @@ export const calculateCreatorScore = async (userId) => {
      * ------------------------------------------
      */
 
-    const snapshot = await AnalyticsSnapshot.findOne({
+    let snapshot = await AnalyticsSnapshot.findOne({
       account: account._id,
     }).sort({
       snapshotDate: -1,
     });
 
     if (!snapshot) {
-      throw new AppError("No analytics snapshot found", 404);
+      snapshot = await createAnalyticsSnapshot(userId);
+    }
+
+    if (!snapshot) {
+      throw new AppError(
+        "No analytics snapshot found. Add manual metrics or synchronize Instagram before calculating your creator score.",
+        404
+      );
     }
 
     /**
@@ -204,6 +212,10 @@ export const calculateCreatorScore = async (userId) => {
           snapshot.metadata?.hasManualMetrics
             ? "manual-estimate"
             : "account-aware",
+        dataLimitationMessage:
+          snapshot.metadata?.hasManualMetrics
+            ? "This score uses manually entered Instagram metrics because Meta did not return complete account data. Treat it as a limited estimate until provider-confirmed metrics become available."
+            : null,
         hasManualMetrics:
           Boolean(
             snapshot.metadata?.hasManualMetrics

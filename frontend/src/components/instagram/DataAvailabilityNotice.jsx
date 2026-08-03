@@ -7,6 +7,12 @@ const noticeContent = {
     description:
       "Meta did not return this value for the connected account. This may depend on account type, permissions, app review status, or available profile activity.",
   },
+  manualNeeded: {
+    icon: ShieldQuestion,
+    title: "Sorry for the inconvenience. Meta did not return complete account metrics.",
+    description:
+      "You can still continue by entering your public follower count, following count, and post count manually. CreatorIQ will clearly label those values as manual estimates and use them to unlock limited scoring, AI planning, and dashboard guidance until provider-confirmed data becomes available.",
+  },
   noPosts: {
     icon: Database,
     title: "No published posts were found",
@@ -23,7 +29,7 @@ const noticeContent = {
     icon: AlertTriangle,
     title: "Analysis is using manually entered values",
     description:
-      "Some account metrics were entered manually because Meta did not return them. Creator Score and AI analysis should be treated as estimates until provider-confirmed data becomes available.",
+      "Some account metrics were entered manually because Meta did not return them. Creator Score, insights, recommendations, and AI chat will continue in limited estimate mode and should be treated as directional guidance until provider-confirmed data becomes available.",
   },
   syncRequired: {
     icon: RefreshCw,

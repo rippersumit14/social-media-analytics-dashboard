@@ -523,8 +523,18 @@ export const updateManualInstagramMetrics =
         success: true,
         statusCode: 200,
         message:
-          "Manual Instagram metrics updated successfully",
+          "Manual Instagram metrics updated successfully. CreatorIQ will use these values as limited estimates when Meta does not return provider-confirmed data.",
         data: {
+          analysisMode: {
+            mode:
+              hasManualMetrics(metrics)
+                ? "manual-estimate"
+                : "provider-data",
+            message:
+              hasManualMetrics(metrics)
+                ? "Meta did not return complete account metrics, so manually confirmed values are available for limited scoring, AI planning, and dashboard guidance."
+                : "Provider-confirmed metrics are available for this account.",
+          },
           account: {
             id:
               account._id,

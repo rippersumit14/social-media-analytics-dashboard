@@ -198,7 +198,7 @@ export default function Instagram() {
         <>
           {hasUnavailableMetrics(account) ? (
             <DataAvailabilityNotice
-              type="noProviderMetric"
+              type="manualNeeded"
               actions={
                 <>
                   <Button variant="outlined" onClick={handleSync} disabled={isSyncing}>Synchronize again</Button>

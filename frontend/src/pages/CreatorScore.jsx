@@ -78,7 +78,16 @@ export default function CreatorScore() {
 
       <ConnectedAccountCard account={analytics.account} />
 
-      {analytics.account && hasUnavailableMetrics(analytics.account) ? <DataAvailabilityNotice type="lowData" /> : null}
+      {analytics.account && hasUnavailableMetrics(analytics.account) ? (
+        <DataAvailabilityNotice
+          type="manualNeeded"
+          actions={
+            <Button as={Link} to={routePaths.instagram} variant="secondary">
+              Add manual metrics
+            </Button>
+          }
+        />
+      ) : null}
       {analytics.account && hasManualMetrics(analytics.account) ? <DataAvailabilityNotice type="manualActive" /> : null}
 
       <div className="grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">

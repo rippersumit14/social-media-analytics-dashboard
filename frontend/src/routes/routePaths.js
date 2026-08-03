@@ -11,6 +11,7 @@ export const routePaths = {
   settings: "/settings",
   profile: "/profile",
   landing: "/landing",
+  product: "/product",
   login: "/login",
   register: "/register",
   verifyEmail: "/verify-email",

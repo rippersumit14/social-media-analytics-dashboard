@@ -1,6 +1,7 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Eye, EyeOff, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react";
 
 import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/TextField";
@@ -37,6 +38,7 @@ export default function Login() {
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const redirectTo = location.state?.from?.pathname || routePaths.dashboard;
 
@@ -85,11 +87,20 @@ export default function Login() {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
-      <p className="mb-2 text-sm font-semibold uppercase text-brand-700">Authentication</p>
-      <h1 className="text-2xl font-semibold text-ink-950">Log in to CreatorIQ</h1>
-      <p className="mt-2 text-sm leading-6 text-ink-500">
-        Access your protected creator analytics workspace.
-      </p>
+      <div className="mb-6 rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-4">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-[var(--app-primary)] text-white">
+            <LockKeyhole aria-hidden="true" size={18} />
+          </span>
+          <div>
+            <p className="text-sm font-semibold uppercase text-brand-700">Secure workspace</p>
+            <h1 className="text-2xl font-semibold text-ink-950">Log in to CreatorIQ</h1>
+          </div>
+        </div>
+        <p className="mt-4 text-sm leading-6 text-ink-500">
+          Access your protected creator analytics workspace with account-aware AI, scoring, notes, and Instagram workflows.
+        </p>
+      </div>
 
       {formError ? (
         <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
@@ -121,16 +132,38 @@ export default function Login() {
           id="password"
           name="password"
           label="Password"
-          type="password"
+          type={showPassword ? "text" : "password"}
           value={form.password}
           onChange={updateField}
           error={errors.password}
           autoComplete="current-password"
           placeholder="Enter your password"
+          rightSlot={
+            <button
+              type="button"
+              onClick={() => setShowPassword((current) => !current)}
+              className="grid h-8 w-8 place-items-center rounded-lg text-[var(--app-muted)] transition hover:bg-[var(--app-bg)] hover:text-[var(--app-text)]"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <EyeOff aria-hidden="true" size={17} /> : <Eye aria-hidden="true" size={17} />}
+            </button>
+          }
         />
         <Button type="submit" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? "Logging in..." : "Log in"}
         </Button>
+      </div>
+
+      <div className="mt-5 grid gap-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-3 text-xs text-[var(--app-muted)]">
+        {[
+          ["Email verification", ShieldCheck],
+          ["JWT protected routes", Sparkles],
+        ].map(([label, Icon]) => (
+          <span key={label} className="inline-flex items-center gap-2">
+            <Icon aria-hidden="true" size={14} className="text-[var(--app-primary)]" />
+            {label}
+          </span>
+        ))}
       </div>
 
       <p className="mt-6 text-center text-sm text-ink-500">
