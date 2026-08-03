@@ -103,17 +103,6 @@ const startServer = async () => {
     await connectDB();
 
     /**
-     * Verify SMTP Connection
-     */
-    await verifyMailConnection();
-
-    /**
-     * Verify Redis Connection
-     */
-    const redisReady =
-      await verifyRedisConnection();
-
-    /**
      * Start Express Server
      */
     server = app.listen(PORT, () => {
@@ -124,16 +113,25 @@ const startServer = async () => {
         nodeVersion: process.version,
       });
 
-      startAutomationRunner();
-      if (redisReady) {
-        startEmailWorker();
-      } else {
-        logger.warn(
-          "Email queue worker not started because Redis is unavailable; direct email fallback will be used where possible"
-        );
-      }
+      Promise.allSettled([
+        verifyMailConnection(),
+        verifyRedisConnection(),
+      ]).then((results) => {
+        const redisReady =
+          results[1].status === "fulfilled" &&
+          results[1].value === true;
 
-      logger.info("Automation scheduler initialized successfully");
+        startAutomationRunner();
+        if (redisReady) {
+          startEmailWorker();
+        } else {
+          logger.warn(
+            "Email queue worker not started because Redis is unavailable; direct email fallback will be used where possible"
+          );
+        }
+
+        logger.info("Automation scheduler initialized successfully");
+      });
     });
 
     /**

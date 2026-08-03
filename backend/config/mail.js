@@ -17,6 +17,9 @@ import logger from "../utils/logger.js";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 15000,
 
   auth: {
     user: process.env.EMAIL_USER,
@@ -39,14 +42,22 @@ export const verifyMailConnection = async () => {
     logger.info(
       "Mail server connected successfully"
     );
+
+    return true;
   } catch (error) {
     logger.warn(
       "Mail server connection failed",
       {
         message:
           "Email delivery is unavailable. Check SMTP provider configuration.",
+        code: error.code,
+        command: error.command,
+        responseCode: error.responseCode,
+        reason: error.message,
       }
     );
+
+    return false;
   }
 };
 
