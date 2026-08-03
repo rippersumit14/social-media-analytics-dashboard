@@ -17,6 +17,45 @@ const stripWrappingQuotes = (value) => {
 export const getRedisUrl = () =>
   stripWrappingQuotes(process.env.REDIS_URL);
 
+export const getRedisConnectionSummary = () => {
+  const redisUrl =
+    getRedisUrl();
+
+  if (!redisUrl) {
+    return {
+      configured:
+        false,
+    };
+  }
+
+  try {
+    const parsedUrl =
+      new URL(redisUrl);
+
+    return {
+      configured:
+        true,
+      protocol:
+        parsedUrl.protocol.replace(":", ""),
+      host:
+        parsedUrl.hostname,
+      port:
+        parsedUrl.port,
+      usernamePresent:
+        Boolean(parsedUrl.username),
+      passwordLength:
+        parsedUrl.password?.length || 0,
+    };
+  } catch {
+    return {
+      configured:
+        true,
+      invalidUrl:
+        true,
+    };
+  }
+};
+
 export const assertRedisUrl = () => {
   const redisUrl =
     getRedisUrl();
@@ -47,7 +86,15 @@ export const createRedisConnection = (options = {}) => {
     enableReadyCheck:
       false,
     lazyConnect:
-      false,
+      true,
+    retryStrategy:
+      (times) => {
+        if (times > 3) {
+          return null;
+        }
+
+        return Math.min(times * 500, 2000);
+      },
     ...options,
     tls:
       redisUrl.startsWith("rediss://")

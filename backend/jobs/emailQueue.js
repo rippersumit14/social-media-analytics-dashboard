@@ -29,6 +29,8 @@ function createBullConnection() {
 export function isEmailQueueEnabled() {
   return Boolean(
     process.env.REDIS_URL &&
+    process.env.EMAIL_QUEUE_ENABLED !== "false" &&
+    process.env.REDIS_RUNTIME_AVAILABLE === "true" &&
     process.env.NODE_ENV !== "test"
   );
 }

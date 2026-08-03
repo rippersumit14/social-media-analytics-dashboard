@@ -45,7 +45,9 @@ import { verifyMailConnection } from "./config/mail.js";
  * --------------------------------------------------
  */
 
-import redis from "./config/redis.js";
+import redis, {
+  verifyRedisConnection,
+} from "./config/redis.js";
 
 /**
  * --------------------------------------------------
@@ -108,7 +110,8 @@ const startServer = async () => {
     /**
      * Verify Redis Connection
      */
-    await redis.ping();
+    const redisReady =
+      await verifyRedisConnection();
 
     /**
      * Start Express Server
@@ -122,7 +125,13 @@ const startServer = async () => {
       });
 
       startAutomationRunner();
-      startEmailWorker();
+      if (redisReady) {
+        startEmailWorker();
+      } else {
+        logger.warn(
+          "Email queue worker not started because Redis is unavailable; direct email fallback will be used where possible"
+        );
+      }
 
       logger.info("Automation scheduler initialized successfully");
     });
