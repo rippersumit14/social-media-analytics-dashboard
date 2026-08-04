@@ -2,9 +2,8 @@
 export const apiEndpoints = {
   auth: {
     register: "/auth/register",
-    verifyEmail: "/auth/verify-email",
-    resendOtp: "/auth/resend-otp",
     login: "/auth/login",
+    google: "/auth/google",
     me: "/auth/me",
     password: "/auth/password",
   },

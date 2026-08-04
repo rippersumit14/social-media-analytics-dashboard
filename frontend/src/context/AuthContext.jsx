@@ -60,6 +60,22 @@ export function AuthProvider({ children }) {
     return authService.register(payload);
   }, []);
 
+  const loginWithGoogle = useCallback(async (credential) => {
+    const response = await authService.loginWithGoogle({ credential });
+    const nextToken = response.data?.token;
+    const nextUser = response.data?.user;
+
+    if (!nextToken || !nextUser) {
+      throw new Error("Google login response did not include a user session.");
+    }
+
+    storeToken(nextToken);
+    setToken(nextToken);
+    setUser(nextUser);
+
+    return response;
+  }, []);
+
   const logout = useCallback(() => {
     clearAuthState();
   }, [clearAuthState]);
@@ -81,11 +97,12 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(user && token),
       isLoading,
       login,
+      loginWithGoogle,
       register,
       logout,
       refreshUser,
     }),
-    [isLoading, login, logout, refreshUser, register, token, user],
+    [isLoading, login, loginWithGoogle, logout, refreshUser, register, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

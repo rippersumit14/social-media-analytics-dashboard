@@ -61,11 +61,19 @@ describe("User Model", () => {
 
 describe("Default Values", () => {
 
-  it("should default isEmailVerified to false", async () => {
+  it("should default isEmailVerified to true", async () => {
 
     const user = await createTestUser();
 
-    expect(user.isEmailVerified).toBe(false);
+    expect(user.isEmailVerified).toBe(true);
+
+  });
+
+  it("should default authProvider to local", async () => {
+
+    const user = await createTestUser();
+
+    expect(user.authProvider).toBe("local");
 
   });
 
@@ -265,6 +273,26 @@ describe("Validation Rules", () => {
       })
 
     ).rejects.toThrow();
+
+  });
+
+  it("should allow Google users without a password", async () => {
+
+    const user = await User.create({
+
+      name: "Google User",
+
+      email: "google-user@example.com",
+
+      authProvider: "google",
+
+      googleId: "google-user-id",
+
+    });
+
+    expect(user.password).toBeUndefined();
+
+    expect(user.authProvider).toBe("google");
 
   });
 

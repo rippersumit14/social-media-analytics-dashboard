@@ -1,6 +1,5 @@
 const previousEnv = {
   EMAIL_FROM: process.env.EMAIL_FROM,
-  EMAIL_USER: process.env.EMAIL_USER,
   CONTACT_RECEIVER_EMAIL:
     process.env.CONTACT_RECEIVER_EMAIL,
 };
@@ -12,8 +11,6 @@ describe("buildContactEmailOptions", () => {
   beforeEach(() => {
     process.env.EMAIL_FROM =
       "\"CreatorIQ\" <no-reply@example.com>";
-    process.env.EMAIL_USER =
-      "fallback@example.com";
     process.env.CONTACT_RECEIVER_EMAIL =
       "support@example.com";
   });
@@ -21,8 +18,6 @@ describe("buildContactEmailOptions", () => {
   afterAll(() => {
     process.env.EMAIL_FROM =
       previousEnv.EMAIL_FROM;
-    process.env.EMAIL_USER =
-      previousEnv.EMAIL_USER;
     process.env.CONTACT_RECEIVER_EMAIL =
       previousEnv.CONTACT_RECEIVER_EMAIL;
   });

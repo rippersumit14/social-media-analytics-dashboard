@@ -1,25 +1,22 @@
 import asyncHandler from "../middlewares/asyncHandler.js";
-
 import ApiResponse from "../utils/ApiResponse.js";
-
 import generateToken from "../utils/generateToken.js";
 
 import {
   registerUser as registerUserService,
-  verifyEmail as verifyEmailService,
-  resendOTP as resendOTPService,
   loginUser as loginUserService,
+  loginWithGoogle as loginWithGoogleService,
   getCurrentUser as getCurrentUserService,
   updatePassword as updatePasswordService,
 } from "../services/authService.js";
 
-/**
- * --------------------------------------------------
- * Register User
- * --------------------------------------------------
- * POST /api/auth/register
- * Public
- */
+const buildSessionPayload = (user) => ({
+  user,
+  token:
+    generateToken(
+      user._id
+    ),
+});
 
 export const registerUser = asyncHandler(
   async (req, res) => {
@@ -32,72 +29,12 @@ export const registerUser = asyncHandler(
       new ApiResponse({
         statusCode: 201,
         message:
-          "User registered successfully. Please verify your email.",
+          result.message,
         data: result,
       })
     );
   }
 );
-
-/**
- * --------------------------------------------------
- * Verify Email OTP
- * --------------------------------------------------
- * POST /api/auth/verify-email
- * Public
- */
-
-export const verifyEmail =
-  asyncHandler(
-    async (req, res) => {
-      const result =
-        await verifyEmailService(
-          req.body
-        );
-
-      return res.status(200).json(
-        new ApiResponse({
-          statusCode: 200,
-          message:
-            result.message,
-        })
-      );
-    }
-  );
-
-/**
- * --------------------------------------------------
- * Resend Verification OTP
- * --------------------------------------------------
- * POST /api/auth/resend-otp
- * Public
- */
-
-export const resendOTP =
-  asyncHandler(
-    async (req, res) => {
-      const result =
-        await resendOTPService(
-          req.body.email
-        );
-
-      return res.status(200).json(
-        new ApiResponse({
-          statusCode: 200,
-          message:
-            result.message,
-        })
-      );
-    }
-  );
-
-/**
- * --------------------------------------------------
- * Login User
- * --------------------------------------------------
- * POST /api/auth/login
- * Public
- */
 
 export const loginUser =
   asyncHandler(
@@ -107,32 +44,41 @@ export const loginUser =
           req.body
         );
 
-      const token =
-        generateToken(
-          user._id
+      return res.status(200).json(
+        new ApiResponse({
+          statusCode: 200,
+          message:
+            "Login successful",
+          data:
+            buildSessionPayload(
+              user
+            ),
+        })
+      );
+    }
+  );
+
+export const loginWithGoogle =
+  asyncHandler(
+    async (req, res) => {
+      const user =
+        await loginWithGoogleService(
+          req.body
         );
 
       return res.status(200).json(
         new ApiResponse({
           statusCode: 200,
           message:
-            "Login successful",
-          data: {
-            user,
-            token,
-          },
+            "Google login successful",
+          data:
+            buildSessionPayload(
+              user
+            ),
         })
       );
     }
   );
-
-/**
- * --------------------------------------------------
- * Get Current User
- * --------------------------------------------------
- * GET /api/auth/me
- * Private
- */
 
 export const getCurrentUser =
   asyncHandler(
@@ -152,14 +98,6 @@ export const getCurrentUser =
       );
     }
   );
-
-/**
- * --------------------------------------------------
- * Update Password
- * --------------------------------------------------
- * PATCH /api/auth/password
- * Private
- */
 
 export const updatePassword =
   asyncHandler(

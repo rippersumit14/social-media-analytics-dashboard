@@ -6,6 +6,7 @@ const DEFAULT_CONTACT_PHONE_LINK = "tel:+917007628757";
 // Centralizes environment access so service modules do not depend on Vite directly.
 export const env = {
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL,
+  googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || "",
   contactEmail: import.meta.env.VITE_CONTACT_EMAIL || DEFAULT_CONTACT_EMAIL,
   contactPhoneDisplay: import.meta.env.VITE_CONTACT_PHONE_DISPLAY || DEFAULT_CONTACT_PHONE_DISPLAY,
   contactPhoneLink: import.meta.env.VITE_CONTACT_PHONE_LINK || DEFAULT_CONTACT_PHONE_LINK,

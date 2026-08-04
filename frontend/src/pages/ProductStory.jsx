@@ -73,7 +73,7 @@ const storyBlocks = [
 ];
 
 const productStats = [
-  ["Auth", "OTP verified account flow"],
+  ["Auth", "Google verified account flow"],
   ["OAuth", "Instagram connection workflow"],
   ["AI", "Chat, insights, recommendations"],
   ["Fallback", "Manual metrics for missing Meta data"],

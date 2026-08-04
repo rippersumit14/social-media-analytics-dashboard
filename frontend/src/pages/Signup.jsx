@@ -2,6 +2,7 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import { Link, useNavigate } from "react-router-dom";
 
+import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
 import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/TextField";
 import { useAuth } from "../hooks/useAuth";
@@ -40,7 +41,7 @@ function validateRegister(values) {
 }
 
 export default function Signup() {
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState(initialForm);
   const [errors, setErrors] = useState({});
@@ -76,13 +77,10 @@ export default function Signup() {
         password: form.password,
       });
 
-      const message =
-        response.data?.verificationPending
-          ? "Your account already exists but still needs email verification. A new code was sent if the cooldown allows it."
-          : response.data?.message || response.message || "Account created. Check your email for the OTP.";
+      const message = response.data?.message || response.message || "Account created. You can log in now.";
 
       toast.success(message);
-      navigate(`${routePaths.verifyEmail}?email=${encodeURIComponent(email)}`, { replace: true });
+      navigate(routePaths.login, { replace: true });
     } catch (error) {
       const details = getApiErrorDetails(error, "Unable to create account.");
       const message =
@@ -93,11 +91,28 @@ export default function Signup() {
             : details.status === 429
               ? details.message
               : details.status === 503
-                ? "We could not send the verification email right now. Please try again in a few minutes."
+              ? "We could not create your account right now. Please try again in a few minutes."
                 : details.message;
 
       setFormError(message);
       toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleGoogleCredential(credential) {
+    setIsSubmitting(true);
+    setFormError("");
+
+    try {
+      await loginWithGoogle(credential);
+      toast.success("Workspace created with Google.");
+      navigate(routePaths.dashboard, { replace: true });
+    } catch (error) {
+      const details = getApiErrorDetails(error, "Google sign-in failed.");
+      setFormError(details.message);
+      toast.error(details.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -108,8 +123,18 @@ export default function Signup() {
       <p className="mb-2 text-sm font-semibold uppercase text-brand-700">Authentication</p>
       <h1 className="text-2xl font-semibold text-ink-950">Create your account</h1>
       <p className="mt-2 text-sm leading-6 text-ink-500">
-        Register with the same details expected by the backend auth API.
+        Continue with Google for a verified workspace, or use email/password as a fallback.
       </p>
+
+      <div className="mt-6">
+        <GoogleSignInButton onCredential={handleGoogleCredential} disabled={isSubmitting} />
+      </div>
+
+      <div className="my-6 flex items-center gap-3 text-xs font-semibold uppercase text-[var(--app-muted)]">
+        <span className="h-px flex-1 bg-[var(--app-border)]" />
+        Email fallback
+        <span className="h-px flex-1 bg-[var(--app-border)]" />
+      </div>
 
       {formError ? (
         <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">

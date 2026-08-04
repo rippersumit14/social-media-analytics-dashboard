@@ -15,6 +15,5 @@ export const routePaths = {
   product: "/product",
   login: "/login",
   register: "/register",
-  verifyEmail: "/verify-email",
   signup: "/signup",
 };

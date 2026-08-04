@@ -1,11 +1,5 @@
 import { z } from "zod";
 
-/**
- * --------------------------------------------------
- * Register Validation
- * --------------------------------------------------
- */
-
 export const registerSchema = z.object({
   name: z
     .string()
@@ -25,44 +19,6 @@ export const registerSchema = z.object({
     .max(128, "Password cannot exceed 128 characters"),
 });
 
-/**
- * --------------------------------------------------
- * Verify Email OTP Validation
- * --------------------------------------------------
- */
-
-export const verifyEmailSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .email("Please provide a valid email address"),
-
-  otp: z
-    .string()
-    .length(6, "OTP must be exactly 6 digits"),
-});
-
-/**
- * --------------------------------------------------
- * Resend OTP Validation
- * --------------------------------------------------
- */
-
-export const resendOTPSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .email("Please provide a valid email address"),
-});
-
-/**
- * --------------------------------------------------
- * Login Validation
- * --------------------------------------------------
- */
-
 export const loginSchema = z.object({
   email: z
     .string()
@@ -75,11 +31,11 @@ export const loginSchema = z.object({
     .min(1, "Password is required"),
 });
 
-/**
- * --------------------------------------------------
- * Update Password Validation
- * --------------------------------------------------
- */
+export const googleLoginSchema = z.object({
+  credential: z
+    .string()
+    .min(20, "Google credential is required"),
+});
 
 export const updatePasswordSchema = z.object({
   currentPassword: z

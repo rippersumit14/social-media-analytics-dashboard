@@ -13,7 +13,7 @@ Completed:
 - Public landing page at `/`.
 - Public product story/demo page at `/product`.
 - Public `/privacy` and `/terms` starter legal pages.
-- Login/register/verify-email flow.
+- Google sign-in plus login/register fallback flow.
 - Show/hide password on login.
 - Auth context, token storage, protected/public route guards.
 - Responsive app shell with sidebar/topbar.
@@ -38,7 +38,7 @@ Completed:
 Partial / production-dependent:
 
 - Real Instagram OAuth for public users depends on Meta app mode/review and production redirect URI.
-- Real contact delivery depends on production backend SMTP configuration.
+- Real contact delivery depends on production backend Resend configuration.
 - AI responses depend on backend provider keys.
 - Manual viewport QA still must be completed before public launch.
 
@@ -56,7 +56,6 @@ Public:
 | `/terms` | Starter complete |
 | `/login` | Complete |
 | `/register` | Complete |
-| `/verify-email` | Complete |
 
 Protected:
 
@@ -103,11 +102,12 @@ frontend/
 Use `frontend/.env.example` as the source of truth.
 
 - `VITE_API_BASE_URL`: backend API base URL, for example `https://api.your-domain.com/api`.
+- `VITE_GOOGLE_CLIENT_ID`: Google OAuth web client ID for browser sign-in.
 - `VITE_CONTACT_EMAIL`: public contact email shown on the site.
 - `VITE_CONTACT_PHONE_DISPLAY`: readable phone text, for example `+91 70076 28757`.
 - `VITE_CONTACT_PHONE_LINK`: clickable phone link, for example `tel:+917007628757`.
 
-Do not put SMTP credentials, backend secrets, OAuth secrets, or provider keys in frontend env.
+Do not put backend secrets, OAuth secrets, or provider keys in frontend env.
 
 ---
 
@@ -208,7 +208,7 @@ npm run build
 - API completion: 97%
 - Database completion: 96%
 - Authentication: 100%
-- Email/OTP: 100%
+- Google authentication: 95%
 - Instagram integration: 88%
 - Manual metrics fallback: 100%
 - Analytics: 92%

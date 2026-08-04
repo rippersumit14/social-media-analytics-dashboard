@@ -56,9 +56,21 @@ const userSchema = new mongoose.Schema(
 
     password: {
       type: String,
-      required: [true, "Password is required"],
       minlength: 6,
       select: false,
+    },
+
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
+
+    googleId: {
+      type: String,
+      default: "",
+      trim: true,
+      index: true,
     },
 
     /**
@@ -77,7 +89,7 @@ const userSchema = new mongoose.Schema(
 
     isEmailVerified: {
       type: Boolean,
-      default: false,
+      default: true,
     },
 
     emailVerifiedAt: {
@@ -143,6 +155,7 @@ userSchema.pre(
   "save",
   async function () {
     if (
+      !this.password ||
       !this.isModified(
         "password"
       )

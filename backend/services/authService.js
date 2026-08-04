@@ -1,118 +1,14 @@
 import User from "../models/User.js";
-import EmailVerificationOTP from "../models/EmailVerificationOTP.js";
-
 import AppError from "../utils/AppError.js";
-import { generateOTP } from "../utils/generateOTP.js";
-
-import { deliverVerificationEmail } from "../jobs/emailQueue.js";
-
-const OTP_EXPIRY_MS =
-  10 * 60 * 1000;
-
-const OTP_RESEND_COOLDOWN_MS =
-  Number(
-    process.env.OTP_RESEND_COOLDOWN_MS
-  ) || 60 * 1000;
 
 const normalizeEmail = (email = "") =>
   email.trim().toLowerCase();
 
-const createAndDeliverOTP = async ({
-  user,
-  purpose,
-  enforceCooldown = false,
-}) => {
-  const latestOtp =
-    await EmailVerificationOTP
-      .findOne({
-        email:
-          user.email,
-      })
-      .sort({
-        createdAt:
-          -1,
-      });
-
-  if (
-    enforceCooldown &&
-    latestOtp?.createdAt &&
-    Date.now() -
-      latestOtp.createdAt.getTime() <
-      OTP_RESEND_COOLDOWN_MS
-  ) {
-    throw new AppError(
-      "Please wait before requesting another verification OTP.",
-      429
-    );
-  }
-
-  const otp = generateOTP();
-
-  const expiresAt = new Date(
-    Date.now() + OTP_EXPIRY_MS
-  );
-
-  const otpRecord =
-    await EmailVerificationOTP.create({
-      user:
-        user._id,
-      email:
-        user.email,
-      otp,
-      expiresAt,
-    });
-
-  try {
-    await deliverVerificationEmail({
-      email:
-        user.email,
-      name:
-        user.name,
-      otp,
-      purpose,
-      userId:
-        user._id.toString(),
-    });
-
-    await EmailVerificationOTP.deleteMany({
-      email:
-        user.email,
-      _id: {
-        $ne:
-          otpRecord._id,
-      },
-    });
-
-    return otpRecord;
-  } catch (error) {
-    await EmailVerificationOTP.deleteOne({
-      _id:
-        otpRecord._id,
-    });
-
-    if (error instanceof AppError) {
-      throw error;
-    }
-
-    throw new AppError(
-      "Verification email could not be delivered. Please try again later.",
-      503
-    );
-  }
-};
-
 /**
- * --------------------------------------------------
- * Register User
- * --------------------------------------------------
- *
- * Flow:
- * Create User
- * → Generate OTP
- * → Store OTP
- * → Send Verification Email
+ * Local email/password auth remains available as a fallback.
+ * Public verification now comes from Google sign-in, so local signup
+ * no longer depends on email-code delivery.
  */
-
 export const registerUser = async ({
   name,
   email,
@@ -121,38 +17,17 @@ export const registerUser = async ({
   const normalizedEmail =
     normalizeEmail(email);
 
-  const existingUser = await User.findOne({
-    email:
-      normalizedEmail,
-  });
+  const existingUser =
+    await User.findOne({
+      email:
+        normalizedEmail,
+    });
 
-  if (
-    existingUser?.isEmailVerified
-  ) {
+  if (existingUser) {
     throw new AppError(
       "User already exists with this email",
       409
     );
-  }
-
-  if (existingUser) {
-    await createAndDeliverOTP({
-      user:
-        existingUser,
-      purpose:
-        "registration-recovery",
-      enforceCooldown:
-        true,
-    });
-
-    return {
-      user:
-        existingUser,
-      verificationPending:
-        true,
-      message:
-        "Email verification is pending. A new verification OTP has been sent.",
-    };
   }
 
   const user =
@@ -161,159 +36,20 @@ export const registerUser = async ({
       email:
         normalizedEmail,
       password,
+      authProvider:
+        "local",
+      isEmailVerified:
+        true,
+      emailVerifiedAt:
+        new Date(),
     });
-
-  try {
-    await createAndDeliverOTP({
-      user,
-      purpose:
-        "registration",
-    });
-  } catch (error) {
-    await Promise.allSettled([
-      EmailVerificationOTP.deleteMany({
-        user:
-          user._id,
-      }),
-      User.deleteOne({
-        _id:
-          user._id,
-      }),
-    ]);
-
-    throw error;
-  }
 
   return {
     user,
     message:
-      "Account created successfully. Please verify your email.",
+      "Account created successfully.",
   };
 };
-
-/**
- * --------------------------------------------------
- * Verify Email
- * --------------------------------------------------
- *
- * Flow:
- * Validate OTP
- * → Mark User Verified
- * → Remove OTP Records
- */
-
-export const verifyEmail = async ({
-  email,
-  otp,
-}) => {
-  const normalizedEmail =
-    normalizeEmail(email);
-
-  const otpRecord =
-    await EmailVerificationOTP.findOne({
-      email:
-        normalizedEmail,
-      otp,
-    });
-
-  if (
-    !otpRecord ||
-    otpRecord.expiresAt <= new Date()
-  ) {
-    throw new AppError(
-      "Invalid or expired OTP",
-      400
-    );
-  }
-
-  const user = await User.findById(
-    otpRecord.user
-  );
-
-  if (!user) {
-    throw new AppError(
-      "User not found",
-      404
-    );
-  }
-
-  if (user.isEmailVerified) {
-    throw new AppError(
-      "Email already verified",
-      400
-    );
-  }
-
-  user.isEmailVerified = true;
-
-  await user.save();
-
-  await EmailVerificationOTP.deleteMany({
-    email:
-      normalizedEmail,
-  });
-
-  return {
-    message:
-      "Email verified successfully",
-  };
-};
-
-/**
- * --------------------------------------------------
- * Resend Verification OTP
- * --------------------------------------------------
- */
-
-export const resendOTP = async (
-  email
-) => {
-  const normalizedEmail =
-    normalizeEmail(email);
-
-  const user = await User.findOne({
-    email:
-      normalizedEmail,
-  });
-
-  if (!user) {
-    throw new AppError(
-      "User not found",
-      404
-    );
-  }
-
-  if (user.isEmailVerified) {
-    throw new AppError(
-      "Email already verified",
-      400
-    );
-  }
-
-  await createAndDeliverOTP({
-    user,
-    purpose:
-      "resend",
-    enforceCooldown:
-      true,
-  });
-
-  return {
-    message:
-      "Verification OTP sent successfully",
-  };
-};
-
-/**
- * --------------------------------------------------
- * Login User
- * --------------------------------------------------
- *
- * Rules:
- * - Email must exist
- * - Password must match
- * - Email must be verified
- */
 
 export const loginUser = async ({
   email,
@@ -322,15 +58,23 @@ export const loginUser = async ({
   const normalizedEmail =
     normalizeEmail(email);
 
-  const user = await User.findOne({
-    email:
-      normalizedEmail,
-  }).select("+password");
+  const user =
+    await User.findOne({
+      email:
+        normalizedEmail,
+    }).select("+password");
 
   if (!user) {
     throw new AppError(
       "Invalid email or password",
       401
+    );
+  }
+
+  if (!user.password) {
+    throw new AppError(
+      "Use Google sign-in for this account",
+      400
     );
   }
 
@@ -346,32 +90,149 @@ export const loginUser = async ({
     );
   }
 
-  if (!user.isEmailVerified) {
-    throw new AppError(
-      "Please verify your email before logging in",
-      403
-    );
-  }
-
-  user.lastLoginAt = new Date();
+  user.lastLoginAt =
+    new Date();
 
   await user.save();
 
   return user;
 };
 
-/**
- * --------------------------------------------------
- * Get Current User
- * --------------------------------------------------
- */
+const verifyGoogleCredential = async (
+  credential
+) => {
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    throw new AppError(
+      "Google authentication is not configured",
+      500
+    );
+  }
+
+  const url =
+    new URL("https://oauth2.googleapis.com/tokeninfo");
+
+  url.searchParams.set(
+    "id_token",
+    credential
+  );
+
+  const response =
+    await fetch(url);
+
+  const profile =
+    await response.json();
+
+  if (!response.ok) {
+    throw new AppError(
+      "Google sign-in could not be verified",
+      401
+    );
+  }
+
+  if (
+    profile.aud !==
+    process.env.GOOGLE_CLIENT_ID
+  ) {
+    throw new AppError(
+      "Google sign-in client does not match this application",
+      401
+    );
+  }
+
+  if (profile.email_verified !== "true") {
+    throw new AppError(
+      "Google account email is not verified",
+      403
+    );
+  }
+
+  return {
+    googleId:
+      profile.sub,
+    email:
+      normalizeEmail(profile.email),
+    name:
+      profile.name ||
+      profile.email?.split("@")[0] ||
+      "Creator",
+    avatar:
+      profile.picture || "",
+  };
+};
+
+export const loginWithGoogle = async ({
+  credential,
+}) => {
+  if (!credential) {
+    throw new AppError(
+      "Google credential is required",
+      400
+    );
+  }
+
+  const googleProfile =
+    await verifyGoogleCredential(
+      credential
+    );
+
+  let user =
+    await User.findOne({
+      email:
+        googleProfile.email,
+    });
+
+  if (user) {
+    user.googleId =
+      user.googleId ||
+      googleProfile.googleId;
+    user.authProvider =
+      "google";
+    user.isEmailVerified =
+      true;
+    user.emailVerifiedAt =
+      user.emailVerifiedAt ||
+      new Date();
+    user.avatar =
+      user.avatar ||
+      googleProfile.avatar;
+    user.lastLoginAt =
+      new Date();
+
+    await user.save();
+
+    return user;
+  }
+
+  user =
+    await User.create({
+      name:
+        googleProfile.name,
+      email:
+        googleProfile.email,
+      avatar:
+        googleProfile.avatar,
+      googleId:
+        googleProfile.googleId,
+      authProvider:
+        "google",
+      isEmailVerified:
+        true,
+      emailVerifiedAt:
+        new Date(),
+      lastLoginAt:
+        new Date(),
+    });
+
+  return user;
+};
 
 export const getCurrentUser = async (
   userId
 ) => {
-  const user = await User.findById(
-    userId
-  );
+  const user =
+    await User.findById(
+      userId
+    );
 
   if (!user) {
     throw new AppError(
@@ -383,25 +244,27 @@ export const getCurrentUser = async (
   return user;
 };
 
-/**
- * --------------------------------------------------
- * Update Password
- * --------------------------------------------------
- */
-
 export const updatePassword = async ({
   userId,
   currentPassword,
   newPassword,
 }) => {
-  const user = await User.findById(
-    userId
-  ).select("+password");
+  const user =
+    await User.findById(
+      userId
+    ).select("+password");
 
   if (!user) {
     throw new AppError(
       "User not found",
       404
+    );
+  }
+
+  if (!user.password) {
+    throw new AppError(
+      "Password updates are only available for email/password accounts",
+      400
     );
   }
 
@@ -417,7 +280,8 @@ export const updatePassword = async ({
     );
   }
 
-  user.password = newPassword;
+  user.password =
+    newPassword;
 
   await user.save();
 

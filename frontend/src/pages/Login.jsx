@@ -3,6 +3,7 @@ import toast from "react-hot-toast";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react";
 
+import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
 import { Button } from "../components/ui/Button";
 import { TextField } from "../components/ui/TextField";
 import { useAuth } from "../hooks/useAuth";
@@ -31,7 +32,7 @@ function validateLogin(values) {
 }
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [form, setForm] = useState(initialForm);
@@ -73,13 +74,28 @@ export default function Login() {
     } catch (error) {
       const details = getApiErrorDetails(error, "Unable to log in.");
       const message =
-        details.status === 403 && details.message.toLowerCase().includes("verify")
-          ? "Please verify your email before logging in."
-          : details.status === 429
+        details.status === 429
             ? details.message
             : details.message;
       setFormError(message);
       toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleGoogleCredential(credential) {
+    setIsSubmitting(true);
+    setFormError("");
+
+    try {
+      await loginWithGoogle(credential);
+      toast.success("Welcome to CreatorIQ.");
+      navigate(redirectTo, { replace: true });
+    } catch (error) {
+      const details = getApiErrorDetails(error, "Google sign-in failed.");
+      setFormError(details.message);
+      toast.error(details.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -102,17 +118,17 @@ export default function Login() {
         </p>
       </div>
 
+      <GoogleSignInButton onCredential={handleGoogleCredential} disabled={isSubmitting} />
+
+      <div className="my-6 flex items-center gap-3 text-xs font-semibold uppercase text-[var(--app-muted)]">
+        <span className="h-px flex-1 bg-[var(--app-border)]" />
+        Email fallback
+        <span className="h-px flex-1 bg-[var(--app-border)]" />
+      </div>
+
       {formError ? (
         <div className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
           {formError}
-          {formError.toLowerCase().includes("verify") ? (
-            <Link
-              to={`${routePaths.verifyEmail}?email=${encodeURIComponent(form.email.trim().toLowerCase())}`}
-              className="ml-1 font-semibold underline"
-            >
-              Verify email
-            </Link>
-          ) : null}
         </div>
       ) : null}
 
@@ -156,7 +172,7 @@ export default function Login() {
 
       <div className="mt-5 grid gap-2 rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-3 text-xs text-[var(--app-muted)]">
         {[
-          ["Email verification", ShieldCheck],
+          ["Google verified sign-in", ShieldCheck],
           ["JWT protected routes", Sparkles],
         ].map(([label, Icon]) => (
           <span key={label} className="inline-flex items-center gap-2">

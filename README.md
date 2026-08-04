@@ -6,7 +6,7 @@ Creator Growth Analytics helps creators connect Instagram, understand available 
 
 ## Features
 
-- Email/password authentication with OTP verification and resend OTP
+- Google sign-in with JWT sessions plus email/password fallback
 - JWT-protected dashboard and app routes
 - Instagram OAuth connection flow
 - Instagram media sync and analytics snapshots
@@ -27,10 +27,10 @@ Creator Growth Analytics helps creators connect Instagram, understand available 
 - Node.js
 - Express
 - MongoDB and Mongoose
-- Redis and BullMQ
+- Redis
 - JWT
 - Zod
-- Nodemailer
+- Resend email API
 - Cloudinary
 - Meta Graph API
 - AI provider integrations
@@ -92,7 +92,8 @@ social-media-analytics-dashboard/
 - npm
 - MongoDB
 - Redis
-- SMTP account for OTP/contact email
+- Google OAuth web client ID
+- Resend API key for contact email
 - Meta developer app for Instagram OAuth
 - At least one configured AI provider key
 
@@ -145,9 +146,9 @@ Use these example files as references:
 | `JWT_SECRET` | JWT signing secret |
 | `JWT_EXPIRES_IN` | JWT expiry window |
 | `REDIS_URL` | Redis connection URL |
-| `EMAIL_USER` | SMTP username |
-| `EMAIL_PASSWORD` | SMTP password or app password |
-| `EMAIL_FROM` | Sender identity for emails |
+| `GOOGLE_CLIENT_ID` | Google OAuth web client ID used by backend token verification |
+| `RESEND_API_KEY` | Resend API key for contact emails |
+| `EMAIL_FROM` | Verified Resend sender identity for emails |
 | `CONTACT_RECEIVER_EMAIL` | Receiver for public contact form |
 | `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
 | `CLOUDINARY_API_KEY` | Cloudinary API key |
@@ -170,6 +171,7 @@ Use these example files as references:
 | Variable | Purpose |
 |---|---|
 | `VITE_API_BASE_URL` | Backend API base URL |
+| `VITE_GOOGLE_CLIENT_ID` | Google OAuth web client ID used by the browser sign-in button |
 | `VITE_CONTACT_EMAIL` | Public contact email shown in UI |
 | `VITE_CONTACT_PHONE_DISPLAY` | Human-readable contact phone |
 | `VITE_CONTACT_PHONE_LINK` | Clickable `tel:` phone link |
@@ -184,7 +186,6 @@ Use these example files as references:
 - `/terms`
 - `/login`
 - `/register`
-- `/verify-email`
 
 ### Protected Frontend Routes
 
@@ -210,9 +211,8 @@ Use these example files as references:
 | `GET` | `/api/ready` |
 | `POST` | `/api/contact` |
 | `POST` | `/api/auth/register` |
-| `POST` | `/api/auth/verify-email` |
-| `POST` | `/api/auth/resend-otp` |
 | `POST` | `/api/auth/login` |
+| `POST` | `/api/auth/google` |
 | `GET` | `/api/instagram/oauth/callback` |
 
 ### Protected APIs
@@ -288,7 +288,8 @@ Backend deployment requires:
 
 - MongoDB connection
 - Redis connection
-- SMTP credentials
+- Google OAuth web client ID
+- Resend API key for contact email
 - Meta OAuth credentials
 - Cloudinary credentials
 - AI provider key

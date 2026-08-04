@@ -19,16 +19,12 @@ export const authService = {
     return unwrapResponse(await http.post(apiEndpoints.auth.login, payload));
   },
 
+  async loginWithGoogle(payload) {
+    return unwrapResponse(await http.post(apiEndpoints.auth.google, payload));
+  },
+
   async getCurrentUser() {
     return unwrapResponse(await http.get(apiEndpoints.auth.me));
-  },
-
-  async verifyEmail(payload) {
-    return unwrapResponse(await http.post(apiEndpoints.auth.verifyEmail, payload));
-  },
-
-  async resendOtp(payload) {
-    return unwrapResponse(await http.post(apiEndpoints.auth.resendOtp, payload));
   },
 
   async updatePassword(payload) {

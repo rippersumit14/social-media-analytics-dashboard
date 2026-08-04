@@ -24,7 +24,6 @@ import {
   Settings,
   Signup,
   Terms,
-  VerifyEmail,
 } from "./lazyPages";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { PublicRoute } from "./PublicRoute";
@@ -79,7 +78,6 @@ export const router = createBrowserRouter([
         children: [
           { path: "login", element: withSuspense(<Login />) },
           { path: "register", element: withSuspense(<Signup />) },
-          { path: "verify-email", element: withSuspense(<VerifyEmail />) },
           { path: "signup", element: <Navigate to={routePaths.register} replace /> },
         ],
       },

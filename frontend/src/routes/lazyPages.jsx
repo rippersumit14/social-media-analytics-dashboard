@@ -19,4 +19,3 @@ export const Recommendations = lazy(() => import("../pages/Recommendations"));
 export const Settings = lazy(() => import("../pages/Settings"));
 export const Signup = lazy(() => import("../pages/Signup"));
 export const Terms = lazy(() => import("../pages/Terms"));
-export const VerifyEmail = lazy(() => import("../pages/VerifyEmail"));

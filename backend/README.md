@@ -1,6 +1,6 @@
 # CreatorIQ Backend
 
-Backend API for the CreatorIQ AI-powered creator analytics SaaS. It provides authentication, OTP verification, Instagram OAuth/data sync, analytics snapshots, manual Instagram metrics fallback, Creator Score, AI insights, recommendations, AI chat with SSE streaming, creator-market news, personal notes, contact email delivery, health/readiness checks, rate limiting, Redis/BullMQ email infrastructure, and Jest coverage.
+Backend API for the CreatorIQ AI-powered creator analytics SaaS. It provides Google authentication, JWT sessions, Instagram OAuth/data sync, analytics snapshots, manual Instagram metrics fallback, Creator Score, AI insights, recommendations, AI chat with SSE streaming, creator-market news, personal notes, contact email delivery, health/readiness checks, rate limiting, Redis infrastructure, and Jest coverage.
 
 ---
 
@@ -12,7 +12,7 @@ Completed:
 
 - JWT authentication and protected routes.
 - Register, login, current user, password update.
-- Email OTP verification and resend OTP.
+- Google sign-in with backend ID-token verification.
 - Zod request validation with structured errors.
 - Auth and AI/contact/manual metrics rate limiting.
 - Instagram OAuth connect URL and backend callback redirect.
@@ -36,7 +36,7 @@ Completed:
 Partial / production-dependent:
 
 - Public Instagram OAuth depends on Meta app mode, redirect URI, app review, and a supported Instagram professional account.
-- Contact delivery depends on production SMTP configuration.
+- Contact delivery depends on production Resend configuration.
 - AI features depend on configured AI provider keys.
 - No backend Instagram disconnect endpoint exists yet.
 - No sync-status polling endpoint exists yet.
@@ -74,10 +74,9 @@ Public endpoints:
 | GET | `/api/health` | Basic backend health |
 | GET | `/api/ready` | MongoDB/Redis readiness |
 | POST | `/api/contact` | Public contact form delivery |
-| POST | `/api/auth/register` | Register and send OTP |
-| POST | `/api/auth/verify-email` | Verify OTP |
-| POST | `/api/auth/resend-otp` | Resend OTP |
-| POST | `/api/auth/login` | Login verified user |
+| POST | `/api/auth/register` | Register local fallback user |
+| POST | `/api/auth/login` | Login local fallback user |
+| POST | `/api/auth/google` | Verify Google credential and issue JWT |
 | GET | `/api/instagram/oauth/callback` | Meta OAuth callback |
 
 Protected endpoints:
@@ -188,6 +187,7 @@ Use `backend/.env.example` as the source of truth.
 - `MONGO_URI`
 - `JWT_SECRET`
 - `JWT_EXPIRES_IN`
+- `GOOGLE_CLIENT_ID`
 - `REDIS_URL`
 - `GROQ_API_KEY`
 - `OPENAI_API_KEY`
@@ -196,13 +196,10 @@ Use `backend/.env.example` as the source of truth.
 - `CLOUDINARY_API_KEY`
 - `CLOUDINARY_API_SECRET`
 - `CLOUDINARY_AI_CHAT_FOLDER`
-- `EMAIL_USER`
-- `EMAIL_PASSWORD`
+- `RESEND_API_KEY`
 - `EMAIL_FROM`
 - `CONTACT_RECEIVER_EMAIL`
-- `EMAIL_QUEUE_CONCURRENCY`
 - `EMAIL_DELIVERY_TIMEOUT_MS`
-- `OTP_RESEND_COOLDOWN_MS`
 - `INSTAGRAM_APP_ID`
 - `INSTAGRAM_APP_SECRET`
 - `INSTAGRAM_REDIRECT_URI`
@@ -248,13 +245,13 @@ http://localhost:5000/api/ready
 - API completion: 97%
 - Database completion: 96%
 - Authentication: 100%
-- Email/OTP: 100% locally verified, production depends on SMTP
+- Google authentication: 95%, production depends on Google OAuth client configuration
 - Instagram integration: 88%, production depends on Meta app configuration/review
 - Manual metrics fallback: 100%
 - Analytics: 92%
 - Creator Score: 94%
 - AI features: 92%
-- Contact system: 90%, production depends on SMTP
+- Contact system: 90%, production depends on Resend configuration
 - Creator News: 92%, production depends on public GDELT/RSS availability and cover-image extraction quality
 - Testing: 92%
 - Documentation: 96%

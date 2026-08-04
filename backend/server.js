@@ -56,13 +56,6 @@ import redis, {
  */
 
 import startAutomationRunner from "./jobs/automationRunner.js";
-import {
-  startEmailWorker,
-  closeEmailWorker,
-} from "./jobs/emailWorker.js";
-import {
-  closeEmailQueue,
-} from "./jobs/emailQueue.js";
 
 /**
  * --------------------------------------------------
@@ -116,20 +109,8 @@ const startServer = async () => {
       Promise.allSettled([
         verifyMailConnection(),
         verifyRedisConnection(),
-      ]).then((results) => {
-        const redisReady =
-          results[1].status === "fulfilled" &&
-          results[1].value === true;
-
+      ]).then(() => {
         startAutomationRunner();
-        if (redisReady) {
-          startEmailWorker();
-        } else {
-          logger.warn(
-            "Email queue worker not started because Redis is unavailable; direct email fallback will be used where possible"
-          );
-        }
-
         logger.info("Automation scheduler initialized successfully");
       });
     });
@@ -166,8 +147,6 @@ const gracefulShutdown = async (signal) => {
   try {
     const closeSharedResources = async () => {
       await Promise.allSettled([
-        closeEmailWorker(),
-        closeEmailQueue(),
         redis.quit(),
         mongoose.connection.close(),
       ]);
