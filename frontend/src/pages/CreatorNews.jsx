@@ -49,7 +49,7 @@ function getSourceInitial(sourceName = "N") {
 function NewsThumbnail({ item }) {
   if (item.imageUrl) {
     return (
-      <div className="h-24 w-28 shrink-0 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] sm:h-28 sm:w-36">
+      <div className="app-image-zoom h-24 w-28 shrink-0 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] sm:h-28 sm:w-36">
         <img
           src={item.imageUrl}
           alt=""
@@ -61,7 +61,7 @@ function NewsThumbnail({ item }) {
   }
 
   return (
-    <div className="grid h-24 w-28 shrink-0 place-items-center rounded-lg border border-[var(--app-border)] bg-[linear-gradient(135deg,var(--app-primary),var(--app-secondary))] text-white sm:h-28 sm:w-36">
+    <div className="news-cover-fallback grid h-24 w-28 shrink-0 place-items-center rounded-lg border border-[var(--app-border)] text-white sm:h-28 sm:w-36">
       <div className="text-center">
         <Newspaper aria-hidden="true" className="mx-auto" size={24} />
         <p className="mt-2 px-2 text-xs font-semibold">{getCategoryLabel(item.category)}</p>
@@ -75,7 +75,7 @@ function NewsPost({ item, rank }) {
     item.sourceName || "Creator news";
 
   return (
-    <article className="group rounded-lg border border-[var(--app-border)] bg-[var(--app-paper)] shadow-sm shadow-black/5 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--app-primary)]/40 hover:shadow-lg">
+    <article className="app-lift-card group rounded-lg border border-[var(--app-border)] bg-[var(--app-paper)] shadow-sm shadow-black/5">
       <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
         <div className="hidden w-12 shrink-0 flex-col items-center rounded-lg bg-[var(--app-bg)] py-3 text-[var(--app-muted)] sm:flex">
           <button type="button" className="rounded-md p-1 transition hover:bg-[var(--app-paper)] hover:text-[var(--app-primary)]" aria-label="Mark as useful">
@@ -93,7 +93,7 @@ function NewsPost({ item, rank }) {
               {getSourceInitial(sourceName)}
             </span>
             <span className="font-semibold text-[var(--app-text)]">{sourceName}</span>
-            <span aria-hidden="true">•</span>
+            <span aria-hidden="true">.</span>
             <span className="inline-flex items-center gap-1">
               <CalendarDays aria-hidden="true" size={13} />
               {formatDateTime(item.publishedAt || item.fetchedAt)}
@@ -141,6 +141,57 @@ function NewsPost({ item, rank }) {
   );
 }
 
+function FeaturedNewsLead({ item }) {
+  if (!item) {
+    return null;
+  }
+
+  return (
+    <section className="app-reveal overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-paper)] shadow-sm shadow-black/5">
+      <div className="grid lg:grid-cols-[1.05fr_0.95fr]">
+        <a
+          href={item.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="app-image-zoom min-h-72 overflow-hidden bg-[var(--app-bg)]"
+          aria-label={`Open featured story: ${item.title}`}
+        >
+          {item.imageUrl ? (
+            <img src={item.imageUrl} alt="" className="h-full min-h-72 w-full object-cover" loading="lazy" />
+          ) : (
+            <div className="news-cover-fallback grid h-full min-h-72 place-items-center text-white">
+              <div className="text-center">
+                <Newspaper aria-hidden="true" className="mx-auto" size={42} />
+                <p className="mt-3 text-sm font-semibold uppercase">{getCategoryLabel(item.category)}</p>
+              </div>
+            </div>
+          )}
+        </a>
+
+        <div className="flex flex-col justify-center p-6 sm:p-8">
+          <StatusBadge variant="success">Featured update</StatusBadge>
+          <p className="mt-5 text-sm font-semibold uppercase text-[var(--app-primary)]">
+            {item.sourceName || "Creator news"}
+          </p>
+          <h2 className="mt-3 text-2xl font-semibold leading-tight text-[var(--app-text)] sm:text-3xl">
+            {item.title}
+          </h2>
+          <p className="mt-4 text-sm leading-7 text-[var(--app-muted)]">
+            {item.summary || "A current creator-market story from the public news index."}
+          </p>
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <Button as="a" href={item.url} target="_blank" rel="noopener noreferrer">
+              Read source
+              <ArrowUpRight aria-hidden="true" size={18} />
+            </Button>
+            <StatusBadge variant="neutral">{getCategoryLabel(item.category)}</StatusBadge>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CategoryNewsSection({ category, items }) {
   if (items.length === 0) {
     return null;
@@ -174,7 +225,7 @@ function NewsSidebar({ categories, sourceCount, lastRefreshedAt }) {
                 <Layers aria-hidden="true" size={19} />
               </div>
               <div>
-                <p className="text-xl font-semibold text-[var(--app-text)]">{sourceCount || "29"}</p>
+                <p className="text-xl font-semibold text-[var(--app-text)]">{sourceCount || "50+"}</p>
                 <p className="text-xs font-semibold uppercase text-[var(--app-muted)]">No-key sources</p>
               </div>
             </div>
@@ -271,7 +322,7 @@ export default function CreatorNews() {
       <PageHeader
         eyebrow="Creator News"
         title="Daily creator market updates"
-        description={`Track creator economy, Instagram, influencer marketing, AI tools, and platform-update stories from ${newsQuery.data?.sourceCount || "20+"} public no-key sources.`}
+        description={`Track creator economy, Instagram, influencer marketing, AI tools, and platform-update stories from ${newsQuery.data?.sourceCount || "50+"} public no-key sources.`}
         actions={
           <Button
             type="button"
@@ -361,6 +412,8 @@ export default function CreatorNews() {
       {items.length > 0 ? (
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-6">
+            <FeaturedNewsLead item={items[0]} />
+
             {activeCategory === "all" ? (
               categorySections.map((section) => (
                 <CategoryNewsSection
@@ -374,8 +427,8 @@ export default function CreatorNews() {
                 title={getCategoryLabel(activeCategory)}
                 description="A focused scrolling feed for this creator-market section."
               >
-                <div className="space-y-3">
-                  {items.map((item, index) => (
+                <div className="app-scroll-strip max-h-[72vh] space-y-3 overflow-y-auto pr-1">
+                  {items.slice(1).map((item, index) => (
                     <NewsPost key={item._id || item.url} item={item} rank={index + 1} />
                   ))}
                 </div>

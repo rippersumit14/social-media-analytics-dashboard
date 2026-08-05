@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { Link } from "react-router-dom";
 import {
+  ArrowUpRight,
   BarChart3,
   Bot,
   BrainCircuit,
@@ -11,6 +12,7 @@ import {
   Gauge,
   Image,
   Lightbulb,
+  Newspaper,
   RefreshCw,
   Sparkles,
   Target,
@@ -45,6 +47,44 @@ const quickActions = [
   { label: "Generate Insights", icon: BrainCircuit, toast: "Insight generation will be activated in the insights milestone." },
   { label: "Recommendations", icon: Lightbulb, to: routePaths.recommendations, variant: "secondary" },
 ];
+
+function NewsPreviewCard({ item }) {
+  const sourceName = item.sourceName || "Creator news";
+
+  return (
+    <article className="app-lift-card overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)]">
+      <Link to={routePaths.creatorNews} className="block">
+        <div className="app-image-zoom h-36 overflow-hidden bg-[var(--app-paper)]">
+          {item.imageUrl ? (
+            <img src={item.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+          ) : (
+            <div className="news-cover-fallback grid h-full place-items-center text-white">
+              <Newspaper aria-hidden="true" size={28} />
+            </div>
+          )}
+        </div>
+        <div className="p-4">
+          <p className="text-xs font-semibold uppercase text-[var(--app-primary)]">{sourceName}</p>
+          <h3 className="mt-2 line-clamp-3 min-h-[4.5rem] text-sm font-semibold leading-6 text-[var(--app-text)]">{item.title}</h3>
+          <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--app-muted)]">
+            {item.summary || "Creator-market update from the public news index."}
+          </p>
+        </div>
+      </Link>
+      {item.url ? (
+        <a
+          href={item.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mx-4 mb-4 inline-flex items-center gap-1 text-xs font-semibold text-[var(--app-primary)] hover:underline"
+        >
+          Read source
+          <ArrowUpRight aria-hidden="true" size={14} />
+        </a>
+      ) : null}
+    </article>
+  );
+}
 
 function getScoreLevel(score) {
   if (score >= 75) {
@@ -90,7 +130,7 @@ export default function Dashboard() {
     queryFn: () =>
       creatorNewsService.list({
         category: "all",
-        limit: 3,
+        limit: 6,
       }),
     retry: false,
   });
@@ -302,7 +342,7 @@ export default function Dashboard() {
 
       <SectionCard
         title="Creator market updates"
-        description="Daily creator economy, Instagram, AI tools, and platform updates refreshed by the backend news job."
+        description={`Daily creator economy, Instagram, AI tools, and platform updates refreshed from ${newsQuery.data?.sourceCount || "50+"} public no-key sources.`}
         action={
           <Button as={Link} to={routePaths.creatorNews} variant="ghost">
             View news
@@ -325,16 +365,9 @@ export default function Dashboard() {
           />
         ) : null}
         {(newsQuery.data?.items || []).length > 0 ? (
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {newsQuery.data.items.map((item) => (
-              <Link
-                key={item._id || item.url}
-                to={routePaths.creatorNews}
-                className="rounded-lg border border-[var(--app-border)] bg-[var(--app-bg)] p-4 transition hover:-translate-y-0.5 hover:bg-[var(--app-paper)]"
-              >
-                <p className="text-xs font-semibold uppercase text-[var(--app-muted)]">{item.sourceName || "Creator news"}</p>
-                <h3 className="mt-2 line-clamp-3 text-sm font-semibold leading-6 text-[var(--app-text)]">{item.title}</h3>
-              </Link>
+              <NewsPreviewCard key={item._id || item.url} item={item} />
             ))}
           </div>
         ) : null}

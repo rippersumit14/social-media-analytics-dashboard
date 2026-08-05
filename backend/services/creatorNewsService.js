@@ -44,7 +44,7 @@ const GDELT_ENDPOINT =
   "https://api.gdeltproject.org/api/v2/doc/doc";
 
 const COVER_IMAGE_FETCH_LIMIT =
-  Number(process.env.CREATOR_NEWS_COVER_FETCH_LIMIT) || 4;
+  Number(process.env.CREATOR_NEWS_COVER_FETCH_LIMIT) || 1;
 
 const SHOULD_UPLOAD_COVER_IMAGES =
   process.env.CREATOR_NEWS_UPLOAD_IMAGES === "true";
@@ -222,6 +222,262 @@ const creatorNewsFeeds = [
       "Google News LinkedIn Creators",
     url:
       "https://news.google.com/rss/search?q=LinkedIn%20creators%20platform%20updates&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "creator-economy",
+    name:
+      "Google News Creator Business",
+    url:
+      "https://news.google.com/rss/search?q=creator%20business%20newsletter&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "creator-economy",
+    name:
+      "Google News Creator Platforms",
+    url:
+      "https://news.google.com/rss/search?q=creator%20platform%20economy&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "creator-economy",
+    name:
+      "Google News Creator Subscriptions",
+    url:
+      "https://news.google.com/rss/search?q=creator%20subscriptions%20membership&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "creator-economy",
+    name:
+      "Google News Creator Funding",
+    url:
+      "https://news.google.com/rss/search?q=creator%20economy%20funding&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "creator-economy",
+    name:
+      "Google News Creator Tools",
+    url:
+      "https://news.google.com/rss/search?q=creator%20tools%20startup&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "creator-economy",
+    name:
+      "Google News Content Strategy",
+    url:
+      "https://news.google.com/rss/search?q=content%20strategy%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "creator-economy",
+    name:
+      "Google News Creator Revenue",
+    url:
+      "https://news.google.com/rss/search?q=creator%20revenue%20business&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "creator-economy",
+    name:
+      "Google News Creator Analytics",
+    url:
+      "https://news.google.com/rss/search?q=creator%20analytics%20tools&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "instagram",
+    name:
+      "Google News Instagram Growth",
+    url:
+      "https://news.google.com/rss/search?q=Instagram%20growth%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "instagram",
+    name:
+      "Google News Instagram Insights",
+    url:
+      "https://news.google.com/rss/search?q=Instagram%20insights%20business%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "instagram",
+    name:
+      "Google News Instagram Monetization",
+    url:
+      "https://news.google.com/rss/search?q=Instagram%20monetization%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "instagram",
+    name:
+      "Google News Instagram Shopping",
+    url:
+      "https://news.google.com/rss/search?q=Instagram%20shopping%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "instagram",
+    name:
+      "Google News Instagram Creator Marketplace",
+    url:
+      "https://news.google.com/rss/search?q=Instagram%20creator%20marketplace&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "instagram",
+    name:
+      "Google News Instagram Professional Dashboard",
+    url:
+      "https://news.google.com/rss/search?q=Instagram%20professional%20dashboard%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "influencer-marketing",
+    name:
+      "Google News Influencer ROI",
+    url:
+      "https://news.google.com/rss/search?q=influencer%20marketing%20ROI&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "influencer-marketing",
+    name:
+      "Google News Micro Influencers",
+    url:
+      "https://news.google.com/rss/search?q=micro%20influencer%20marketing&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "influencer-marketing",
+    name:
+      "Google News Creator Partnerships",
+    url:
+      "https://news.google.com/rss/search?q=creator%20brand%20partnerships&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "influencer-marketing",
+    name:
+      "Google News Creator Agencies",
+    url:
+      "https://news.google.com/rss/search?q=creator%20agency%20influencer%20marketing&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "influencer-marketing",
+    name:
+      "Google News Social Commerce Creators",
+    url:
+      "https://news.google.com/rss/search?q=social%20commerce%20creators%20influencers&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "influencer-marketing",
+    name:
+      "Google News Creator Campaigns",
+    url:
+      "https://news.google.com/rss/search?q=creator%20campaigns%20brands&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "ai-tools",
+    name:
+      "Google News AI Creator Workflow",
+    url:
+      "https://news.google.com/rss/search?q=AI%20creator%20workflow&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "ai-tools",
+    name:
+      "Google News AI Design Tools",
+    url:
+      "https://news.google.com/rss/search?q=AI%20design%20tools%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "ai-tools",
+    name:
+      "Google News AI Editing Tools",
+    url:
+      "https://news.google.com/rss/search?q=AI%20video%20editing%20tools%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "ai-tools",
+    name:
+      "Google News AI Marketing Tools",
+    url:
+      "https://news.google.com/rss/search?q=AI%20marketing%20tools%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "ai-tools",
+    name:
+      "Google News AI Short Form Video",
+    url:
+      "https://news.google.com/rss/search?q=AI%20short%20form%20video%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "ai-tools",
+    name:
+      "Google News AI Creator Automation",
+    url:
+      "https://news.google.com/rss/search?q=AI%20creator%20automation&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "platform-updates",
+    name:
+      "Google News YouTube Shorts Creators",
+    url:
+      "https://news.google.com/rss/search?q=YouTube%20Shorts%20creators%20updates&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "platform-updates",
+    name:
+      "Google News TikTok Creator Tools",
+    url:
+      "https://news.google.com/rss/search?q=TikTok%20creator%20tools%20updates&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "platform-updates",
+    name:
+      "Google News LinkedIn Creator Mode",
+    url:
+      "https://news.google.com/rss/search?q=LinkedIn%20creator%20tools%20updates&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "platform-updates",
+    name:
+      "Google News Social Algorithms",
+    url:
+      "https://news.google.com/rss/search?q=social%20media%20algorithm%20updates%20creators&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "platform-updates",
+    name:
+      "Google News Creator Policy Updates",
+    url:
+      "https://news.google.com/rss/search?q=creator%20platform%20policy%20updates&hl=en-US&gl=US&ceid=US:en",
+  },
+  {
+    category:
+      "platform-updates",
+    name:
+      "Google News Social Media Trends",
+    url:
+      "https://news.google.com/rss/search?q=social%20media%20trends%20creators&hl=en-US&gl=US&ceid=US:en",
   },
   {
     category:

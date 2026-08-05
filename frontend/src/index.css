@@ -162,6 +162,69 @@
     color: var(--app-text);
   }
 
+  .app-reveal {
+    animation: app-reveal 540ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  .app-lift-card {
+    position: relative;
+    overflow: hidden;
+    transition:
+      transform 220ms cubic-bezier(0.2, 0, 0, 1),
+      border-color 220ms cubic-bezier(0.2, 0, 0, 1),
+      box-shadow 220ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .app-lift-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(115deg, transparent 8%, color-mix(in srgb, var(--app-primary) 10%, transparent), transparent 48%);
+    opacity: 0;
+    transform: translateX(-24%);
+    transition:
+      opacity 260ms cubic-bezier(0.2, 0, 0, 1),
+      transform 420ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .app-lift-card:hover,
+  .app-lift-card:focus-within {
+    transform: translateY(-0.18rem);
+    border-color: color-mix(in srgb, var(--app-primary) 46%, var(--app-border));
+    box-shadow: 0 18px 45px rgba(2, 6, 23, 0.16);
+  }
+
+  .app-lift-card:hover::before,
+  .app-lift-card:focus-within::before {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .app-image-zoom img {
+    transform: scale(1);
+    transition:
+      transform 620ms cubic-bezier(0.2, 0, 0, 1),
+      filter 620ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  .app-image-zoom:hover img,
+  .app-image-zoom:focus-within img {
+    filter: saturate(1.08) contrast(1.04);
+    transform: scale(1.055);
+  }
+
+  .app-scroll-strip {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--app-primary) 55%, var(--app-border)) transparent;
+  }
+
+  .news-cover-fallback {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--app-primary) 76%, #111827), color-mix(in srgb, var(--app-secondary) 58%, #111827)),
+      var(--app-primary);
+  }
+
   .app-shell main,
   .app-shell section,
   .app-shell article {
@@ -507,6 +570,25 @@
   }
 }
 
+@keyframes app-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(0.9rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .app-reveal {
+    animation-timeline: view();
+    animation-range: entry 0% cover 24%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     scroll-behavior: auto;
@@ -523,6 +605,17 @@
 
   .landing-reveal {
     opacity: 1;
+    transform: none;
+  }
+
+  .app-reveal {
+    animation: none !important;
+  }
+
+  .app-lift-card:hover,
+  .app-lift-card:focus-within,
+  .app-image-zoom:hover img,
+  .app-image-zoom:focus-within img {
     transform: none;
   }
 }
