@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button, Drawer, IconButton } from "@mui/material";
 import { Menu, Sparkles, X } from "lucide-react";
 
@@ -39,6 +39,7 @@ export function PublicNavbar({ isAuthenticated }) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const primaryLabel = isAuthenticated ? "Open dashboard" : "Start free";
   const primaryPath = isAuthenticated ? routePaths.dashboard : routePaths.register;
 
@@ -53,12 +54,28 @@ export function PublicNavbar({ isAuthenticated }) {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  useEffect(() => {
+    if (location.pathname !== "/" || !location.hash) {
+      return;
+    }
+
+    const sectionId = decodeURIComponent(location.hash.slice(1));
+    const timer = window.setTimeout(() => {
+      scrollToSection(sectionId);
+    }, 40);
+
+    return () => window.clearTimeout(timer);
+  }, [location.hash, location.pathname]);
+
   function handleSectionClick(sectionId) {
     if (location.pathname !== "/") {
+      navigate(`/#${sectionId}`);
+      setIsDrawerOpen(false);
       return;
     }
 
     scrollToSection(sectionId);
+    window.history.replaceState(null, "", `#${sectionId}`);
     setIsDrawerOpen(false);
   }
 
